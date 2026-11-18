@@ -139,6 +139,7 @@ export function WorkspaceSettingsPage(): React.ReactElement {
         <TelegramWorkGroupsCard
           workspaceId={workspace.id}
           canManage={isOwner || workspace.role === 'lead'}
+          isOwner={isOwner}
         />
       )}
       {!isDefault && (

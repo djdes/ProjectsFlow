@@ -351,7 +351,32 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     // Рабочие Telegram-группы (db/181) и кандидаты «Из соседних пространств».
     [/^\/workspaces\/([^/]+)\/telegram-groups$/, () =>
       json({
-        groups: [{ chatId: -1001234567890, title: 'Команда · задачи', createdAt: '2026-11-01T09:00:00.000Z' }],
+        groups: [
+          {
+            chatId: -1001234567890,
+            title: 'Команда · задачи',
+            createdAt: '2026-11-01T09:00:00.000Z',
+            status: 'active',
+            projectIds: [PROJECT_SEEDS[0].id],
+          },
+          // Черновик (db/189): бот сам добавлен в группу, ждёт подтверждения.
+          {
+            chatId: -1009876543210,
+            title: 'Поддержка клиентов',
+            createdAt: '2026-11-17T09:00:00.000Z',
+            status: 'draft',
+            projectIds: [],
+          },
+          // Отключённая группа, которую просит забрать другое пространство (решает владелец).
+          {
+            chatId: -1005555555555,
+            title: 'Старый чат продаж',
+            createdAt: '2026-10-01T09:00:00.000Z',
+            status: 'disconnected',
+            projectIds: [],
+            transferRequest: { workspaceName: 'Офис', requestedAt: '2026-11-17T10:00:00.000Z' },
+          },
+        ],
         mainGroup: null,
         botUsername: 'ProjectsFlow_Bot',
       })],

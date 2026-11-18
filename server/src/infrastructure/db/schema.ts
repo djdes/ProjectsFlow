@@ -287,12 +287,33 @@ export const workspaceTelegramGroups = mysqlTable(
     workspaceId: char('workspace_id', { length: 36 }).notNull(),
     title: varchar('title', { length: 255 }),
     addedByUserId: char('added_by_user_id', { length: 36 }),
+    // db/189: черновик (бот сам добавил группу) → active после подтверждения руководителем.
+    status: mysqlEnum('status', ['draft', 'active', 'disconnected']).notNull().default('active'),
+    mode: mysqlEnum('mode', ['standard', 'incident']).notNull().default('standard'),
+    invitedByTgUserId: bigint('invited_by_tg_user_id', { mode: 'number' }),
+    // Запрос на перенос отключённой группы в другое пространство (ждёт владельца текущего).
+    transferToWorkspaceId: char('transfer_to_workspace_id', { length: 36 }),
+    transferRequestedByUserId: char('transfer_requested_by_user_id', { length: 36 }),
+    transferTargetStatus: mysqlEnum('transfer_target_status', ['draft', 'active']),
+    transferRequestedAt: timestamp('transfer_requested_at'),
     createdAt: createdAtCol(),
   },
   (t) => [index('idx_wtg_workspace').on(t.workspaceId)],
 );
 
 export type WorkspaceTelegramGroupRow = typeof workspaceTelegramGroups.$inferSelect;
+
+// Проекты рабочей группы (db/189). Пусто — все проекты пространства.
+export const telegramGroupProjects = mysqlTable(
+  'telegram_group_projects',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    addedByUserId: char('added_by_user_id', { length: 36 }),
+    createdAt: createdAtCol(),
+  },
+  (t) => [primaryKey({ columns: [t.tgChatId, t.projectId] }), index('idx_tgp_project').on(t.projectId)],
+);
 
 // Одноразовые коды «Подключить группу» (db/181): t.me/<bot>?startgroup=wg_<code>. Только хеш.
 export const telegramGroupLinkTokens = mysqlTable(

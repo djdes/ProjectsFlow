@@ -172,7 +172,11 @@ import {
   TelegramBotUnavailableError,
   TelegramGroupNotFoundError,
   TelegramGroupNotAdminError,
+  TelegramGroupProjectInvalidError,
   TelegramGroupTakenError,
+  TelegramGroupDraftElsewhereError,
+  TelegramGroupTransferRequestedError,
+  TelegramGroupTransferNotFoundError,
   TelegramNotLinkedError,
 } from '../../domain/telegram/errors.js';
 import {
@@ -1015,6 +1019,22 @@ export function errorHandler(
   }
   if (err instanceof TelegramGroupTakenError) {
     res.status(409).json({ error: 'telegram_group_taken', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupDraftElsewhereError) {
+    res.status(409).json({ error: 'telegram_group_draft_elsewhere', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupTransferRequestedError) {
+    res.status(409).json({ error: 'telegram_group_transfer_requested', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupTransferNotFoundError) {
+    res.status(404).json({ error: 'telegram_group_transfer_not_found', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupProjectInvalidError) {
+    res.status(400).json({ error: 'telegram_group_project_invalid', message: err.message });
     return;
   }
   if (err instanceof TelegramNotLinkedError) {

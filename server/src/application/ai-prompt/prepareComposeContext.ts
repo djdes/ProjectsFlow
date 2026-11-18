@@ -93,7 +93,8 @@ function isMentioned(normalizedText: string, projectName: string): boolean {
 // Откуда брать проекты-кандидаты: 'active' — активное пространство (веб: пользователь уже
 // внутри пространства), 'all' — все его пространства (Telegram: сообщение может быть про
 // любой его проект, а «активное» там — случайное состояние браузера).
-export type ComposeProjectScope = 'active' | 'all';
+// { projectIds } — проекты рабочей Telegram-группы (db/189): только они из всех проектов юзера.
+export type ComposeProjectScope = 'active' | 'all' | { readonly projectIds: readonly string[] };
 
 /**
  * Готовит контекст для compose-режима: перечень проектов, в которых пользователь
@@ -122,13 +123,17 @@ export async function prepareComposeContext(
       projects = await deps.members.listProjectsForUserInWorkspace(userId, workspace.id);
     } else {
       projects = await deps.members.listProjectsForUser(userId);
+      if (typeof scope === 'object') {
+        const allowed = new Set(scope.projectIds);
+        projects = projects.filter((p) => allowed.has(p.id));
+      }
     }
   } catch {
     return null;
   }
   // Подписи пространств — только когда их несколько (иначе строка — лишний шум в промпте).
   let spaceNames = new Map<string, string>();
-  if (scope === 'all' && deps.listWorkspacesForUser) {
+  if (scope !== 'active' && deps.listWorkspacesForUser) {
     try {
       const spaces = await deps.listWorkspacesForUser(userId);
       if (spaces.length > 1) spaceNames = new Map(spaces.map((s) => [s.id, s.name]));

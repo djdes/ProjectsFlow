@@ -20,7 +20,7 @@ export class DrizzleTelegramChatWorkspaceRepository implements TelegramChatWorks
     const [workGroup] = await this.db
       .select({ workspaceId: workspaceTelegramGroups.workspaceId })
       .from(workspaceTelegramGroups)
-      .where(eq(workspaceTelegramGroups.tgChatId, tgChatId))
+      .where(and(eq(workspaceTelegramGroups.tgChatId, tgChatId), eq(workspaceTelegramGroups.status, 'active')))
       .limit(1);
     if (workGroup) return [workGroup.workspaceId];
     const [byProject, byWorkspace] = await Promise.all([

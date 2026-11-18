@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findNewGroup, groupLabel, parseChatIdInput } from './telegramWorkGroups';
+import {
+  addableProjects,
+  findNewGroup,
+  groupLabel,
+  groupProjects,
+  parseChatIdInput,
+  splitGroupsByStatus,
+} from './telegramWorkGroups';
 
 test('parseChatIdInput: only negative group ids, tolerant to copy-paste', () => {
   assert.equal(parseChatIdInput('-1003920622527'), -1003920622527);
@@ -22,4 +29,22 @@ test('groupLabel: title or a fallback with the id', () => {
   assert.equal(groupLabel({ chatId: -5, title: 'Команда' }), 'Команда');
   assert.equal(groupLabel({ chatId: -5, title: '  ' }), 'Группа -5');
   assert.equal(groupLabel({ chatId: -5, title: null }), 'Группа -5');
+});
+
+test('splitGroupsByStatus: drafts apart from connected groups', () => {
+  const groups = [
+    { chatId: -1, status: 'active' as const },
+    { chatId: -2, status: 'draft' as const },
+    { chatId: -3, status: 'disconnected' as const },
+  ];
+  const { drafts, connected } = splitGroupsByStatus(groups);
+  assert.deepEqual(drafts.map((g) => g.chatId), [-2]);
+  assert.deepEqual(connected.map((g) => g.chatId), [-1, -3]);
+});
+
+test('groupProjects / addableProjects: chips and the rest of the workspace projects', () => {
+  const projects = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }];
+  assert.deepEqual(groupProjects(['c', 'gone', 'a'], projects).map((p) => p.id), ['c', 'a']);
+  assert.deepEqual(addableProjects(['c', 'a'], projects).map((p) => p.id), ['b']);
+  assert.deepEqual(addableProjects([], projects).map((p) => p.id), ['a', 'b', 'c']);
 });

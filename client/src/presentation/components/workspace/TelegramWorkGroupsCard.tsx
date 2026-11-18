@@ -1,14 +1,29 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, MessagesSquare, Plus, Unlink } from 'lucide-react';
+import { Check, Loader2, MessagesSquare, Plus, Unlink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
-import type { TelegramWorkGroups } from '@/domain/workspace/TelegramWorkGroup';
+import type { TelegramWorkGroup, TelegramWorkGroups } from '@/domain/workspace/TelegramWorkGroup';
 import { TelegramGroupConnectDialog } from './TelegramGroupConnectDialog';
-import { findNewGroup, groupLabel, parseChatIdInput } from './telegramWorkGroups';
+import {
+  addableProjects,
+  findNewGroup,
+  groupLabel,
+  groupProjects,
+  parseChatIdInput,
+  splitGroupsByStatus,
+} from './telegramWorkGroups';
+
+type WorkspaceProject = { readonly id: string; readonly name: string };
 
 /**
  * Рабочие Telegram-группы пространства (db/181): в них бот принимает задачи пространства,
@@ -18,10 +33,13 @@ import { findNewGroup, groupLabel, parseChatIdInput } from './telegramWorkGroups
 export function TelegramWorkGroupsCard({
   workspaceId,
   canManage,
+  isOwner = false,
 }: {
   workspaceId: string;
   // Владелец или руководитель: рабочая группа открывает вход в пространство.
   canManage: boolean;
+  // Перенос отключённой группы в другое пространство одобряет только владелец.
+  isOwner?: boolean;
 }): React.ReactElement {
   const { workspaceRepository } = useContainer();
   const [data, setData] = useState<TelegramWorkGroups | null>(null);
@@ -30,6 +48,7 @@ export function TelegramWorkGroupsCard({
   const [manualId, setManualId] = useState('');
   const [busyChatId, setBusyChatId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
+  const [projects, setProjects] = useState<readonly WorkspaceProject[]>([]);
 
   const load = useCallback(async (): Promise<TelegramWorkGroups> => {
     const next = await workspaceRepository.listTelegramGroups(workspaceId);
@@ -42,6 +61,78 @@ export function TelegramWorkGroupsCard({
       toast.error((error as Error).message || 'Не удалось загрузить Telegram-группы'),
     );
   }, [load]);
+
+  // Проекты пространства — для чипов и «Добавить проект» у групп (db/189).
+  useEffect(() => {
+    let cancelled = false;
+    workspaceRepository
+      .listProjects(workspaceId)
+      .then((list) => {
+        if (!cancelled) setProjects(list);
+      })
+      .catch(() => {
+        if (!cancelled) setProjects([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, workspaceRepository]);
+
+  const replaceGroup = (group: TelegramWorkGroup): void => {
+    setData((prev) =>
+      prev ? { ...prev, groups: prev.groups.map((g) => (g.chatId === group.chatId ? group : g)) } : prev,
+    );
+  };
+
+  const confirm = async (group: TelegramWorkGroup): Promise<void> => {
+    setBusyChatId(group.chatId);
+    try {
+      replaceGroup(await workspaceRepository.confirmTelegramGroup(workspaceId, group.chatId));
+      toast.success(`Группа «${groupLabel(group)}» подключена`);
+    } catch (error) {
+      toast.error((error as Error).message || 'Не удалось подключить группу');
+    } finally {
+      setBusyChatId(null);
+    }
+  };
+
+  const decideTransfer = async (group: TelegramWorkGroup, decision: 'approve' | 'reject'): Promise<void> => {
+    setBusyChatId(group.chatId);
+    try {
+      await workspaceRepository.decideTelegramGroupTransfer(workspaceId, group.chatId, decision);
+      toast.success(decision === 'approve' ? 'Группа перенесена' : 'Перенос отклонён');
+      await load();
+    } catch (error) {
+      toast.error((error as Error).message || 'Не удалось сохранить решение');
+    } finally {
+      setBusyChatId(null);
+    }
+  };
+
+  const reject = async (group: TelegramWorkGroup): Promise<void> => {
+    setBusyChatId(group.chatId);
+    try {
+      await workspaceRepository.removeTelegramGroup(workspaceId, group.chatId);
+      toast.success(`Группа «${groupLabel(group)}» отклонена`);
+      await load();
+    } catch (error) {
+      toast.error((error as Error).message || 'Не удалось отклонить группу');
+    } finally {
+      setBusyChatId(null);
+    }
+  };
+
+  // Список проектов группы сохраняется сразу, без отдельной кнопки (spec, раздел 2).
+  const saveProjects = async (group: TelegramWorkGroup, projectIds: readonly string[]): Promise<void> => {
+    const previous = group;
+    replaceGroup({ ...group, projectIds });
+    try {
+      replaceGroup(await workspaceRepository.setTelegramGroupProjects(workspaceId, group.chatId, projectIds));
+    } catch (error) {
+      replaceGroup(previous);
+      toast.error((error as Error).message || 'Не удалось сохранить проекты группы');
+    }
+  };
 
   const openConnect = (): void => {
     setKnownChatIds(data?.groups.map((group) => group.chatId) ?? []);
@@ -84,6 +175,7 @@ export function TelegramWorkGroupsCard({
     }
   };
 
+  const { drafts, connected } = splitGroupsByStatus(data?.groups ?? []);
   const mainGroup = data?.mainGroup ?? null;
   const mainIsWork = mainGroup !== null && (data?.groups.some((g) => g.chatId === mainGroup.chatId) ?? false);
   const bot = data?.botUsername ?? 'ProjectsFlow_Bot';
@@ -102,17 +194,104 @@ export function TelegramWorkGroupsCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {drafts.length > 0 && (
+          <ul className="space-y-2">
+            {drafts.map((group) => (
+              <li
+                key={group.chatId}
+                className="flex flex-wrap items-center gap-3 rounded-lg border border-approval/40 bg-approval/5 px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium">Новая группа «{groupLabel(group)}» ждёт подтверждения</div>
+                  <div className="text-xs text-muted-foreground">
+                    Бота добавили в&nbsp;группу. Пока её не&nbsp;подключат, задачи из&nbsp;неё не&nbsp;принимаются.
+                  </div>
+                </div>
+                {canManage && (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      aria-label={`Подключить «${groupLabel(group)}»`}
+                      disabled={busyChatId === group.chatId}
+                      onClick={() => void confirm(group)}
+                    >
+                      {busyChatId === group.chatId ? (
+                        <Loader2 className="size-4 motion-safe:animate-spin" />
+                      ) : (
+                        <Check className="size-4" />
+                      )}
+                      Подключить
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Отклонить «${groupLabel(group)}»`}
+                      disabled={busyChatId === group.chatId}
+                      onClick={() => void reject(group)}
+                    >
+                      Отклонить
+                    </Button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
         {data === null ? (
           <Skeleton className="h-16" />
-        ) : data.groups.length === 0 ? (
+        ) : connected.length === 0 ? (
           <p className="text-sm text-muted-foreground">Рабочих групп пока нет.</p>
         ) : (
           <ul className="divide-y divide-border rounded-lg bg-panel">
-            {data.groups.map((group) => (
+            {connected.map((group) => (
               <li key={group.chatId} className="flex flex-wrap items-center gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{groupLabel(group)}</div>
                   <div className="font-mono text-xs text-muted-foreground">{group.chatId}</div>
+                  {group.status === 'disconnected' ? (
+                    <>
+                      <div className="text-xs text-muted-foreground">Бота удалили из&nbsp;группы&nbsp;— задачи не&nbsp;принимаются.</div>
+                      {group.transferRequest && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-approval/40 bg-approval/5 px-2 py-1.5 text-xs">
+                          <span className="min-w-0 flex-1">
+                            Пространство «{group.transferRequest.workspaceName ?? 'другое'}» просит перенести группу к&nbsp;себе.
+                            {!isOwner && ' Решает владелец пространства.'}
+                          </span>
+                          {isOwner && (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={busyChatId === group.chatId}
+                                onClick={() => void decideTransfer(group, 'approve')}
+                              >
+                                Разрешить перенос
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                disabled={busyChatId === group.chatId}
+                                onClick={() => void decideTransfer(group, 'reject')}
+                              >
+                                Отклонить
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <GroupProjects
+                      group={group}
+                      projects={projects}
+                      canManage={canManage}
+                      onChange={(projectIds) => void saveProjects(group, projectIds)}
+                    />
+                  )}
                 </div>
                 {canManage && (
                   <Button
@@ -202,5 +381,61 @@ export function TelegramWorkGroupsCard({
         />
       )}
     </Card>
+  );
+}
+
+// Проекты группы (db/189): чипы + «Добавить проект». Пусто — все проекты пространства.
+function GroupProjects({
+  group,
+  projects,
+  canManage,
+  onChange,
+}: {
+  group: TelegramWorkGroup;
+  projects: readonly WorkspaceProject[];
+  canManage: boolean;
+  onChange: (projectIds: readonly string[]) => void;
+}): React.ReactElement {
+  const chips = groupProjects(group.projectIds, projects);
+  const addable = addableProjects(group.projectIds, projects);
+  return (
+    <div className="mbs-1.5 flex flex-wrap items-center gap-1.5">
+      {chips.length === 0 ? (
+        <span className="text-xs text-muted-foreground">Все проекты пространства</span>
+      ) : (
+        chips.map((project) => (
+          <span key={project.id} className="pf-tag pf-tone-gray inline-flex items-center gap-1 text-2xs">
+            {project.name}
+            {canManage && (
+              <button
+                type="button"
+                className="rounded-sm text-muted-foreground hover:text-foreground"
+                aria-label={`Убрать проект «${project.name}» из группы`}
+                onClick={() => onChange(group.projectIds.filter((id) => id !== project.id))}
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </span>
+        ))
+      )}
+      {canManage && addable.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs">
+              <Plus className="size-3" />
+              Добавить проект
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {addable.map((project) => (
+              <DropdownMenuItem key={project.id} onSelect={() => onChange([...group.projectIds, project.id])}>
+                {project.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   );
 }

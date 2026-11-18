@@ -1220,6 +1220,7 @@ const telegramWorkGroups: ManageTelegramWorkGroups = new ManageTelegramWorkGroup
   repo: new DrizzleTelegramWorkGroupRepository(db),
   workspaces: workspaceRepo,
   users: userRepo,
+  projects: projectRepo,
   telegram: telegramClient,
   botUsername: telegramBotUsername,
   randomToken: () => randomBytes(32).toString('base64url'),
@@ -1457,6 +1458,7 @@ const waitForAiPromptJob = new WaitForAiPromptJob({
 });
 const telegramComposer = new TelegramComposerService({
   workerPolicy,
+  groupProjects: telegramWorkGroups,
   taskOrigins: telegramTaskOriginRepo,
   drafts: telegramTaskDraftRepo,
   taskMessages: telegramTaskMessageRepo,

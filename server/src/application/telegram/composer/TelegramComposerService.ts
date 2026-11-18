@@ -126,6 +126,9 @@ type Deps = {
   readonly workspaces?: ComposerWorkspaceDeps;
   // Выбор подходящего пространства на таймауте авто-создания, когда человек не нажал кнопку.
   readonly llm?: GenerateLlmText;
+  // Проекты рабочей группы (db/189): задачи из группы ставятся только в них. Пусто — без
+  // ограничения (все проекты, как раньше). Необязательно.
+  readonly groupProjects?: { allowedProjectIds(chatId: number): Promise<readonly string[]> };
 };
 
 // Пространство задач черновика без проекта — для карточки и создания.
@@ -908,7 +911,7 @@ export class TelegramComposerService {
 
     let hint: { projectId: string | null; taskText: string; ambiguous?: boolean };
     try {
-      hint = await this.resolveProjectHint(userId, parsedEff);
+      hint = await this.resolveProjectHint(userId, parsedEff, chatId);
     } catch (err) {
       console.warn('[tg-composer] project hint failed → manual flow:', err);
       await this.manualFlow(
@@ -925,6 +928,23 @@ export class TelegramComposerService {
       return;
     }
     if (parsedEff.projectQuery === null && inherited?.projectId) hint = { ...hint, projectId: inherited.projectId };
+    // Рабочая группа с выбранными проектами (db/189): проект вне списка не берём, единственный
+    // доступный — выбираем без вопросов.
+    const groupScope = await this.chatProjectScope(chatId);
+    if (groupScope) {
+      if (hint.projectId && !groupScope.has(hint.projectId)) hint = { ...hint, projectId: null };
+      if (!hint.projectId && !hint.ambiguous && parsedEff.projectQuery !== null) {
+        const outside = await this.resolveProjectHint(userId, parsedEff).catch(() => null);
+        if (outside?.projectId && !groupScope.has(outside.projectId)) {
+          await this.send(chatId, await this.groupProjectsText(groupScope));
+          return;
+        }
+      }
+      if (!hint.projectId && !hint.ambiguous) {
+        const available = (await this.chatProjects(userId, chatId)).filter((p) => !p.isInbox);
+        if (available.length === 1) hint = { ...hint, projectId: available[0]!.id };
+      }
+    }
     if (hint.ambiguous) {
       await this.manualFlow(userId, chatId, effectiveRaw, undefined, attachments, undefined,
         options.sourceKey ?? null, column, { replyContext: options.replyContext ?? null, defaults: inherited });
@@ -1013,14 +1033,15 @@ export class TelegramComposerService {
         ...(waitMsgId !== null && waitMsgId !== resumeWaitMsgId ? { tgMessageId: waitMsgId } : {}),
         aiStartedAt: this.now(),
       });
+      const scope = await this.chatProjectScope(chatId);
       const job = await this.deps.enqueueAiPromptJob.execute({
         userId,
         text: aiText,
         projectId: hint.projectId,
         mode: 'compose',
         // Сообщение может быть про любой проект пользователя, а не только про пространство,
-        // открытое в браузере.
-        projectScope: 'all',
+        // открытое в браузере. В рабочей группе с выбранными проектами — только про них.
+        projectScope: scope ? { projectIds: [...scope] } : 'all',
       });
       const beforeWait = await this.deps.drafts.getById(draft.id);
       if (!beforeWait || beforeWait.status !== 'composing') return;
@@ -1039,7 +1060,7 @@ export class TelegramComposerService {
       const segments = await this.toDraftSegments(parsedSegs, hint.projectId, userId, forceStatus,
         forceStatus === 'todo' ? draft.assigneeUserId ?? userId : parsed.assigneeQuery?.trim() ? draft.assigneeUserId : null, allowAppend,
         // Без явного @ответственного — тот, что в черновике (из задачи, на которую ответили).
-        parsed.assigneeQuery?.trim() ? null : draft.assigneeUserId);
+        parsed.assigneeQuery?.trim() ? null : draft.assigneeUserId, chatId);
       const patched = await this.deps.drafts.patchComposing(draft.id, {
         taskText: aiText,
         segments,
@@ -1227,7 +1248,7 @@ export class TelegramComposerService {
     let offeredProjects: TelegramDraftOffered['projects'] | undefined;
     let taskText = parsed.taskText.trim();
     if (parsed.projectQuery !== null) {
-      const all = (await this.deps.members.listProjectsForUser(userId)).filter((p) => !p.isInbox);
+      const all = (await this.chatProjects(userId, chatId)).filter((p) => !p.isInbox);
       // Сегмент «<проект> <текст>» для жадного матча многословных имён.
       const segment = [parsed.projectQuery, parsed.taskText].filter((s) => s.length > 0).join(' ');
       const greedy = greedyProjectPrefix(segment, all, (p) => p.name);
@@ -1249,8 +1270,10 @@ export class TelegramComposerService {
 
     if (parsed.projectQuery === null && defaults?.projectId) projectId = defaults.projectId;
     if (parsed.projectQuery === null && !projectId) {
-      const all = (await this.deps.members.listProjectsForUser(userId)).filter(p => !p.isInbox);
+      const all = (await this.chatProjects(userId, chatId)).filter(p => !p.isInbox);
       projectId = matchProjectMention(taskText, all)?.id ?? null;
+      // В группе с одним доступным проектом — он, без вопросов (db/189).
+      if (!projectId && all.length === 1 && (await this.chatProjectScope(chatId))) projectId = all[0]!.id;
     }
 
     if (taskText.length === 0) {
@@ -1286,7 +1309,7 @@ export class TelegramComposerService {
     if (forceStatus === 'todo' && parsed.assigneeQuery === null) assigneeUserId = userId;
 
     if (offeredProjects && assigneeUserId && assigneeUserId !== userId && this.deps.workspaces) {
-      const all = await this.deps.members.listProjectsForUser(userId);
+      const all = await this.chatProjects(userId, chatId);
       const allowed = await Promise.all(offeredProjects.map(async (choice) => {
         const project = all.find((p) => p.id === choice.id);
         return project && await this.deps.workspaces!.isMember(project.workspaceId, assigneeUserId!);
@@ -1536,8 +1559,8 @@ export class TelegramComposerService {
       return;
     }
     if (sel.type === 'choose') {
-      // «Сменить проект» из карточки-подтверждения: предлагаем все проекты.
-      const all = (await this.deps.members.listProjectsForUser(userId)).filter((p) => !p.isInbox);
+      // «Сменить проект» из карточки-подтверждения: предлагаем все проекты (в группе — её).
+      const all = (await this.chatProjects(userId, chatId)).filter((p) => !p.isInbox);
       const offered: TelegramDraftOffered = {
         ...(draft.offered?.members ? { members: draft.offered.members } : {}),
         projects: await this.offeredProjects(userId, all),
@@ -2154,6 +2177,34 @@ export class TelegramComposerService {
     }
   }
 
+  // Проекты рабочей группы (db/189). null — ограничения нет (личка, группа без списка).
+  private async chatProjectScope(chatId: number): Promise<ReadonlySet<string> | null> {
+    if (chatId >= 0 || !this.deps.groupProjects) return null;
+    const ids = await this.deps.groupProjects.allowedProjectIds(chatId).catch((err) => {
+      console.warn('[tg-composer] group projects lookup failed:', err);
+      return [] as readonly string[];
+    });
+    return ids.length > 0 ? new Set(ids) : null;
+  }
+
+  // Проекты автора, доступные в этом чате: в группе со списком — только её проекты.
+  private async chatProjects(userId: string, chatId: number) {
+    const all = await this.deps.members.listProjectsForUser(userId);
+    const scope = await this.chatProjectScope(chatId);
+    return scope ? all.filter((p) => scope.has(p.id)) : all;
+  }
+
+  private async groupProjectsText(scope: ReadonlySet<string>): Promise<string> {
+    const names = (
+      await Promise.all([...scope].map((id) => this.deps.projects.getById(id).catch(() => null)))
+    )
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+      .map((p) => `«${escapeHtml(p.name)}»`);
+    return names.length > 0
+      ? `⚠️ В этой группе доступны: ${names.join(', ')}. Назовите один из них — в другой проект задачу отсюда не поставлю.`
+      : '⚠️ Этот проект недоступен в группе.';
+  }
+
   // Варианты проектов для пикера: имя + пространство в подписи кнопки.
   private async offeredProjects(
     userId: string,
@@ -2313,13 +2364,20 @@ export class TelegramComposerService {
   private async resolveProjectHint(
     userId: string,
     parsed: { projectQuery: string | null; taskText: string },
+    // Чат группы: искать только среди её проектов (db/189). null — все проекты автора.
+    chatId: number | null = null,
   ): Promise<{ projectId: string | null; taskText: string; ambiguous?: boolean }> {
     const taskText = parsed.taskText.trim();
+    const list = async () =>
+      (chatId === null
+        ? await this.deps.members.listProjectsForUser(userId)
+        : await this.chatProjects(userId, chatId)
+      ).filter((p) => !p.isInbox);
     if (parsed.projectQuery === null) {
-      const all = (await this.deps.members.listProjectsForUser(userId)).filter(p => !p.isInbox);
+      const all = await list();
       return { projectId: matchProjectMention(taskText, all)?.id ?? null, taskText };
     }
-    const all = (await this.deps.members.listProjectsForUser(userId)).filter((p) => !p.isInbox);
+    const all = await list();
     const segment = [parsed.projectQuery, parsed.taskText].filter((s) => s.length > 0).join(' ');
     const greedy = greedyProjectPrefix(segment, all, (p) => p.name);
     // Одноимённые проекты выбирает автор кнопкой с названием пространства.
@@ -2447,11 +2505,16 @@ export class TelegramComposerService {
     allowAppend = false,
     // Ответственный по умолчанию, когда модель никого не назвала (не нашла или поставила автора).
     defaultAssigneeUserId: string | null = null,
+    // Чат группы: проекты сегментов — только из её списка (db/189).
+    chatId: number | null = null,
   ): Promise<TelegramDraftSegment[]> {
     const out: TelegramDraftSegment[] = [];
     const projects = hintProjectId
       ? []
-      : (await this.deps.members.listProjectsForUser(creatorUserId)).filter((p) => !p.isInbox);
+      : (chatId === null
+          ? await this.deps.members.listProjectsForUser(creatorUserId)
+          : await this.chatProjects(creatorUserId, chatId)
+        ).filter((p) => !p.isInbox);
     for (const s of parsed) {
       let project = hintProjectId ? null : this.matchSegmentProject(s, projects);
       // An explicit @assignee is a human instruction for the whole message. AI must
@@ -3201,7 +3264,7 @@ export class TelegramComposerService {
     messageId: number | undefined,
   ): Promise<void> {
     if (sel.type === 'open') {
-      const all = (await this.deps.members.listProjectsForUser(userId)).filter((p) => !p.isInbox);
+      const all = (await this.chatProjects(userId, chatId)).filter((p) => !p.isInbox);
       const offered: TelegramDraftOffered = {
         ...(draft.offered?.members ? { members: draft.offered.members } : {}),
         projects: await this.offeredProjects(userId, all),

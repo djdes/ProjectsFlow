@@ -1,9 +1,18 @@
 // Рабочая Telegram-группа пространства: в ней бот принимает задачи пространства и подключает
 // людей без аккаунта или вне пространства (db/181).
+// draft — бот сам добавлен в группу, ждёт подтверждения владельца/руководителя;
+// active — рабочая группа; disconnected — бота удалили из группы (db/189).
+export type TelegramWorkGroupStatus = 'draft' | 'active' | 'disconnected';
+
 export type TelegramWorkGroup = {
   readonly chatId: number;
   readonly title: string | null;
   readonly createdAt: string;
+  readonly status: TelegramWorkGroupStatus;
+  // Проекты группы: задачи из неё ставятся только в них. Пусто — все проекты пространства.
+  readonly projectIds: readonly string[];
+  // Другое пространство просит забрать отключённую группу: решает владелец этого пространства.
+  readonly transferRequest: { readonly workspaceName: string | null; readonly requestedAt: string } | null;
 };
 
 // work — рабочая группа; main — основная группа сводок (карточка Telegram-расписания).

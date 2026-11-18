@@ -142,6 +142,11 @@ export const createTelegramGroupLinkSchema = z.object({
   purpose: z.enum(['work', 'main']).default('work'),
 });
 
+// Проекты рабочей группы (db/189): список целиком, пустой — все проекты пространства.
+export const setTelegramGroupProjectsSchema = z.object({
+  projectIds: z.array(z.string().uuid()).max(200),
+});
+
 export const addTelegramWorkGroupSchema = z.object({
   // У групп и супергрупп Telegram id отрицательный.
   chatId: z.number().int().negative().refine(Number.isSafeInteger, 'Некорректный id группы'),

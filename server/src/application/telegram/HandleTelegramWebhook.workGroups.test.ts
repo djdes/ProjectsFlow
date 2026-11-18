@@ -11,7 +11,12 @@ function makeHarness(opts: {
   member?: boolean;
   bindResult?: { kind: string; workspaceName?: string };
   voiceTranscript?: string;
+  botAdded?: { kind: string; workspaceName?: string; options?: Array<{ id: string; name: string }> };
+  chooseResult?: { kind: string; workspaceName?: string };
 } = {}) {
+  const botAddedCalls: Array<{ chatId: number; title: string | null; inviter: number }> = [];
+  const botRemovedCalls: number[] = [];
+  const chooseCalls: Array<{ chatId: number; workspaceId: string; tgUserId: number }> = [];
   const sent: Array<{ chatId: number; text: string }> = [];
   const composerCalls: Array<{ text: string; groupCtx: unknown }> = [];
   const prompts: OnboardingPromptInput[] = [];
@@ -35,6 +40,7 @@ function makeHarness(opts: {
     client: {
       async sendMessage(i: { chatId: number; text: string }) { sent.push({ chatId: i.chatId, text: i.text }); return { kind: 'ok' as const, messageId: 1 }; },
       async answerCallbackQuery() {},
+      async editMessageText(i: { chatId: number; text?: string }) { sent.push({ chatId: i.chatId, text: i.text ?? '' }); },
       async downloadFile() { return { data: Buffer.from('v'), filename: 'voice.oga', mimeType: 'audio/ogg' }; },
     },
     appUrl: 'https://pf.test',
@@ -62,6 +68,15 @@ function makeHarness(opts: {
       },
       async resolveChat() { return workGroup ? { ...workGroup, addedByUserId: null } : null; },
       async migrateChat(from: number, to: number) { migrations.push([from, to]); },
+      async handleBotAdded(chat: { id: number; title: string | null }, inviter: number) {
+        botAddedCalls.push({ chatId: chat.id, title: chat.title, inviter });
+        return opts.botAdded ?? { kind: 'not_linked' };
+      },
+      async handleBotRemoved(chatId: number) { botRemovedCalls.push(chatId); },
+      async chooseDraftWorkspace(chat: { id: number }, workspaceId: string, tgUserId: number) {
+        chooseCalls.push({ chatId: chat.id, workspaceId, tgUserId });
+        return opts.chooseResult ?? { kind: 'draft', workspaceName: 'Офис' };
+      },
     },
     onboarding: {
       async prompt(input: OnboardingPromptInput) { prompts.push(input); },
@@ -83,7 +98,10 @@ function makeHarness(opts: {
     notifyStatusChanged() {},
   };
   const h = new HandleTelegramWebhook(deps as never);
-  return { h, sent, composerCalls, prompts, privateStarts, joinCallbacks, binds, migrations, groupStarts, pairedTelegramIds, bindSenders };
+  return {
+    h, sent, composerCalls, prompts, privateStarts, joinCallbacks, binds, migrations, groupStarts,
+    pairedTelegramIds, bindSenders, botAddedCalls, botRemovedCalls, chooseCalls,
+  };
 }
 
 const CODE = 'B'.repeat(43);
@@ -248,4 +266,70 @@ test('CSharpFixer: configured chat bypasses account onboarding for text and voic
   } finally {
     keys.forEach((key, index) => { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; });
   }
+});
+
+function myChatMember(newStatus: string, oldStatus = 'left'): TelegramUpdate {
+  return {
+    update_id: 5,
+    my_chat_member: {
+      chat: { id: -1001, type: 'supergroup', title: 'Команда' },
+      from: { id: 777 },
+      new_chat_member: { status: newStatus, user: { id: 42 } },
+      old_chat_member: { status: oldStatus },
+    },
+  } as TelegramUpdate;
+}
+
+test('my_chat_member: бота добавили — черновик в пространстве пригласившего, сообщение в группу', async () => {
+  const x = makeHarness({ botAdded: { kind: 'draft', workspaceName: 'Программисты' } });
+  await x.h.execute(myChatMember('member'));
+  assert.deepEqual(x.botAddedCalls, [{ chatId: -1001, title: 'Команда', inviter: 777 }]);
+  assert.equal(x.sent.length, 1);
+  assert.equal(x.sent[0]!.chatId, -1001);
+  assert.match(x.sent[0]!.text, /добавлена в пространство «Программисты» и ждёт подтверждения/);
+  // Приветствие «как подключить» после черновика не дублируется.
+  await x.h.execute(groupMessage({ new_chat_members: [{ id: 42, is_bot: true, username: 'ProjectsFlow_Bot' }] }));
+  assert.equal(x.sent.length, 1);
+});
+
+test('my_chat_member: несколько пространств — выбор кнопками в личке пригласившего', async () => {
+  const x = makeHarness({
+    botAdded: {
+      kind: 'choose',
+      options: [
+        { id: '11111111-1111-1111-1111-111111111111', name: 'Программисты' },
+        { id: '22222222-2222-2222-2222-222222222222', name: 'Офис' },
+      ],
+    },
+  });
+  await x.h.execute(myChatMember('administrator'));
+  assert.equal(x.sent.length, 1);
+  assert.equal(x.sent[0]!.chatId, 777, 'choice goes to the inviter DM, not to the group');
+  await x.h.execute({
+    update_id: 6,
+    callback_query: {
+      id: 'cq1',
+      from: { id: 777 },
+      message: { message_id: 9, chat: { id: 777 } },
+      data: 'wd:-1001:22222222-2222-2222-2222-222222222222',
+    },
+  } as TelegramUpdate);
+  assert.deepEqual(x.chooseCalls, [
+    { chatId: -1001, workspaceId: '22222222-2222-2222-2222-222222222222', tgUserId: 777 },
+  ]);
+  assert.match(x.sent.at(-1)!.text, /добавлена в пространство «Офис»/);
+});
+
+test('my_chat_member: смена прав уже добавленного бота — не новое добавление', async () => {
+  const x = makeHarness({ botAdded: { kind: 'draft', workspaceName: 'Программисты' } });
+  await x.h.execute(myChatMember('administrator', 'member'));
+  assert.deepEqual(x.botAddedCalls, []);
+});
+
+test('my_chat_member: бота удалили — группа отключается', async () => {
+  const x = makeHarness();
+  await x.h.execute(myChatMember('kicked', 'member'));
+  await x.h.execute(myChatMember('left', 'administrator'));
+  assert.deepEqual(x.botRemovedCalls, [-1001, -1001]);
+  assert.equal(x.sent.length, 0);
 });
