@@ -527,3 +527,104 @@ test('standardGroupInfo: только активная группа обычно
   assert.equal(await service.standardGroupInfo(-3003), null);
   assert.equal(await service.standardGroupInfo(-9999), null);
 });
+
+// Запрос на перенос — ещё и в личку владельцу прежнего пространства, с кнопками (spec, раздел 2).
+function makeTransferService() {
+  const store = makeRepo();
+  const sent: Array<{ chatId: number; text: string; replyMarkup?: unknown }> = [];
+  const roles: Record<string, Record<string, WorkspaceRole>> = {
+    ws1: { lead: 'lead' },
+    ws2: { ws2owner: 'owner', ws2lead: 'lead' },
+  };
+  const tgIds: Record<string, number> = { ws2owner: 801, ws2lead: 802, lead: 777 };
+  const service = new ManageTelegramWorkGroups({
+    repo: store.repo,
+    workspaces: {
+      async getMembership(workspaceId, userId) {
+        const role = roles[workspaceId]?.[userId];
+        return role ? { workspaceId, userId, role } : null;
+      },
+      async getById(id) {
+        if (id === 'ws1') return { id, name: 'Программисты', kind: 'team' };
+        if (id === 'ws2') return { id, name: 'Офис', kind: 'team' };
+        return null;
+      },
+      async listMembers(workspaceId) {
+        return Object.entries(roles[workspaceId] ?? {}).map(([userId, role]) => ({ workspaceId, userId, role }));
+      },
+      async listForUser(userId) {
+        return userId === 'lead' ? [{ id: 'ws1', name: 'Программисты', role: 'lead' as WorkspaceRole, kind: 'team' as const }] : [];
+      },
+    },
+    users: {
+      async getTelegramLink(userId) {
+        return tgIds[userId] ? { telegramUserId: tgIds[userId]! } : null;
+      },
+      async findUserIdByTelegramUserId(tg) {
+        return Object.entries(tgIds).find(([, id]) => id === tg)?.[0] ?? null;
+      },
+    },
+    telegram: {
+      async getChat(chatId) {
+        return { id: chatId, title: 'Офис', type: 'supergroup' };
+      },
+      async getChatAdministrators() {
+        return [];
+      },
+      async sendMessage(input) {
+        sent.push(input);
+        return { ok: true, messageId: 1 } as never;
+      },
+    },
+    botUsername: 'ProjectsFlow_Bot',
+    randomToken: () => TOKEN,
+    now: () => NOW,
+  });
+  return { service, sent, ...store };
+}
+
+test('transfer DM: only the old workspace owner gets buttons, once per request', async () => {
+  const { service, groups, sent } = makeTransferService();
+  groups.set(-3001, foreign('disconnected'));
+  assert.deepEqual(await service.handleBotAdded({ id: -3001, title: 'Офис' }, 777), { kind: 'transfer_requested' });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]!.chatId, 801, 'owner of ws2, not its lead');
+  assert.match(sent[0]!.text, /«Офис».*«Программисты»/);
+  assert.deepEqual(sent[0]!.replyMarkup, {
+    inline_keyboard: [[
+      { text: 'Разрешить перенос', callback_data: 'wt:a:-3001' },
+      { text: 'Отклонить', callback_data: 'wt:r:-3001' },
+    ]],
+  });
+  // Повторный запрос в то же пространство — владельца второй раз не дёргаем.
+  await service.handleBotAdded({ id: -3001, title: 'Офис' }, 777);
+  assert.equal(sent.length, 1);
+});
+
+test('transfer DM buttons: ownership is re-checked on press', async () => {
+  const { service, groups } = makeTransferService();
+  groups.set(-3001, foreign('disconnected'));
+  await service.handleBotAdded({ id: -3001, title: 'Офис' }, 777);
+  assert.deepEqual(await service.decideTransferFromTelegram(-3001, 802, true), { kind: 'forbidden' });
+  assert.deepEqual(await service.decideTransferFromTelegram(-3001, 999, true), { kind: 'forbidden' });
+  assert.equal(groups.get(-3001)?.workspaceId, 'ws2');
+  assert.deepEqual(await service.decideTransferFromTelegram(-3001, 801, true), {
+    kind: 'approved',
+    groupTitle: 'Офис',
+    toWorkspaceName: 'Программисты',
+  });
+  assert.equal(groups.get(-3001)?.workspaceId, 'ws1');
+  assert.equal(groups.get(-3001)?.status, 'draft');
+  // Повторное нажатие после решения — запроса уже нет.
+  assert.deepEqual(await service.decideTransferFromTelegram(-3001, 801, true), { kind: 'not_found' });
+});
+
+test('transfer DM buttons: owner rejects, group stays disconnected in the old workspace', async () => {
+  const { service, groups } = makeTransferService();
+  groups.set(-3001, foreign('disconnected'));
+  await service.handleBotAdded({ id: -3001, title: 'Офис' }, 777);
+  assert.equal((await service.decideTransferFromTelegram(-3001, 801, false)).kind, 'rejected');
+  assert.equal(groups.get(-3001)?.workspaceId, 'ws2');
+  assert.equal(groups.get(-3001)?.status, 'disconnected');
+  assert.equal(groups.get(-3001)?.transfer, null);
+});

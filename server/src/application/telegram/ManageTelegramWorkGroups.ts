@@ -17,6 +17,7 @@ import {
   TelegramNotLinkedError,
 } from '../../domain/telegram/errors.js';
 import { requireWorkspaceLead, requireWorkspaceMember, requireWorkspaceOwner } from '../workspace/workspaceAccess.js';
+import { escapeHtml } from '../../domain/task/digestFormat.js';
 import type { TelegramClient } from './TelegramClient.js';
 import type {
   TelegramGroupLinkPurpose,
@@ -37,6 +38,8 @@ type Deps = {
     getMembership(workspaceId: string, userId: string): Promise<WorkspaceMember | null>;
     getById(id: string): Promise<{ id: string; name: string; kind: WorkspaceKind } | null>;
     // Черновик группы (db/189): в каких командных пространствах пригласивший бота руководит.
+    // Владельцы прежнего пространства — им бот пишет в личку о запросе на перенос группы.
+    listMembers?(workspaceId: string): Promise<readonly WorkspaceMember[]>;
     listForUser?(userId: string): Promise<
       readonly { id: string; name: string; kind: WorkspaceKind; role: WorkspaceRole }[]
     >;
@@ -49,7 +52,8 @@ type Deps = {
   readonly projects?: {
     getById(id: string): Promise<{ id: string; workspaceId: string; isInbox: boolean } | null>;
   };
-  readonly telegram: Pick<TelegramClient, 'getChat' | 'getChatAdministrators'>;
+  readonly telegram: Pick<TelegramClient, 'getChat' | 'getChatAdministrators'> &
+    Partial<Pick<TelegramClient, 'sendMessage'>>;
   readonly botUsername: string | null;
   // base64url 32 байта (43 символа): влезает в deep link вместе с префиксом.
   readonly randomToken: () => string;
@@ -93,6 +97,13 @@ export type BotAddedResult =
 //  draft_elsewhere    — черновик другого пространства (активирует только оно);
 //  transfer_requested — отключена в другом пространстве: записан запрос его владельцу.
 type ClaimOutcome = 'free' | 'taken' | 'draft_elsewhere' | 'transfer_requested';
+
+// Кнопки запроса на перенос в личке владельца: wt:a:<chatId> — разрешить, wt:r:<chatId> — отклонить.
+export const TRANSFER_CALLBACK_PREFIX = 'wt:';
+
+export type TransferDecisionResult =
+  | { readonly kind: 'approved' | 'rejected'; readonly groupTitle: string | null; readonly toWorkspaceName: string | null }
+  | { readonly kind: 'forbidden' | 'not_found' };
 
 const LEAD_ROLES: ReadonlySet<WorkspaceRole> = new Set<WorkspaceRole>(['owner', 'lead']);
 
@@ -402,8 +413,69 @@ export class ManageTelegramWorkGroups {
     if (!existing || existing.workspaceId === workspaceId) return 'free';
     if (existing.status === 'active') return 'taken';
     if (existing.status === 'draft') return 'draft_elsewhere';
+    // Повтор того же запроса (человек ещё раз нажал кнопку) — владельца второй раз не дёргаем.
+    const repeated = existing.transfer?.toWorkspaceId === workspaceId;
     await this.deps.repo.requestTransfer(existing.chatId, { toWorkspaceId: workspaceId, requestedByUserId, targetStatus });
+    if (!repeated) {
+      await this.notifyTransferOwners(existing, workspaceId).catch((err) => {
+        console.warn('[tg-work-groups] transfer request DM failed:', err);
+      });
+    }
     return 'transfer_requested';
+  }
+
+  // Запрос на перенос — в личку владельцам прежнего пространства, с кнопками (кроме карточки
+  // в «Настройках пространства»). Владелец без привязанного Telegram увидит только карточку.
+  private async notifyTransferOwners(group: TelegramWorkGroup, toWorkspaceId: string): Promise<void> {
+    const send = this.deps.telegram.sendMessage;
+    if (!send || !this.deps.workspaces.listMembers) return;
+    const [from, to, members] = await Promise.all([
+      this.deps.workspaces.getById(group.workspaceId),
+      this.deps.workspaces.getById(toWorkspaceId),
+      this.deps.workspaces.listMembers(group.workspaceId),
+    ]);
+    if (!from || !to) return;
+    const title = group.title ? `«${escapeHtml(group.title)}»` : 'без названия';
+    const text =
+      `🔁 Группу ${title} хотят подключить к пространству «${escapeHtml(to.name)}». ` +
+      `Сейчас она отключена в вашем пространстве «${escapeHtml(from.name)}». Разрешить перенос?`;
+    const replyMarkup = {
+      inline_keyboard: [[
+        { text: 'Разрешить перенос', callback_data: `${TRANSFER_CALLBACK_PREFIX}a:${group.chatId}` },
+        { text: 'Отклонить', callback_data: `${TRANSFER_CALLBACK_PREFIX}r:${group.chatId}` },
+      ]],
+    };
+    for (const owner of members.filter((m) => m.role === 'owner')) {
+      const link = await this.deps.users.getTelegramLink(owner.userId);
+      if (!link) continue;
+      await send.call(this.deps.telegram, { chatId: link.telegramUserId, text, parseMode: 'HTML', replyMarkup });
+    }
+  }
+
+  // Кнопка в личке владельца: права проверяются заново (approveTransfer/rejectTransfer требуют
+  // владельца пространства группы на момент нажатия).
+  async decideTransferFromTelegram(
+    chatId: number,
+    telegramUserId: number,
+    approve: boolean,
+  ): Promise<TransferDecisionResult> {
+    const userId = await this.deps.users.findUserIdByTelegramUserId?.(telegramUserId);
+    if (!userId) return { kind: 'forbidden' };
+    const group = await this.deps.repo.findByChat(chatId);
+    if (!group?.transfer || group.status !== 'disconnected') return { kind: 'not_found' };
+    const member = await this.deps.workspaces.getMembership(group.workspaceId, userId);
+    if (member?.role !== 'owner') return { kind: 'forbidden' };
+    const toWorkspaceName = (await this.deps.workspaces.getById(group.transfer.toWorkspaceId))?.name ?? null;
+    try {
+      if (approve) await this.approveTransfer(group.workspaceId, userId, chatId);
+      else await this.rejectTransfer(group.workspaceId, userId, chatId);
+    } catch (err) {
+      if (err instanceof TelegramGroupTransferNotFoundError || err instanceof TelegramGroupNotFoundError) {
+        return { kind: 'not_found' };
+      }
+      throw err;
+    }
+    return { kind: approve ? 'approved' : 'rejected', groupTitle: group.title, toWorkspaceName };
   }
 
   // Владелец прежнего пространства отключённой группы разрешает перенос в запросившее пространство.
