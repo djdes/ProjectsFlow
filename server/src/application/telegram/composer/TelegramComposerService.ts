@@ -1,4 +1,11 @@
-import { csharpFixerConfig, signCsharpFixerRequest, stripCsharpFixerOrigin } from './csharpFixerIntake.js';
+import { csharpFixerConfig, signCsharpFixerRequest } from './csharpFixerIntake.js';
+import {
+  incidentSigningKey,
+  pickIncidentProject,
+  readIncidentOrigin,
+  signIncidentRequest,
+  stripIntakeOrigin,
+} from './incidentIntake.js';
 import type {
   TelegramClient,
   TelegramDownloadedFile,
@@ -85,6 +92,9 @@ export type TelegramGroupContext = {
   readonly ownerUserId: string | null;
   readonly senderName: string;
   readonly groupTitle: string | null;
+  // Рабочая группа в режиме incident (spec 2026-11-17, раздел 3): задачи ставятся от того,
+  // кто подключил группу, а реальный автор — в подписанном источнике.
+  readonly incident?: { readonly addedByUserId: string | null };
 };
 
 type Deps = {
@@ -771,6 +781,74 @@ export class TelegramComposerService {
     return draft !== null && this.isCSharpFixerDraft(draft);
   }
 
+  // Режим incident: та же модель, что у CSharpFixer, но проект и чат — из рабочей группы.
+  private async startIncident(
+    tgUserId: number,
+    chatId: number,
+    rawText: string,
+    groupCtx: TelegramGroupContext,
+    attachments: readonly TelegramDraftAttachment[],
+    options: TelegramMessageIngestOptions,
+  ): Promise<void> {
+    const creatorUserId = groupCtx.incident?.addedByUserId ?? null;
+    const signingKey = incidentSigningKey();
+    if (!creatorUserId || !signingKey || !options.sourceKey || !options.sourceMessageId) {
+      if (!signingKey) console.warn('[tg-incident] TELEGRAM_ORIGIN_SIGNING_KEY is not configured');
+      await this.send(chatId, '⚠️ Запрос не принят: администратор должен проверить настройку этой группы.');
+      return;
+    }
+    const existing = await this.deps.drafts.findBySourceKey(options.sourceKey);
+    if (existing) {
+      // Части альбома, пришедшие позже: файлы добавляем к тому же обращению.
+      const merged = appendNewAttachments(existing.attachments, attachments);
+      if (merged.added > 0) {
+        if (existing.status === 'composing') {
+          await this.deps.drafts.patchComposing(existing.id, { attachments: merged.attachments, autoCreateSeconds: 15 });
+        } else {
+          await this.deps.drafts.patch(existing.id, { attachments: merged.attachments });
+          console.warn('[tg-incident] late album attachments preserved for operator', existing.id);
+          await this.send(chatId, '📎 Дополнительные файлы сохранены и будут учтены.');
+        }
+      }
+      return;
+    }
+    const allowed = (await this.deps.groupProjects?.allowedProjectIds(chatId).catch((err) => {
+      console.warn('[tg-incident] group projects lookup failed:', err);
+      return [] as readonly string[];
+    })) ?? [];
+    const projects = (
+      await Promise.all(allowed.map((id) => this.deps.projects.getById(id).catch(() => null)))
+    ).filter((p): p is NonNullable<typeof p> => p !== null);
+    if (projects.length === 0) {
+      await this.send(chatId, '⚠️ Запрос не принят: для группы ещё не выбраны системы. Администратор настроит это в ProjectsFlow.');
+      return;
+    }
+    const projectId = pickIncidentProject(stripIntakeOrigin(rawText), projects);
+    if (!projectId) {
+      const names = projects.map((p) => `«${escapeHtml(p.name)}»`).join(', ');
+      await this.send(chatId, `❓ Уточните, пожалуйста, где возникла проблема: ${names}. Напишите сообщение ещё раз и назовите систему.`);
+      return;
+    }
+    const description = signIncidentRequest(rawText, {
+      chatId, userId: tgUserId, messageId: options.sourceMessageId,
+      messageThreadId: options.sourceThreadId ?? null, senderName: groupCtx.senderName,
+      ...(options.replyToMessageId !== undefined ? { replyToMessageId: options.replyToMessageId } : {}),
+    }, projectId, signingKey);
+    const id = this.deps.shortIdGen();
+    const draft = await this.deps.drafts.create({
+      id, sourceKey: options.sourceKey, creatorUserId, tgChatId: chatId,
+      taskText: description, projectId, assigneeUserId: creatorUserId,
+      targetStatus: 'todo', attachments: withDefaultAttachmentTargets(attachments),
+      ttlSeconds: DRAFT_TTL_SECONDS, autoCreateSeconds: options.sourceKey.startsWith('g:') ? 15 : 5,
+    });
+    if (draft.id !== id) return;
+    const messageId = await this.sendReturningId(chatId, '🛠 Запрос принят. Разберёмся и ответим здесь.');
+    if (messageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId: messageId });
+    if (!options.sourceKey.startsWith('g:')) {
+      await this.finalize(draft, creatorUserId, chatId, messageId ?? undefined, null);
+    }
+  }
+
   async startFromMessage(
     tgUserId: number,
     chatId: number,
@@ -821,6 +899,9 @@ export class TelegramComposerService {
         await this.finalize(draft, groupCtx.ownerUserId, chatId, messageId ?? undefined, null);
       }
       return;
+    }
+    if (groupCtx?.incident) {
+      return this.startIncident(tgUserId, chatId, rawText, groupCtx, attachments, options);
     }
     // Групповое сообщение: каждый привязанный участник работает «как отправитель» (в своё) —
     // продолжаем обычным флоу ниже. Непривязанный → в «Входящие» владельца (или просьба привязать).
@@ -1698,6 +1779,8 @@ export class TelegramComposerService {
         description: text,
         status: this.isCSharpFixerDraft(draft) ? 'backlog' : draft.targetStatus ?? DEFAULT_COLUMN,
         ralphMode: this.isCSharpFixerDraft(draft) ? 'silent' : undefined,
+        // Инцидент группы — полный конвейер (spec 2026-11-17, раздел 3); CSharpFixer — как раньше.
+        runMode: this.isIncidentGroupDraft(draft) ? 'full' : undefined,
         assigneeUserId: draft.assigneeUserId ?? userId,
         // Ручной путь (без AI-сегментов) срока не собирает вовсе — без явного значения
         // CreateTask поставил бы «сегодня». Держим то же правило, что и для сегментов.
@@ -1709,7 +1792,7 @@ export class TelegramComposerService {
       // Сразу закрываем claim после успешного createTask. Всё ниже — best-effort оформление;
       // его сбой не должен вернуть уже созданную задачу в очередь и породить дубль.
       await this.deps.drafts.patch(draft.id, { status: 'confirmed' });
-      await this.rememberOrigin(chatId, draft.tgMessageId, task.id, targetId);
+      await this.rememberOrigin(chatId, draft.tgMessageId, task.id, targetId, text);
       await this.postOriginalComment(task.id, targetId, userId, text, [], draft.replyContext);
       const attachmentResult = await this.attachDraftAttachments(
         draft.attachments,
@@ -1754,8 +1837,10 @@ export class TelegramComposerService {
           chatId,
           messageId,
           this.isCSharpFixerDraft(draft)
-            ? `🛠 Запрос передан CSharpFixer. Проверю скрипт и сообщу результат здесь.${attachmentSuffix}`
-            : `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n${metadata}\n📝 ${markdownToTelegramHtml(excerpt(stripCsharpFixerOrigin(text)))}\n🔗 <a href="${this.taskUrl(targetId, task.id)}">Открыть задачу</a>${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
+            ? this.isIncidentGroupDraft(draft)
+              ? `🛠 Запрос принят в работу. Ответим здесь, когда будет результат.${attachmentSuffix}`
+              : `🛠 Запрос передан CSharpFixer. Проверю скрипт и сообщу результат здесь.${attachmentSuffix}`
+            : `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n${metadata}\n📝 ${markdownToTelegramHtml(excerpt(stripIntakeOrigin(text)))}\n🔗 <a href="${this.taskUrl(targetId, task.id)}">Открыть задачу</a>${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
           // Проект распознан — предлагаем режим запуска воркера (по умолчанию «обычное»).
           draft.projectId && !this.isCSharpFixerDraft(draft) && this.deps.updateTask
             ? runModeKeyboard(task.id)
@@ -1778,7 +1863,7 @@ export class TelegramComposerService {
           messageId,
           this.isCSharpFixerDraft(draft)
             ? '⚠️ Запрос сохранён, но не принят в работу. Администратор проверит подключение; повторять сообщение не требуется.'
-            : `⚠️ Не удалось создать задачу${why}.\n📝 ${markdownToTelegramHtml(excerpt(stripCsharpFixerOrigin(text)))}\n\n⛔ Черновик закрыт — поправьте и отправьте сообщение заново.`,
+            : `⚠️ Не удалось создать задачу${why}.\n📝 ${markdownToTelegramHtml(excerpt(stripIntakeOrigin(text)))}\n\n⛔ Черновик закрыт — поправьте и отправьте сообщение заново.`,
         );
       }
       if (cqId) {
@@ -3710,16 +3795,37 @@ export class TelegramComposerService {
     }
   }
 
+  // Черновик «тихого» обращения: старый CSharpFixer-чат (env) или группа в режиме incident.
   private isCSharpFixerDraft(draft: TelegramTaskDraft): boolean {
+    return this.isLegacyCSharpFixerDraft(draft) || this.isIncidentGroupDraft(draft);
+  }
+
+  private isLegacyCSharpFixerDraft(draft: TelegramTaskDraft): boolean {
     const config = process.env.CSHARP_FIXER_CHAT_ID === String(draft.tgChatId) ? csharpFixerConfig() : null;
     return config !== null && draft.projectId === config.projectId && draft.tgChatId === config.chatId;
   }
 
-  private async rememberOrigin(chatId: number, messageId: number | null, taskId: string, projectId: string): Promise<void> {
+  // Подпись проверяется: обычный участник не сделает «инцидент», вставив маркер в текст.
+  private isIncidentGroupDraft(draft: TelegramTaskDraft): boolean {
+    const origin = readIncidentOrigin(draft.taskText ?? '', incidentSigningKey());
+    return origin !== null && origin.chatId === draft.tgChatId && origin.projectId === draft.projectId;
+  }
+
+  private async rememberOrigin(
+    chatId: number,
+    messageId: number | null,
+    taskId: string,
+    projectId: string,
+    text?: string,
+  ): Promise<void> {
     // CSharpFixer preserves the real reporter and owns its durable result delivery.
     const config = process.env.CSHARP_FIXER_CHAT_ID === String(chatId) ? csharpFixerConfig() : null;
     if (config !== null && projectId === config.projectId) return;
-    await this.deps.taskOrigins?.attach({ chatId, messageId, taskId, projectId });
+    // Инцидент группы: результат — reply на исходное сообщение автора (оно в том же топике).
+    const incident = text ? readIncidentOrigin(text, incidentSigningKey()) : null;
+    const replyTo = incident && incident.chatId === chatId && incident.projectId === projectId
+      ? incident.messageId : messageId;
+    await this.deps.taskOrigins?.attach({ chatId, messageId: replyTo, taskId, projectId });
   }
 
   /**

@@ -357,6 +357,7 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
             title: 'Команда · задачи',
             createdAt: '2026-11-01T09:00:00.000Z',
             status: 'active',
+            mode: 'incident',
             projectIds: [PROJECT_SEEDS[0].id],
           },
           // Черновик (db/189): бот сам добавлен в группу, ждёт подтверждения.

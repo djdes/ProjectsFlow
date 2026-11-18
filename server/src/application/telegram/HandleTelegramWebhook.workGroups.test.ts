@@ -6,7 +6,7 @@ import type { OnboardingPromptInput } from './TelegramGroupOnboarding.js';
 // Рабочие группы пространства (db/181): привязка по коду, /id, приветствие, переезд группы,
 // гейт подключения людей. Минимальные стабы (tsx + node:test).
 function makeHarness(opts: {
-  workGroup?: { workspaceId: string; workspaceName: string } | null;
+  workGroup?: { workspaceId: string; workspaceName: string; mode?: 'standard' | 'incident'; addedByUserId?: string | null } | null;
   senderUserId?: string | null;
   member?: boolean;
   bindResult?: { kind: string; workspaceName?: string };
@@ -66,7 +66,7 @@ function makeHarness(opts: {
         if (result.kind === 'bound') workGroup = { workspaceId: 'ws1', workspaceName: 'Программисты' };
         return result;
       },
-      async resolveChat() { return workGroup ? { ...workGroup, addedByUserId: null } : null; },
+      async resolveChat() { return workGroup ? { addedByUserId: null, mode: 'standard' as const, ...workGroup } : null; },
       async migrateChat(from: number, to: number) { migrations.push([from, to]); },
       async handleBotAdded(chat: { id: number; title: string | null }, inviter: number) {
         botAddedCalls.push({ chatId: chat.id, title: chat.title, inviter });
@@ -332,4 +332,23 @@ test('my_chat_member: бота удалили — группа отключае�
   await x.h.execute(myChatMember('left', 'administrator'));
   assert.deepEqual(x.botRemovedCalls, [-1001, -1001]);
   assert.equal(x.sent.length, 0);
+});
+
+test('группа инцидентов: любой участник без аккаунта идёт в композер с режимом incident', async () => {
+  const group = { workspaceId: 'ws1', workspaceName: 'YesBeat', mode: 'incident' as const, addedByUserId: 'u-lead' };
+  const text = makeHarness({ workGroup: group, senderUserId: null });
+  await text.h.execute(groupMessage({ text: '@ProjectsFlow_Bot Не открывается отчёт' }));
+  assert.equal(text.prompts.length, 0, 'no account onboarding in an incident group');
+  assert.equal(text.composerCalls.length, 1);
+  assert.deepEqual((text.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, { addedByUserId: 'u-lead' });
+  const voice = makeHarness({ workGroup: group, senderUserId: null, voiceTranscript: 'Не открывается отчёт' });
+  await voice.h.execute(groupMessage({ voice: { file_id: 'voice', duration: 1 }, reply_to_message: { message_id: 3, from: { id: 1, is_bot: true, username: 'ProjectsFlow_Bot' } } }));
+  assert.equal(voice.prompts.length, 0);
+  assert.deepEqual((voice.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, { addedByUserId: 'u-lead' });
+});
+
+test('обычная рабочая группа не получает режим incident', async () => {
+  const x = makeHarness({ workGroup: { workspaceId: 'ws1', workspaceName: 'Программисты' }, senderUserId: 'u-ivan', member: true });
+  await x.h.execute(groupMessage({ text: '@ProjectsFlow_Bot Сделать отчёт' }));
+  assert.equal((x.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, undefined);
 });

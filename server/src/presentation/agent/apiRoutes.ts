@@ -1,5 +1,6 @@
 import { agentActivity, AgentActivityTracker } from '../../application/agent/AgentActivityTracker.js';
 import { Router, raw, type NextFunction, type Request, type Response } from 'express';
+import { INCIDENT_NOTIFY_KINDS, type IncidentNotifyKind, type NotifyIncidentGroup } from '../../application/telegram/NotifyIncidentGroup.js';
 import { contentDisposition } from '../contentDisposition.js';
 import { z } from 'zod';
 import { agentTaskCreateStatus, requireAgentTaskMove } from '../../application/agent/AgentTaskDispatchPolicy.js';
@@ -207,6 +208,8 @@ type Deps = {
   // Multi-user TG-уведомления (Ralph → @projectsflow_bot → юзер).
   readonly sendTelegramNotification: SendAgentTelegramNotification;
   readonly broadcastTelegramByTask: BroadcastTelegramNotificationByTask;
+  // Вопрос/«не получилось» автору инцидента — в его Telegram-группу (spec 2026-11-17, раздел 3).
+  readonly notifyIncidentGroup?: Pick<NotifyIncidentGroup, 'execute'>;
   // Нужны для members-эндпоинта (isOwner = userId === project.ownerId; hasTelegram batch).
   readonly projects: ProjectRepository;
   readonly users: UserRepository;
@@ -2164,6 +2167,25 @@ export function agentApiRouter(deps: Deps): Router {
       try {
         const body = telegramNotifySchema.parse(req.body);
         const respectPrefs = body.respectPrefs !== false;
+
+        // Задача из группы «Инциденты»: сообщение уходит в группу reply'ем на автора.
+        if ((INCIDENT_NOTIFY_KINDS as readonly string[]).includes(body.kind)) {
+          if (!body.taskId || !deps.notifyIncidentGroup) {
+            res.status(400).json({ error: 'invalid_body' });
+            return;
+          }
+          const r = await deps.notifyIncidentGroup.execute({
+            actorUserId: req.user!.id,
+            taskId: body.taskId,
+            kind: body.kind as IncidentNotifyKind,
+            text: body.text,
+            ...(body.ralphQuestionId ? { ralphQuestionId: body.ralphQuestionId } : {}),
+          });
+          res.json(r.status === 'ok'
+            ? { ok: true, sent: 1, skipped: [], delivered: [{ chatId: r.chatId, messageId: r.messageId }] }
+            : { ok: true, sent: 0, skipped: [{ reason: r.status, ...('description' in r ? { detail: r.description } : {}) }], delivered: [] });
+          return;
+        }
 
         // Приоритет userId. taskId-fan-out только если userId не указан.
         if (body.userId) {

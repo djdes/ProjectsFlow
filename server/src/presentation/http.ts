@@ -160,6 +160,7 @@ import type { PairTelegramAccount } from '../application/telegram/PairTelegramAc
 import type { HandleTelegramWebhook } from '../application/telegram/HandleTelegramWebhook.js';
 import type { SendAgentTelegramNotification } from '../application/telegram/SendAgentTelegramNotification.js';
 import type { BroadcastTelegramNotificationByTask } from '../application/telegram/BroadcastTelegramNotificationByTask.js';
+import type { NotifyIncidentGroup } from '../application/telegram/NotifyIncidentGroup.js';
 import type { CreateTaskComment } from '../application/task/CreateTaskComment.js';
 import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js';
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
@@ -834,6 +835,7 @@ type AppDeps = {
     readonly dispatchCommentNotifications: DispatchCommentNotifications;
     readonly sendTelegramNotification: SendAgentTelegramNotification;
     readonly broadcastTelegramByTask: BroadcastTelegramNotificationByTask;
+    readonly notifyIncidentGroup?: NotifyIncidentGroup;
     readonly projects: ProjectRepository;
   };
 };
@@ -1294,6 +1296,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       dispatchCommentNotifications: deps.agent.dispatchCommentNotifications,
       sendTelegramNotification: deps.agent.sendTelegramNotification,
       broadcastTelegramByTask: deps.agent.broadcastTelegramByTask,
+      ...(deps.agent.notifyIncidentGroup ? { notifyIncidentGroup: deps.agent.notifyIncidentGroup } : {}),
       projects: deps.agent.projects,
       users: deps.telegram.users,
     }),

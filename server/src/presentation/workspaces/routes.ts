@@ -27,6 +27,7 @@ import {
   addMemberSchema,
   addTelegramWorkGroupSchema,
   setTelegramGroupProjectsSchema,
+  setTelegramGroupModeSchema,
   changeRoleSchema,
   createTelegramGroupLinkSchema,
   inviteNeighborsSchema,
@@ -192,6 +193,7 @@ function telegramGroupToDto(g: TelegramWorkGroup & { readonly transferWorkspaceN
   title: string | null;
   createdAt: string;
   status: TelegramWorkGroup['status'];
+  mode: TelegramWorkGroup['mode'];
   projectIds: readonly string[];
   transferRequest: { workspaceName: string | null; requestedAt: string } | null;
 } {
@@ -200,6 +202,7 @@ function telegramGroupToDto(g: TelegramWorkGroup & { readonly transferWorkspaceN
     title: g.title,
     createdAt: g.createdAt.toISOString(),
     status: g.status,
+    mode: g.mode ?? 'standard',
     projectIds: g.projectIds,
     // Запрос другого пространства забрать отключённую группу — ждёт решения владельца.
     transferRequest:
@@ -611,6 +614,17 @@ export function workspacesRouter(deps: Deps): Router {
       if (!Number.isSafeInteger(chatId)) { res.status(400).json({ error: 'invalid_chat_id' }); return; }
       const { projectIds } = setTelegramGroupProjectsSchema.parse(req.body);
       const group = await deps.telegramGroups.setProjects(req.params.id, req.user!.id, chatId, projectIds);
+      res.json({ group: telegramGroupToDto(group) });
+    } catch (error) { next(error); }
+  });
+  // Режим группы: standard | incident (spec 2026-11-17, раздел 3).
+  router.put('/:id/telegram-groups/:chatId/mode', async (req, res, next) => {
+    try {
+      if (!deps.telegramGroups) { res.sendStatus(503); return; }
+      const chatId = Number(req.params.chatId);
+      if (!Number.isSafeInteger(chatId)) { res.status(400).json({ error: 'invalid_chat_id' }); return; }
+      const { mode } = setTelegramGroupModeSchema.parse(req.body);
+      const group = await deps.telegramGroups.setMode(req.params.id, req.user!.id, chatId, mode);
       res.json({ group: telegramGroupToDto(group) });
     } catch (error) { next(error); }
   });

@@ -4,11 +4,16 @@
 // active — рабочая группа; disconnected — бота удалили из группы (db/189).
 export type TelegramWorkGroupStatus = 'draft' | 'active' | 'disconnected';
 
+// standard — обычная рабочая группа; incident — группа инцидентов (замена CSharpFixer-чата):
+// писать может любой, задача молча уходит воркеру, ответ — простым языком в группу.
+export type TelegramWorkGroupMode = 'standard' | 'incident';
+
 export type TelegramWorkGroup = {
   readonly chatId: number;
   readonly title: string | null;
   readonly createdAt: string;
   readonly status: TelegramWorkGroupStatus;
+  readonly mode: TelegramWorkGroupMode;
   // Проекты группы: задачи из неё ставятся только в них. Пусто — все проекты пространства.
   readonly projectIds: readonly string[];
   // Другое пространство просит забрать отключённую группу: решает владелец этого пространства.

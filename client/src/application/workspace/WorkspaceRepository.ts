@@ -10,6 +10,7 @@ import type { InviteCandidate, InviteNeighborStatus } from '@/domain/workspace/I
 import type {
   TelegramGroupLinkPurpose,
   TelegramWorkGroup,
+  TelegramWorkGroupMode,
   TelegramWorkGroups,
 } from '@/domain/workspace/TelegramWorkGroup';
 import type {
@@ -99,6 +100,7 @@ export interface WorkspaceRepository {
   // Перенос отключённой группы в другое пространство — решение владельца (db/189).
   decideTelegramGroupTransfer(id: string, chatId: number, decision: 'approve' | 'reject'): Promise<void>;
   setTelegramGroupProjects(id: string, chatId: number, projectIds: readonly string[]): Promise<TelegramWorkGroup>;
+  setTelegramGroupMode(id: string, chatId: number, mode: TelegramWorkGroupMode): Promise<TelegramWorkGroup>;
 
   listProjects(id: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
   moveProject(workspaceId: string, projectId: string, targetWorkspaceId: string): Promise<void>;

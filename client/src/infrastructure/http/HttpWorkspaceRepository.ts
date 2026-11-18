@@ -2,6 +2,7 @@ import type { InviteCandidate, InviteNeighborStatus } from '@/domain/workspace/I
 import type {
   TelegramGroupLinkPurpose,
   TelegramWorkGroup,
+  TelegramWorkGroupMode,
   TelegramWorkGroups,
 } from '@/domain/workspace/TelegramWorkGroup';
 import type {
@@ -61,6 +62,7 @@ function normalizeTelegramGroup(group: Partial<TelegramWorkGroup> & Pick<Telegra
     title: group.title ?? null,
     createdAt: group.createdAt ?? '',
     status: group.status ?? 'active',
+    mode: group.mode ?? 'standard',
     projectIds: group.projectIds ?? [],
     transferRequest: group.transferRequest ?? null,
   };
@@ -316,6 +318,18 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
     const { group } = await httpClient.put<{ group: TelegramWorkGroup }>(
       `/workspaces/${id}/telegram-groups/${chatId}/projects`,
       { projectIds },
+    );
+    return normalizeTelegramGroup(group);
+  }
+
+  async setTelegramGroupMode(
+    id: string,
+    chatId: number,
+    mode: TelegramWorkGroupMode,
+  ): Promise<TelegramWorkGroup> {
+    const { group } = await httpClient.put<{ group: TelegramWorkGroup }>(
+      `/workspaces/${id}/telegram-groups/${chatId}/mode`,
+      { mode },
     );
     return normalizeTelegramGroup(group);
   }

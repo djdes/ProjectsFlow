@@ -12,12 +12,17 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/sonner';
 import { useContainer } from '@/infrastructure/di/container';
-import type { TelegramWorkGroup, TelegramWorkGroups } from '@/domain/workspace/TelegramWorkGroup';
+import type {
+  TelegramWorkGroup,
+  TelegramWorkGroupMode,
+  TelegramWorkGroups,
+} from '@/domain/workspace/TelegramWorkGroup';
 import { TelegramGroupConnectDialog } from './TelegramGroupConnectDialog';
 import {
   addableProjects,
   findNewGroup,
   groupLabel,
+  groupModeHint,
   groupProjects,
   parseChatIdInput,
   splitGroupsByStatus,
@@ -131,6 +136,18 @@ export function TelegramWorkGroupsCard({
     } catch (error) {
       replaceGroup(previous);
       toast.error((error as Error).message || 'Не удалось сохранить проекты группы');
+    }
+  };
+
+  const saveMode = async (group: TelegramWorkGroup, mode: TelegramWorkGroupMode): Promise<void> => {
+    if (group.mode === mode) return;
+    replaceGroup({ ...group, mode });
+    try {
+      replaceGroup(await workspaceRepository.setTelegramGroupMode(workspaceId, group.chatId, mode));
+      toast.success(mode === 'incident' ? 'Группа переведена в режим инцидентов' : 'Группа снова обычная');
+    } catch (error) {
+      replaceGroup(group);
+      toast.error((error as Error).message || 'Не удалось сменить режим группы');
     }
   };
 
@@ -285,12 +302,15 @@ export function TelegramWorkGroupsCard({
                       )}
                     </>
                   ) : (
-                    <GroupProjects
-                      group={group}
-                      projects={projects}
-                      canManage={canManage}
-                      onChange={(projectIds) => void saveProjects(group, projectIds)}
-                    />
+                    <>
+                      <GroupMode group={group} canManage={canManage} onChange={(mode) => void saveMode(group, mode)} />
+                      <GroupProjects
+                        group={group}
+                        projects={projects}
+                        canManage={canManage}
+                        onChange={(projectIds) => void saveProjects(group, projectIds)}
+                      />
+                    </>
                   )}
                 </div>
                 {canManage && (
@@ -381,6 +401,46 @@ export function TelegramWorkGroupsCard({
         />
       )}
     </Card>
+  );
+}
+
+const MODE_LABELS: Record<TelegramWorkGroupMode, string> = { standard: 'Обычная', incident: 'Инциденты' };
+
+// Режим группы: Обычная / Инциденты. Меняют владелец и руководители (spec 2026-11-17, раздел 3).
+function GroupMode({
+  group,
+  canManage,
+  onChange,
+}: {
+  group: TelegramWorkGroup;
+  canManage: boolean;
+  onChange: (mode: TelegramWorkGroupMode) => void;
+}): React.ReactElement {
+  const mode = group.mode ?? 'standard';
+  return (
+    <div className="mbs-1.5 space-y-1">
+      {canManage ? (
+        <div role="group" aria-label="Режим группы" className="inline-flex rounded-md border border-border p-0.5">
+          {(['standard', 'incident'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={mode === value}
+              className={
+                'rounded px-2 py-0.5 text-xs ' +
+                (mode === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')
+              }
+              onClick={() => onChange(value)}
+            >
+              {MODE_LABELS[value]}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="text-xs">Режим: {MODE_LABELS[mode]}</div>
+      )}
+      <div className="text-xs text-muted-foreground">{groupModeHint(mode, group.projectIds.length > 0)}</div>
+    </div>
   );
 }
 

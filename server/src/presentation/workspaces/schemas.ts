@@ -157,3 +157,8 @@ export const inviteNeighborsSchema = z.object({
   userIds: z.array(z.string().trim().min(1).max(36)).min(1).max(50),
   role: z.enum(['editor', 'viewer']),
 });
+
+// Режим рабочей группы (spec 2026-11-17, раздел 3).
+export const setTelegramGroupModeSchema = z.object({
+  mode: z.enum(['standard', 'incident']),
+});

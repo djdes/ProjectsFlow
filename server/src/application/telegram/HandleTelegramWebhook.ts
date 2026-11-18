@@ -583,7 +583,8 @@ export class HandleTelegramWebhook {
       const bu = this.deps.botUsername;
       const repliedToBot = msg.reply_to_message?.from?.is_bot === true;
       const mentioned = bu ? new RegExp('@' + bu + '\\b', 'i').test(text) : false;
-      const continuation = this.isCSharpFixerChat(chatId) && sourceKey.startsWith('g:') &&
+      const continuation = sourceKey.startsWith('g:') &&
+        (this.isCSharpFixerChat(chatId) || (await this.workGroupFor(chatId))?.mode === 'incident') &&
         await this.deps.composer.isCSharpFixerSource?.(sourceKey);
       if (!repliedToBot && !mentioned && !continuation) return;
       // Вырезаем @упоминание из текста: чтобы оно не попало в текст задачи и чтобы команды
@@ -613,6 +614,7 @@ export class HandleTelegramWebhook {
         return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text, {
           quote: msg.quote?.text ?? null,
           messageId: msg.message_id,
+          senderName: formatSenderName(msg.from),
         });
       }
       replyContext = context;
@@ -667,11 +669,14 @@ export class HandleTelegramWebhook {
       // Рабочая группа пространства: кто ещё не может ставить задачи (нет аккаунта/Telegram или
       // не участник), получает инструкцию с кнопкой, а текст ждёт подключения.
       const workGroup = await this.workGroupFor(chatId);
-      if (!this.isCSharpFixerChat(chatId) && workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, text, sourceKey))) return;
+      // Группа инцидентов (spec 2026-11-17, раздел 3): писать может любой участник, аккаунт не нужен.
+      const incident = this.incidentOf(chatId, workGroup);
+      if (!this.isCSharpFixerChat(chatId) && !incident && workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, text, sourceKey))) return;
       const groupCtx: TelegramGroupContext = {
         ownerUserId: await this.deps.groupOwners.getOwnerUserId(chatId),
         senderName: formatSenderName(msg.from),
         groupTitle: msg.chat.title ?? null,
+        ...(incident ? { incident } : {}),
       };
       return this.deps.composer.startFromMessage(tgUserId, chatId, text, groupCtx, attachments, {
         sourceKey,
@@ -713,7 +718,7 @@ export class HandleTelegramWebhook {
 
       // Рабочая группа: неподключённому — инструкция, расшифровка ждёт подключения. Сбой здесь
       // не «ошибка расшифровки»: текст уже есть, поэтому пробрасываем — Telegram повторит доставку.
-      if (workGroup && !this.isCSharpFixerChat(msg.chat.id)) {
+      if (workGroup && !this.isCSharpFixerChat(msg.chat.id) && !this.incidentOf(msg.chat.id, workGroup)) {
         let waiting: boolean;
         try {
           waiting = await this.promptOnboardingIfNeeded(msg, workGroup, transcript, sourceKey);
@@ -740,6 +745,7 @@ export class HandleTelegramWebhook {
         ownerUserId,
         senderName: formatSenderName(msg.from),
         groupTitle: msg.chat.title ?? null,
+        ...(this.incidentOf(msg.chat.id, workGroup) ? { incident: this.incidentOf(msg.chat.id, workGroup)! } : {}),
       };
       await this.deps.composer.startFromMessage(
         msg.from.id,
@@ -758,6 +764,15 @@ export class HandleTelegramWebhook {
         '⚠️ Не удалось расшифровать голосовое. Отправьте его ещё раз или напишите задачу текстом.',
       );
     }
+  }
+
+  // Режим incident рабочей группы. Чат из CSHARP_FIXER_* (env) пока обслуживается старым путём.
+  private incidentOf(
+    chatId: number,
+    workGroup: ResolvedWorkGroup | null,
+  ): { readonly addedByUserId: string | null } | null {
+    if (!workGroup || workGroup.mode !== 'incident' || this.isCSharpFixerChat(chatId)) return null;
+    return { addedByUserId: workGroup.addedByUserId };
   }
 
   private isCSharpFixerChat(chatId: number): boolean {
@@ -854,7 +869,7 @@ export class HandleTelegramWebhook {
     chatId: number,
     replyToMessageId: number,
     text: string,
-    reply: { readonly quote: string | null; readonly messageId: number } = { quote: null, messageId: 0 },
+    reply: { readonly quote: string | null; readonly messageId: number; readonly senderName?: string } = { quote: null, messageId: 0 },
   ): Promise<void> {
     const mapping = await this.deps.ralphQuestionMessages.findByMessage(chatId, replyToMessageId);
     if (!mapping) {
@@ -863,7 +878,11 @@ export class HandleTelegramWebhook {
       return this.handleTaskReplyComment(tgUserId, chatId, replyToMessageId, text, reply);
     }
 
-    const senderUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    const linkedUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    // Группа «Инциденты»: у автора жалобы аккаунта может не быть — ответ reply'ем на вопрос
+    // принимаем от участника группы и пишем от того, на кого заведена задача (как CSharpFixer).
+    const incidentGroup = chatId < 0 && (await this.workGroupFor(chatId))?.mode === 'incident';
+    const senderUserId = incidentGroup ? mapping.recipientUserId : linkedUserId;
     if (!senderUserId || senderUserId !== mapping.recipientUserId) {
       // Защита от того что чужой TG-аккаунт отвечает на чужое уточнение (после share
       // chat'а, например). По spec'е — отвечает только адресат.
@@ -889,8 +908,9 @@ export class HandleTelegramWebhook {
       source: 'tg-reply-projectsflow-bot',
       answeredAt: new Date().toISOString(),
     };
+    const via = incidentGroup ? `через группу Telegram${reply.senderName ? `, ${reply.senderName}` : ''}` : 'через Telegram reply';
     const body =
-      `**✅ Ответ на уточнение** (через Telegram reply)\n\n${text}\n\n` +
+      `**✅ Ответ на уточнение** (${via})\n\n${text}\n\n` +
       `<!-- ralph-answer ${JSON.stringify(answerPayload)} -->`;
 
     let comment;
@@ -948,7 +968,9 @@ export class HandleTelegramWebhook {
     const preview = text.length > 80 ? text.slice(0, 79).trimEnd() + '…' : text;
     await this.reply(
       chatId,
-      `✅ Принято: <i>${escapeHtml(preview)}</i>\n\nЗадача возвращена в работу.`,
+      incidentGroup
+        ? '✅ Спасибо, ответ получен. Продолжаем работу и напишем здесь, когда будет результат.'
+        : `✅ Принято: <i>${escapeHtml(preview)}</i>\n\nЗадача возвращена в работу.`,
     );
   }
 

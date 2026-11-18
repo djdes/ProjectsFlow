@@ -4,6 +4,7 @@ import {
   addableProjects,
   findNewGroup,
   groupLabel,
+  groupModeHint,
   groupProjects,
   parseChatIdInput,
   splitGroupsByStatus,
@@ -47,4 +48,10 @@ test('groupProjects / addableProjects: chips and the rest of the workspace proje
   assert.deepEqual(groupProjects(['c', 'gone', 'a'], projects).map((p) => p.id), ['c', 'a']);
   assert.deepEqual(addableProjects(['c', 'a'], projects).map((p) => p.id), ['b']);
   assert.deepEqual(addableProjects([], projects).map((p) => p.id), ['a', 'b', 'c']);
+});
+
+test('groupModeHint: explains the mode; incident without projects warns that nothing is accepted', () => {
+  assert.match(groupModeHint('standard', false), /перефразирует/);
+  assert.match(groupModeHint('incident', true), /простым языком/);
+  assert.match(groupModeHint('incident', false), /Выберите проекты/);
 });
