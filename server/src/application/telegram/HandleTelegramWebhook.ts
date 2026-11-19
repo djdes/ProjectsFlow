@@ -42,6 +42,11 @@ import {
 } from './assigneeBrowse.js';
 import { parseComposerMessage } from './composer/parseComposerMessage.js';
 import {
+  inlineTextMentions,
+  telegramIdOfMention,
+  type TelegramMessageEntity,
+} from './composer/personMatch.js';
+import {
   buildWorkspaceAssigneeDigestMessage,
   buildWorkspaceAssigneeDigestRichMessage,
 } from '../digest/SendWorkspaceAssigneeDigest.js';
@@ -103,6 +108,9 @@ export type TelegramUpdate = {
     readonly chat: { readonly id: number; readonly type: string; readonly title?: string };
     readonly text?: string;
     readonly caption?: string;
+    // Разметка текста/подписи; нужна ради text_mention — упоминания людей без @username.
+    readonly entities?: readonly TelegramMessageEntity[];
+    readonly caption_entities?: readonly TelegramMessageEntity[];
     readonly media_group_id?: string;
     readonly photo?: readonly {
       readonly file_id: string;
@@ -530,6 +538,14 @@ export class HandleTelegramWebhook {
     );
   }
 
+  // Текст сообщения, где люди без @username (text_mention) превращены в @-упоминания.
+  private async textWithMentions(msg: TelegramMessage): Promise<string> {
+    const raw = msg.text ?? msg.caption ?? '';
+    const entities = msg.text !== undefined ? msg.entities : msg.caption_entities;
+    if (!entities?.some((e) => e.type === 'text_mention')) return raw;
+    return inlineTextMentions(raw, entities, async (id) => (await this.deps.users.findUserIdByTelegramUserId(id)) !== null);
+  }
+
   private async handleMessage(
     msg: TelegramMessage,
     attachments: readonly TelegramDraftAttachment[],
@@ -537,7 +553,7 @@ export class HandleTelegramWebhook {
   ): Promise<void> {
     if (!msg.from) return;
 
-    let text = (msg.text ?? msg.caption ?? '').trim();
+    let text = (await this.textWithMentions(msg)).trim();
     const tgUserId = msg.from.id;
     const chatId = msg.chat.id;
 
@@ -1897,6 +1913,8 @@ export class HandleTelegramWebhook {
         `👤 <b>Назначить ответственного</b> — добавь <code>@Имя</code> в конец:\n` +
         `   <code>+DocsFlow обновить шаблон @Олег</code>\n` +
         `   <i>задача сразу появится у коллеги; он сможет выполнить её или сменить ответственного</i>\n\n` +
+        `👥 <b>Совместная задача</b> — назови двух и больше: <code>${bot} собрать отчёт @Олег @Ира</code>\n` +
+        `   <i>каждый получит такую же задачу, в описании будут перечислены все исполнители</i>\n\n` +
         `⚡ <b>Из любого чата</b> — набери <code>${bot} текст задачи</code> и выбери проект из списка.\n\n` +
         `💬 <b>Комментарий</b> — ответь (reply) на карточку задачи от бота. Участники получат уведомление.\n` +
         `   <i>В сводке выдели название задачи и ответь с цитатой — комментарий попадёт к ней; без цитаты бот спросит, к какой задаче.</i>\n\n` +
@@ -2332,11 +2350,15 @@ export class HandleTelegramWebhook {
     // 1) Резолв по Telegram @username — в TG людей упоминают именно так (@hotspotping), а не
     //    по отображаемому имени. Нашли пользователя → сразу его карточки.
     if (assigneeQuery.length > 0) {
-      const byUsername = await this.deps.users.findUserIdByTelegramUsername(assigneeQuery);
+      const tgId = telegramIdOfMention(assigneeQuery);
+      const byUsername = tgId !== null
+        ? await this.deps.users.findUserIdByTelegramUserId(tgId)
+        : await this.deps.users.findUserIdByTelegramUsername(assigneeQuery);
       if (byUsername) {
         const sent = await this.sendAssigneeDigest(chatId, ownerUserId, byUsername, groupScope);
         if (!sent) {
-          await this.reply(chatId, `✨ У @${escapeHtml(assigneeQuery)} нет открытых задач в проектах.`);
+          const who = tgId !== null ? 'этого человека' : `@${escapeHtml(assigneeQuery)}`;
+          await this.reply(chatId, `✨ У ${who} нет открытых задач в проектах.`);
         }
         return;
       }

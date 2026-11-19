@@ -3219,3 +3219,110 @@ test('смешанная группа: с исполнителем — обыч�
     assert.ok(h.assigneeMessages.find((m) => m.userId === 'u2'), 'исполнитель получил уведомление');
     assert.match(h.edits.at(-1)!.text, /Задача создана в <b>Yesbeat<\/b>/);
   }));
+
+// --- Совместная задача: «@Бот … @Вася @Петя» → копия каждому исполнителю (2026-11-18) ---
+
+const CO_SHARED = [
+  { id: 'u2', displayName: 'Вася', email: 'v@e.com' },
+  { id: 'u3', displayName: 'Петя', email: 'p@e.com' },
+];
+
+function coAiSegment(): AiSeg {
+  return {
+    id: 's1',
+    title: 'Собрать отчёт',
+    simpleBody: 'Собрать отчёт за ноябрь по продажам',
+    projectId: 'p1',
+    projectName: 'Альфа',
+    confidence: 0.9,
+    assigneeUserId: 'u2',
+    assigneeName: 'Вася',
+    deadline: null,
+  };
+}
+
+test('совместная задача: два @исполнителя → одинаковая задача каждому, в описании названы оба', async () => {
+  const h = makeHarness({ shared: CO_SHARED, aiSegments: [coAiSegment()] });
+  await h.service.startFromMessage(111, -500, 'собрать отчёт за ноябрь @Вася @Петя', gctx('u1', 'Босс', 'Рабочий чат'));
+  const draft = [...h.drafts.values()][0]!;
+  // Модели сказали, что задача общая и кто в ней участвует.
+  assert.match(draft.taskText ?? '', /Ответственные исполнители .*: Вася, Петя/);
+  assert.equal(draft.segments?.length, 2);
+  assert.match(h.edits.at(-1)?.text ?? h.sent.at(-1)!.text, /Совместная задача — копия каждому исполнителю: <b>Вася, Петя<\/b>/);
+
+  await h.service.handleCallback({ ...cq(`ac:${draft.id}`), message: { message_id: 99, chat: { id: -500 } } });
+  assert.equal(h.createTaskCalls.length, 2);
+  assert.deepEqual(h.createTaskCalls.map((c) => c.assigneeUserId).sort(), ['u2', 'u3']);
+  assert.ok(h.createTaskCalls.every((c) => c.projectId === 'p1'));
+  const [a, b] = h.createTaskCalls;
+  assert.equal(a!.description, b!.description, 'одна и та же задача');
+  assert.match(a!.description, /Собрать отчёт за ноябрь по продажам/);
+  assert.match(a!.description, /Ответственные исполнители:\*\* Вася, Петя — задача общая/);
+});
+
+test('совместная задача: «@мне» среди исполнителей — копия и автору', async () => {
+  const h = makeHarness({ shared: CO_SHARED, aiSegments: [coAiSegment()] });
+  await h.service.startFromMessage(111, 500, 'собрать отчёт @мне @Петя');
+  const draft = [...h.drafts.values()][0]!;
+  await h.service.handleCallback(cq(`ac:${draft.id}`));
+  assert.deepEqual(h.createTaskCalls.map((c) => c.assigneeUserId).sort(), ['u1', 'u3']);
+  assert.match(h.createTaskCalls[0]!.description, /Ответственные исполнители:\*\* Создатель, Петя/);
+});
+
+test('совместная задача: ИИ упал → копии исполнителям остаются, ручной флоу не теряет второго', async () => {
+  const h = makeHarness({ shared: CO_SHARED, aiOutcome: 'fail' });
+  await h.service.startFromMessage(111, 500, '+Альфа собрать отчёт @Вася @Петя');
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.segments?.length, 2);
+  await h.service.handleCallback(cq(`ac:${draft.id}`));
+  assert.equal(h.createTaskCalls.length, 2);
+  assert.deepEqual(h.createTaskCalls.map((c) => c.assigneeUserId).sort(), ['u2', 'u3']);
+  assert.ok(h.createTaskCalls.every((c) => c.projectId === 'p1'));
+  assert.match(h.createTaskCalls[0]!.description, /^собрать отчёт\n\n👥 \*\*Ответственные исполнители:\*\* Вася, Петя/);
+});
+
+test('совместная задача: авто-создание до конца разбора создаёт копию каждому', async () => {
+  let release!: () => void;
+  const h = makeHarness({ shared: CO_SHARED, aiSegments: [coAiSegment()], aiGate: new Promise<void>((r) => { release = r; }) });
+  await h.service.startFromMessage(111, 500, '+Альфа собрать отчёт @Вася @Петя', undefined, [], { background: true });
+  const draft = [...h.drafts.values()][0]!;
+  h.drafts.set(draft.id, { ...h.drafts.get(draft.id)!, autoCreateAt: new Date(Date.now() - 1000) });
+  await h.service.processDueAutoCreate();
+  assert.deepEqual(h.createTaskCalls.map((c) => c.assigneeUserId).sort(), ['u2', 'u3']);
+  release();
+});
+
+test('совместная задача: один @исполнитель — прежний поток с одним ответственным', async () => {
+  const h = makeHarness({ shared: CO_SHARED, aiSegments: [coAiSegment()] });
+  await h.service.startFromMessage(111, 500, 'собрать отчёт @Петя');
+  const draft = [...h.drafts.values()][0]!;
+  await h.service.handleCallback(cq(`ac:${draft.id}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u3');
+  assert.doesNotMatch(h.createTaskCalls[0]!.description, /Ответственные исполнители/);
+});
+
+// --- Поиск исполнителя: падежи, уменьшительные, латиница, упоминание без @username ---
+
+test('поиск исполнителя: «@Олегу @vasya» — оба найдены, совместная задача', async () => {
+  const h = makeHarness({
+    shared: [
+      { id: 'u2', displayName: 'Олег', email: 'o@e.com' },
+      { id: 'u3', displayName: 'Василий Петров', email: 'v@e.com' },
+    ],
+    aiSegments: [coAiSegment()],
+  });
+  await h.service.startFromMessage(111, 500, 'собрать отчёт @Олегу @vasya');
+  const draft = [...h.drafts.values()][0]!;
+  await h.service.handleCallback(cq(`ac:${draft.id}`));
+  assert.deepEqual(h.createTaskCalls.map((c) => c.assigneeUserId).sort(), ['u2', 'u3']);
+  assert.match(h.createTaskCalls[0]!.description, /Ответственные исполнители:\*\* Олег, Василий Петров/);
+});
+
+test('поиск исполнителя: «@tgid:<id>» (text_mention) → привязанный аккаунт', async () => {
+  const h = makeHarness({ shared: CO_SHARED, aiOutcome: 'fail' });
+  // tgId 222 привязан к u2 (Вася) в фейке users.
+  await h.service.startFromMessage(111, 500, '+Альфа собрать отчёт @tgid:222');
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.assigneeUserId, 'u2');
+});
