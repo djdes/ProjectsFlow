@@ -14,6 +14,7 @@ const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const lease = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const conversationId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
+const failureQueries: unknown[] = [];
 async function withApi(run: (url: string) => Promise<void>) {
   const job: ImageGeneration = { id, userId: 'owner', dispatcherUserId: 'dispatcher', prompt: 'Фото кружки', status: 'succeeded', claimToken: lease, storageKey: 'private/photo.png', errorMessage: null, createdAt: new Date(), startedAt: new Date(), finishedAt: new Date() };
   const service = new ImageGenerationService({
@@ -30,6 +31,10 @@ async function withApi(run: (url: string) => Promise<void>) {
       async get(key) { return key === id ? job : null; },
       async claim() { job.status = 'running'; return job; },
       async complete() { return true; },
+      async listFailures(q) {
+        failureQueries.push(q);
+        return [{ ...job, status: 'failed', errorMessage: 'Модель отказала', userEmail: 'irina@example.com', userName: 'Ирина' }];
+      },
     },
     storage: { async put() {}, async read(key) { return key === 'private/photo.png' ? { data: Buffer.from('private image bytes'), mimeType: 'image/png' } : null; }, async delete() {} },
     dispatcherUserId: 'dispatcher', idGen: () => id,
@@ -41,7 +46,7 @@ async function withApi(run: (url: string) => Promise<void>) {
   app.use('/api/ai/image-jobs', imageGenerationRouter(service));
   const authenticate = {
     async execute(token: string) {
-      return { user: { id: token === 'other' ? 'other' : 'dispatcher' }, token: { id: 'token', scopeKind: token === 'project' ? 'project' : 'account' } };
+      return { user: { id: token === 'other' ? 'other' : 'dispatcher', isAdmin: token === 'admin' }, token: { id: 'token', scopeKind: token === 'project' ? 'project' : 'account' } };
     },
   } as unknown as AuthenticateAgentToken;
   app.use('/api/agent/image-jobs', imageGenerationAgentRouter(service, authenticate));
@@ -96,5 +101,24 @@ test('photo API binds a request to an accessible chat and rejects foreign or inv
     assert.equal((await fetch(`${base}/api/ai/image-jobs?conversationId=${conversationId}`, { headers: { 'x-test-user': 'other' } })).status, 404);
     const listing = await (await fetch(`${base}/api/ai/image-jobs?conversationId=${conversationId}`, { headers: { 'x-test-user': 'owner' } })).json();
     assert.deepEqual(listing.items, [], 'standalone photos do not appear in an unrelated chat');
+  });
+});
+
+test('agent can search failed photo jobs: admin across users, others only their own', async () => {
+  await withApi(async base => {
+    failureQueries.length = 0;
+    const admin = await fetch(base + '/api/agent/image-jobs/errors?hours=48&query=%D1%84%D0%BE%D1%82%D0%BE', { headers: { Authorization: 'Bearer admin' } });
+    assert.equal(admin.status, 200);
+    const body = await admin.json();
+    assert.equal(body.items[0].error, 'Модель отказала');
+    assert.equal(body.items[0].userEmail, 'irina@example.com');
+    assert.equal('claimToken' in body.items[0], false);
+    await fetch(base + '/api/agent/image-jobs/errors', { headers: { Authorization: 'Bearer other' } });
+    assert.deepEqual(failureQueries, [
+      { userId: null, hours: 48, limit: 30, query: 'фото' },
+      { userId: 'other', hours: 72, limit: 30 },
+    ]);
+    assert.equal((await fetch(base + '/api/agent/image-jobs/errors?hours=9999', { headers: { Authorization: 'Bearer admin' } })).status, 400);
+    assert.equal((await fetch(base + '/api/agent/image-jobs/errors', { headers: { Authorization: 'Bearer project' } })).status, 403);
   });
 });

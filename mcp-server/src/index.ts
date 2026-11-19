@@ -770,6 +770,26 @@ const TOOLS = [
     },
   },
   {
+    name: 'pf_search_image_generation_errors',
+    description:
+      'Search FAILED AI photo-generation jobs (the free photo generation used by desktop apps like ' +
+      'Config and by the web UI). Returns newest first: id, userEmail, userName, prompt, error ' +
+      '(the server-side failure text), createdAt/startedAt/finishedAt (UTC ISO). Admin tokens see ' +
+      'all users, other tokens only their own jobs. Use this FIRST when a task reports that photo ' +
+      'generation failed: match by time and product/prompt text (query) instead of asking the ' +
+      'author for logs. If nothing matches, the request probably failed on the client before ' +
+      'reaching the server (quota/network) — only then ask the author for the app log.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hours: { type: 'integer', description: 'Look back this many hours (1..720, default 72)' },
+        limit: { type: 'integer', description: 'Max jobs (1..100, default 30)' },
+        query: { type: 'string', description: 'Substring of prompt, error text, user email or name (≤200 chars)' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'pf_list_pending_ai_prompt_jobs',
     description:
       'List queued AI-prompt-improvement jobs where current user is the dispatcher, oldest first. ' +
@@ -1784,6 +1804,12 @@ const DeclareAppSchemaInput = z.object({
   schema: z.object({ tables: z.array(AppTableZ).min(1) }),
 });
 
+const SearchImageGenerationErrorsInput = z.object({
+  hours: z.number().int().min(1).max(720).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+  query: z.string().max(200).optional(),
+});
+
 const ListPendingAiPromptJobsInput = z.object({
   limit: z.number().int().min(1).max(50).optional(),
 });
@@ -2230,6 +2256,10 @@ async function main(): Promise<void> {
           const input = DeclareAppSchemaInput.parse(req.params.arguments ?? {});
           const result = await api.declareAppSchema(input.projectId, input.schema);
           return jsonResult(result);
+        }
+        case 'pf_search_image_generation_errors': {
+          const input = SearchImageGenerationErrorsInput.parse(req.params.arguments ?? {});
+          return jsonResult(await api.searchImageGenerationErrors(input));
         }
         case 'pf_list_pending_ai_prompt_jobs': {
           const input = ListPendingAiPromptJobsInput.parse(req.params.arguments ?? {});
