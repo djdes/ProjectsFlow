@@ -47,12 +47,16 @@ test('incident question: reply to the author in the group, plain text, mapped fo
   assert.deepEqual(h.mapped, [{ tgChatId: CHAT, tgMessageId: 900, recipientUserId: 'u-lead', taskId: 'task', ralphQuestionId: 'q1' }]);
 });
 
-test('incident blocked: plain «передали разработчику», no mapping', async () => {
+test('incident blocked: «передали разработчику» plus the worker reason, no mapping', async () => {
   const h = harness(incidentTask());
-  await h.uc.execute({ actorUserId: 'dispatcher', taskId: 'task', kind: 'incident_blocked', text: 'stack trace' });
-  assert.match(h.sent[0]!.text, /Автоматически сделать не удалось, задачу передали разработчику\./);
-  assert.doesNotMatch(h.sent[0]!.text, /stack trace/);
+  await h.uc.execute({ actorUserId: 'dispatcher', taskId: 'task', kind: 'incident_blocked', text: 'Пришлите скриншот <ошибки>' });
+  assert.match(h.sent[0]!.text, /передали разработчику\.\n\nПришлите скриншот &lt;ошибки&gt;/);
   assert.equal(h.mapped.length, 0);
+});
+
+test('incident blocked: generic worker text is not duplicated', () => {
+  const t = incidentMessageText('incident_blocked', { userId: 1, senderName: 'A' }, 'Автоматически сделать не удалось, задачу передали разработчику.');
+  assert.equal(t.match(/передали разработчику/g)?.length, 1);
 });
 
 test('incident notify: unsigned task, moved task or non-incident group never reach Telegram', async () => {

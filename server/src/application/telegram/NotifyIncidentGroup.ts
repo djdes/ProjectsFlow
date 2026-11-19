@@ -47,7 +47,11 @@ export function incidentMessageText(
   const who = escapeTelegramHtml(author.senderName.trim() || 'Автор запроса');
   const mention = `<a href="tg://user?id=${author.userId}">${who}</a>`;
   if (kind === 'incident_blocked') {
-    return `${mention}\n⚠️ Автоматически сделать не удалось, задачу передали разработчику.`;
+    // Причину воркер пишет простым языком для автора: без неё автор не знает, что прислать.
+    // Шаблонный текст воркера не дублируем.
+    const reason = escapeTelegramHtml(text.replace(/<!--[\s\S]*?-->/g, '').trim()).slice(0, 1500);
+    const generic = !reason || reason === '-' || reason.includes('передали разработчику');
+    return `${mention}\n⚠️ Автоматически сделать не удалось, задачу передали разработчику.${generic ? '' : `\n\n${reason}`}`;
   }
   const question = escapeTelegramHtml(text.replace(/<!--[\s\S]*?-->/g, '').trim()).slice(0, 3500);
   return `${mention}\n❓ Нужно небольшое уточнение:\n${question}\n\nОтветьте прямо на это сообщение, и я продолжу.`;
