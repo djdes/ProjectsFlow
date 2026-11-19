@@ -43,6 +43,11 @@ export function imageGenerationRouter(service: ImageGenerationService, authentic
 export function imageGenerationAgentRouter(service: ImageGenerationService, authenticate: AuthenticateAgentToken): Router {
   const r=Router();r.use(requireAgentToken(authenticate));
   r.use((req,res,next)=>{if(req.agentToken?.scopeKind!=='account'){res.status(403).json({error:'account_token_required'});return;}next();});
+  r.get('/errors',wrap(async(req,res)=>{
+    const q=z.object({hours:z.coerce.number().int().min(1).max(720).default(72),limit:z.coerce.number().int().min(1).max(100).default(30),query:z.string().trim().max(200).optional()}).parse(req.query);
+    const items=await service.failures(req.user!.id,req.user!.isAdmin===true,q);
+    res.set('Cache-Control','private, no-store').json({items:items.map(j=>({id:j.id,userId:j.userId,userEmail:j.userEmail,userName:j.userName,prompt:j.prompt,error:j.errorMessage,createdAt:new Date(j.createdAt).toISOString(),startedAt:j.startedAt?new Date(j.startedAt).toISOString():null,finishedAt:j.finishedAt?new Date(j.finishedAt).toISOString():null}))});
+  }));
   r.post('/claim',wrap(async(req,res)=>{const job=await service.claim(req.user!.id);res.json({job:job?{id:job.id,prompt:job.prompt,claimToken:job.claimToken,input:await service.input(req.user!.id,job.id,job.claimToken!)}:null});}));
   const upload=multer({storage:multer.memoryStorage(),limits:{files:1,fileSize:24*1024*1024,fields:2,fieldSize:1000}});
   r.post('/:id/complete',upload.single('image'),wrap(async(req,res)=>{await service.complete(req.user!.id,z.string().uuid().parse(req.params.id),z.string().uuid().parse(req.body.claimToken),req.file?.buffer);res.json({ok:true});}));

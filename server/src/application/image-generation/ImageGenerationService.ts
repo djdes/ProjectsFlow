@@ -40,6 +40,10 @@ export class ImageGenerationService {
     return job;
   }
   quota(userId: string) { return this.deps.jobs.quota(userId); }
+  // Поиск ошибок генерации для воркера: администратор видит все, остальные — только свои.
+  failures(userId: string, isAdmin: boolean, opts: { hours: number; limit: number; query?: string }) {
+    return this.deps.jobs.listFailures({ userId: isAdmin ? null : userId, ...opts });
+  }
   async image(userId: string, id: string): Promise<Buffer> {
     const job = await this.owned(userId, id);
     if (job.status !== 'succeeded' || !job.storageKey) throw new ImageGenerationError(409, 'Фотография ещё не готова');

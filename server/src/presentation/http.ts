@@ -7,6 +7,8 @@ import express, { type Express, type Request, type Response, type RequestHandler
 import { mountBuildAssets } from './staticAssets.js';
 import type { ImageGenerationService } from '../application/image-generation/ImageGenerationService.js';
 import { imageGenerationRouter, imageGenerationAgentRouter } from './image-generation/routes.js';
+import type { AppErrorReports } from '../application/app-errors/AppErrorReports.js';
+import { appErrorIngestRouter, appErrorAgentRouter } from './app-errors/routes.js';
 import { aiTextJobsRouter } from './ai-text/routes.js';
 import type { VoiceTranscriber } from '../application/telegram/VoiceTranscriber.js';
 import { voiceTranscriptionRouter } from './voice-transcription/routes.js';
@@ -360,6 +362,7 @@ import { deploymentRouter } from './deployment/routes.js';
 type AppDeps = {
   readonly deployment?: GetDeploymentStatus;
   readonly imageGeneration?: ImageGenerationService;
+  readonly appErrors?: AppErrorReports;
   readonly voiceTranscriber?: VoiceTranscriber;
   readonly workspaceScope?: RequestHandler;
   readonly emailActions: {
@@ -910,6 +913,11 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Текстовый шлюз Codex: до 100000 символов текста + 20000 инструкции — в кириллице это
   // больше общего лимита 256kb.
   app.use('/api/ai/text-jobs', express.json({ limit: '1mb' }));
+  // Отчёты об ошибках программ — до общего express.json: хвост лога больше 256 КБ.
+  if (deps.appErrors) {
+    app.use('/api/app-errors', appErrorIngestRouter(deps.appErrors));
+    app.use('/api/agent/app-errors', appErrorAgentRouter(deps.appErrors, deps.agent.authenticateAgentToken));
+  }
   app.use(express.json({ limit: '256kb' }));
   app.use(cookieParser());
 

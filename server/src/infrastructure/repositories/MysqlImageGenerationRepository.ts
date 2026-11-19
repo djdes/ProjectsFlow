@@ -1,5 +1,5 @@
 import type { Pool, RowDataPacket, ResultSetHeader } from 'mysql2/promise';
-import type { ImageGenerationRepository } from '../../application/image-generation/ImageGenerationRepository.js';
+import type { ImageGenerationFailure, ImageGenerationFailureQuery, ImageGenerationRepository } from '../../application/image-generation/ImageGenerationRepository.js';
 import { ImageGenerationError, type ImageGeneration } from '../../domain/image-generation/ImageGeneration.js';
 const fields = `id, user_id AS userId, conversation_id AS conversationId, dispatcher_user_id AS dispatcherUserId, prompt, status, claim_token AS claimToken, storage_key AS storageKey, error_message AS errorMessage, created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt`;
 export class MysqlImageGenerationRepository implements ImageGenerationRepository {
@@ -31,6 +31,25 @@ export class MysqlImageGenerationRepository implements ImageGenerationRepository
     await this.expire();
     const [rows] = await this.pool.query<RowDataPacket[]>(`SELECT ${fields} FROM image_generation_jobs WHERE user_id=?${conversationId ? ' AND conversation_id=?' : ''} ORDER BY created_at DESC LIMIT 40`, conversationId ? [userId, conversationId] : [userId]);
     return rows as ImageGeneration[];
+  }
+  async listFailures(q: ImageGenerationFailureQuery): Promise<ImageGenerationFailure[]> {
+    await this.expire();
+    const where = ["j.status='failed'", 'j.created_at >= UTC_TIMESTAMP(3) - INTERVAL ? HOUR'];
+    const params: unknown[] = [q.hours];
+    if (q.userId) { where.push('j.user_id=?'); params.push(q.userId); }
+    const text = q.query?.trim();
+    if (text) {
+      const like = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      where.push('(j.prompt LIKE ? OR j.error_message LIKE ? OR u.email LIKE ? OR u.display_name LIKE ?)');
+      params.push(like, like, like, like);
+    }
+    params.push(q.limit);
+    const cols = fields.split(', ').map((f) => `j.${f}`).join(', ');
+    const [rows] = await this.pool.query<RowDataPacket[]>(
+      `SELECT ${cols}, u.email AS userEmail, u.display_name AS userName
+       FROM image_generation_jobs j LEFT JOIN users u ON u.id=j.user_id
+       WHERE ${where.join(' AND ')} ORDER BY j.created_at DESC LIMIT ?`, params);
+    return rows as ImageGenerationFailure[];
   }
   async get(id: string): Promise<ImageGeneration | null> {
     const [rows] = await this.pool.query<RowDataPacket[]>(`SELECT ${fields} FROM image_generation_jobs WHERE id=?`, [id]);

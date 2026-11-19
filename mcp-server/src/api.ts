@@ -892,6 +892,22 @@ export class ApiClient {
     );
   }
 
+  async searchAppErrors(params: { program?: string; query?: string; hours?: number; limit?: number; withLog?: boolean }): Promise<unknown[]> {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') qs.set(k, String(v));
+    const { items } = await this.request<{ items: unknown[] }>(`/agent/app-errors${qs.size ? `?${qs}` : ''}`);
+    return items;
+  }
+
+  async searchImageGenerationErrors(params: { hours?: number; limit?: number; query?: string }): Promise<unknown[]> {
+    const qs = new URLSearchParams();
+    if (params.hours !== undefined) qs.set('hours', String(params.hours));
+    if (params.limit !== undefined) qs.set('limit', String(params.limit));
+    if (params.query) qs.set('query', params.query);
+    const { items } = await this.request<{ items: unknown[] }>(`/agent/image-jobs/errors${qs.size ? `?${qs}` : ''}`);
+    return items;
+  }
+
   async listPendingAiPromptJobs(limit: number): Promise<PendingAiPromptJob[]> {
     const { jobs } = await this.request<{ jobs: PendingAiPromptJob[] }>(
       `/agent/pending-ai-prompt-jobs?limit=${limit}`,
