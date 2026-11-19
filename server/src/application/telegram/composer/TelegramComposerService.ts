@@ -50,6 +50,7 @@ import { taskActionKeyboard } from '../taskActionKeyboard.js';
 import { parseComposerMessage } from './parseComposerMessage.js';
 import { parseDonePrefix } from './parseDonePrefix.js';
 import { fuzzyMatch, greedyProjectPrefix } from './fuzzyMatch.js';
+import { matchPerson, telegramIdOfMention } from './personMatch.js';
 import { parseComposeSegments, type ParsedComposeSegment } from './parseComposeSegments.js';
 import { endOfWeekDeadline } from './defaultDeadline.js';
 import {
@@ -2845,11 +2846,12 @@ export class TelegramComposerService {
   private async assigneeCandidates(
     userId: string,
     projectId: string | null,
-  ): Promise<readonly { id: string; displayName: string }[]> {
+  ): Promise<readonly { id: string; displayName: string; email?: string | null }[]> {
     return projectId
       ? (await this.deps.members.listByProject(projectId)).map((member) => ({
           id: member.userId,
           displayName: member.user.displayName,
+          email: member.user.email ?? null,
         }))
       : await this.deps.members.listSharedUsers(userId);
   }
@@ -2869,13 +2871,26 @@ export class TelegramComposerService {
    */
   private async matchAssignee(
     query: string,
-    candidates: readonly { id: string; displayName: string }[],
+    candidates: readonly { id: string; displayName: string; email?: string | null }[],
   ): Promise<{
     unique: { id: string; displayName: string } | null;
     matches: readonly { id: string; displayName: string }[];
   }> {
-    const clean = query.trim();
+    const clean = query.trim().replace(/[.,:;!?)]+$/u, '');
     if (clean.length === 0) return { unique: null, matches: [] };
+    // Упоминание человека без @username (text_mention): Telegram дал его id — сверяем с
+    // привязанным аккаунтом, имя не угадываем.
+    const tgId = telegramIdOfMention(clean);
+    if (tgId !== null) {
+      try {
+        const linked = await this.deps.users.findUserIdByTelegramUserId(tgId);
+        const member = linked ? candidates.find((c) => c.id === linked) : undefined;
+        return member ? { unique: member, matches: [member] } : { unique: null, matches: [] };
+      } catch (err) {
+        console.warn('[tg-composer] telegram id lookup failed:', err);
+        return { unique: null, matches: [] };
+      }
+    }
     try {
       const byUsername = await this.deps.users.findUserIdByTelegramUsername(clean);
       const member = byUsername ? candidates.find((c) => c.id === byUsername) : undefined;
@@ -2885,8 +2900,8 @@ export class TelegramComposerService {
       // приём задачи, дальше отработает совпадение по имени.
       console.warn('[tg-composer] telegram username lookup failed:', err);
     }
-    const r = fuzzyMatch(clean, candidates, (c) => c.displayName);
-    return { unique: r.unique ?? null, matches: r.matches };
+    const r = matchPerson(clean, candidates);
+    return { unique: r.unique, matches: r.matches };
   }
 
   // Опрос compose-job: до COMPOSE_MAX_ATTEMPTS long-poll'ов (≈150с в проде; в тестах мок
@@ -4238,6 +4253,8 @@ export class TelegramComposerService {
     candidates: readonly { id: string; displayName: string }[],
   ): Promise<string> {
     const projName = await this.projNameOf(projectId);
+    // Упоминание без @username (text_mention) — показываем не служебный id, а «этот человек».
+    if (telegramIdOfMention(query) !== null) query = 'Этот человек';
     const names = (list: readonly { displayName: string }[]) =>
       list.map((c) => escapeHtml(c.displayName)).join(', ');
     if (matches.length > 1) {

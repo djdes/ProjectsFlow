@@ -6,7 +6,7 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { Task } from '../../domain/task/Task.js';
 import { taskActionKeyboard } from './taskActionKeyboard.js';
-import { fuzzyMatch } from './composer/fuzzyMatch.js';
+import { matchPerson } from './composer/personMatch.js';
 import {
   splitDescription,
   formatDeadlineRu,
@@ -172,7 +172,7 @@ export async function collectAssigneeProjectTasks(
 
 // Резолв «@Человек» (из TG-упоминания) → конкретный ответственный. Кандидаты — только те,
 // у кого ЕСТЬ открытые задачи в проектах viewer'а (о ком вообще есть что показать). Матч —
-// fuzzyMatch по displayName (exact → prefix → substring), тот же приём, что в композере.
+// matchPerson (падежи, уменьшительные, латиница) — тот же поиск, что в композере.
 export type AssigneeResolution =
   | { readonly kind: 'ok'; readonly assigneeUserId: string; readonly assigneeName: string }
   | { readonly kind: 'none' } // query не сматчился ни с кем
@@ -200,12 +200,16 @@ export async function resolveAssigneeByName(
     count: e.count,
   }));
 
-  const res = fuzzyMatch(query, candidates, (c) => c.name);
+  // Тот же поиск человека, что в композере: падежи, уменьшительные, латиница.
+  const res = matchPerson(query, candidates.map((c) => ({ ...c, id: c.userId, displayName: c.name })));
   if (res.unique) {
     return { kind: 'ok', assigneeUserId: res.unique.userId, assigneeName: res.unique.name };
   }
   if (res.matches.length === 0) return { kind: 'none' };
-  return { kind: 'ambiguous', options: res.matches.slice(0, ASSIGNEE_MENU_LIMIT).map((m) => ({ ...m })) };
+  return {
+    kind: 'ambiguous',
+    options: res.matches.slice(0, ASSIGNEE_MENU_LIMIT).map((m) => ({ userId: m.userId, name: m.name, count: m.count })),
+  };
 }
 
 // Разбивка кнопок по 2 в ряд (та же вёрстка, что в /tasks-браузере).

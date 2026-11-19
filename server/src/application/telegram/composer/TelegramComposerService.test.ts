@@ -3301,3 +3301,28 @@ test('совместная задача: один @исполнитель — п
   assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u3');
   assert.doesNotMatch(h.createTaskCalls[0]!.description, /Ответственные исполнители/);
 });
+
+// --- Поиск исполнителя: падежи, уменьшительные, латиница, упоминание без @username ---
+
+test('поиск исполнителя: «@Олегу @vasya» — оба найдены, совместная задача', async () => {
+  const h = makeHarness({
+    shared: [
+      { id: 'u2', displayName: 'Олег', email: 'o@e.com' },
+      { id: 'u3', displayName: 'Василий Петров', email: 'v@e.com' },
+    ],
+    aiSegments: [coAiSegment()],
+  });
+  await h.service.startFromMessage(111, 500, 'собрать отчёт @Олегу @vasya');
+  const draft = [...h.drafts.values()][0]!;
+  await h.service.handleCallback(cq(`ac:${draft.id}`));
+  assert.deepEqual(h.createTaskCalls.map((c) => c.assigneeUserId).sort(), ['u2', 'u3']);
+  assert.match(h.createTaskCalls[0]!.description, /Ответственные исполнители:\*\* Олег, Василий Петров/);
+});
+
+test('поиск исполнителя: «@tgid:<id>» (text_mention) → привязанный аккаунт', async () => {
+  const h = makeHarness({ shared: CO_SHARED, aiOutcome: 'fail' });
+  // tgId 222 привязан к u2 (Вася) в фейке users.
+  await h.service.startFromMessage(111, 500, '+Альфа собрать отчёт @tgid:222');
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.assigneeUserId, 'u2');
+});
