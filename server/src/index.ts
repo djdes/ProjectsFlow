@@ -15,6 +15,8 @@ import { parsePerMinute } from './domain/mailing/deliveryPolicy.js';
 import { MysqlTelegramTaskOriginRepository } from './infrastructure/repositories/MysqlTelegramTaskOriginRepository.js';
 import { ImageGenerationService } from './application/image-generation/ImageGenerationService.js';
 import { MysqlImageGenerationRepository } from './infrastructure/repositories/MysqlImageGenerationRepository.js';
+import { MysqlAppErrorReportRepository } from './infrastructure/repositories/MysqlAppErrorReportRepository.js';
+import { AppErrorReports } from './application/app-errors/AppErrorReports.js';
 import { RequestWorkspaceContext } from './infrastructure/workspace/RequestWorkspaceContext.js';
 import { workspaceScope } from './presentation/middleware/workspaceScope.js';
 // Composition root: собираем зависимости + поднимаем HTTP-сервер.
@@ -2536,6 +2538,12 @@ const { app, devProxyUpgrade } = createApp({
         } };
       },
     }),
+  }),
+  appErrors: new AppErrorReports({
+    repo: new MysqlAppErrorReportRepository(pool),
+    idGen: idGenerator,
+    now,
+    ...(process.env.APP_ERROR_INGEST_KEY_SHA256 ? { keySha256: process.env.APP_ERROR_INGEST_KEY_SHA256 } : {}),
   }),
   imageGeneration: new ImageGenerationService({
     conversations: aiConversationService,
