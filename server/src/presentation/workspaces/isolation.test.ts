@@ -120,7 +120,7 @@ async function harness(t: TestContext) {
   const nd = { repo, resolveActiveWorkspace, now: () => new Date() };
   app.use('/api/notifications', notificationsRouter({
     tasks: taskRepo as never, resolveActiveWorkspace,
-    getProjectWorkspaceId: async (id) => projects.find((p) => p.id === id)?.workspaceId ?? null,
+    getProjectWorkspaceIds: async (id) => { const ws = projects.find((p) => p.id === id)?.workspaceId; return ws ? [ws] : []; },
     list: new ListNotifications(nd), countUnread: new CountUnreadNotifications(nd),
     alerts: new NotificationAlerts({ repo, workspaces: workspaces as never }),
     markRead: new MarkNotificationRead(nd), markAllRead: new MarkAllNotificationsRead(nd),

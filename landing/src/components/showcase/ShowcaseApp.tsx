@@ -159,14 +159,15 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
 
       {/* Top Glass Header */}
       <header className="sticky top-0 z-50 backdrop-blur-2xl bg-[#0c0514]/80 border-b border-white/15">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-4">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-3 sm:gap-4">
           <a
             href="#hero"
             onClick={(e) => {
               e.preventDefault();
               scrollToSection('hero');
             }}
-            className="flex items-center gap-3 group cursor-pointer"
+            aria-label="ProjectsFlow"
+            className="flex shrink-0 items-center gap-3 group cursor-pointer"
           >
             <div
               className="w-10 h-10 rounded-xl border border-white/25 flex items-center justify-center shadow-lg transition-transform group-hover:scale-105"
@@ -177,7 +178,9 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
                 style={{ color: activeLayer.accentColor }}
               />
             </div>
-            <div>
+            {/* Логотип + надпись + кнопка + меню не помещаются уже 440 px: меню уезжало за
+                правый край. На узком экране остаётся значок, имя есть в первом экране. */}
+            <div className="hidden min-[440px]:block">
               <span className="font-display font-black text-base sm:text-lg tracking-tight text-white block leading-none">
                 ProjectsFlow
               </span>
@@ -226,9 +229,17 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
             <a
               href={isAuthed ? `${appBase}/projects` : `${appBase}/login`}
               data-auth-authed={isAuthed ? '' : undefined}
-              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-white text-[#12061c] font-extrabold text-xs hover:bg-rose-50 transition-all shadow-md"
+              className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 sm:px-5 py-2.5 rounded-xl bg-white text-[#12061c] font-extrabold text-xs hover:bg-rose-50 transition-all shadow-md"
             >
-              <span>{isAuthed ? 'В проекты' : '1 час Прайма бесплатно'}</span>
+              {isAuthed ? (
+                <span>В проекты</span>
+              ) : (
+                <>
+                  {/* Полный текст на телефоне шёл в две строки — подпись короче. */}
+                  <span className="sm:hidden">1 час бесплатно</span>
+                  <span className="hidden sm:inline">1 час Прайма бесплатно</span>
+                </>
+              )}
               <ArrowUpRight className="w-3.5 h-3.5" />
             </a>
 
@@ -236,7 +247,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
               type="button"
               aria-label="Открыть меню"
               onClick={() => setMobileMenuOpen((v) => !v)}
-              className="xl:hidden w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white cursor-pointer"
+              className="xl:hidden shrink-0 w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white cursor-pointer"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>

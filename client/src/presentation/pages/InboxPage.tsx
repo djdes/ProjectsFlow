@@ -1,7 +1,7 @@
 import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
 import { useCallback, useEffect, useState } from 'react';
-import { ListChecks } from 'lucide-react';
+import { EyeOff, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InboxBreadcrumbs } from '@/presentation/layout/InboxBreadcrumbs';
 import { PageTitle, PageTopBar } from '@/presentation/layout/PageChrome';
@@ -25,7 +25,13 @@ function loadHideDone(): boolean {
 // The globe opens AllWorkspaceTasksPage without changing the selected workspace.
 // Личные задачи живут в обычном проекте с флагом isInbox=true; сервер создаёт его лениво
 // при первом GET /api/inbox.
-export function InboxPage({ embedded = false }: { embedded?: boolean }): React.ReactElement {
+export function InboxPage({
+  embedded = false,
+  onHideWorkspace,
+}: {
+  embedded?: boolean;
+  onHideWorkspace?: () => void;
+}): React.ReactElement {
   const { projectRepository, taskRepository } = useContainer();
   const { workspace } = useCurrentWorkspace();
   const [project, setProject] = useState<Project | null>(null);
@@ -118,10 +124,13 @@ export function InboxPage({ embedded = false }: { embedded?: boolean }): React.R
       </PageTopBar>}
 
       {/* Тело страницы: плотные поля C4 (16/24/36px). Единственный канбан — блок
-          ответственных текущего пространства: название пространства, вкладки, люди и поиск
-          он ставит в одну строку сам. */}
-      <div className={embedded ? 'flex flex-1 flex-col gap-3' : 'flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-4 lg:px-9'}>
-        {!embedded && <PageTitle>Задачи пространства</PageTitle>}
+          ответственных текущего пространства: заголовок, «Мои / Все», людей и поиск он
+          ставит в одну строку сам. */}
+      {/* Верхний отступ меньше, чем у остальных страниц, ровно на то, на сколько строка
+          управления выше самого заголовка (44px с иконками на телефоне, 32px с поиском на
+          десктопе): заголовок встаёт на те же 16/20px от шапки, что и везде. */}
+      {/* Телефон: строки заголовка нет (см. compactHeading) — лента «кто» стоит в 12px от шапки. */}
+      <div className={embedded ? 'flex flex-1 flex-col gap-3' : 'flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-[1.125rem] lg:px-9'}>
         <AssignedToMeBlock
           regionId={embedded ? `workspace-board-${workspace?.id}` : undefined}
           initialTab={embedded ? 'toMe' : undefined}
@@ -129,36 +138,59 @@ export function InboxPage({ embedded = false }: { embedded?: boolean }): React.R
           boardTasks={boardTasks}
           inboxProjectId={project.id}
           onChanged={() => void reloadInboxTasks(project.id)}
-          heading={<CurrentWorkspaceHeading name={workspace?.name ?? 'Пространство'} icon={workspace?.icon ?? null} />}
+          // Своя страница — заголовок страницы прямо в строке управления: название
+          // пространства уже стоит в крошках (на телефоне — в шапке приложения), отдельная
+          // строка с ним только повторяла его и отодвигала задачи вниз. На «Всех задачах»
+          // блоков несколько, там заголовок блока — его пространство.
+          heading={embedded
+            ? <CurrentWorkspaceHeading name={workspace?.name ?? 'Пространство'} icon={workspace?.icon ?? null} />
+            : <PageTitle className="me-1">Задачи пространства</PageTitle>}
           actions={
-            // Выделение задач блока: режим включается сразу во всех его колонках, в шапке
-            // каждой появляются «Все»/«Очистить», снизу — панель действий.
-            <Button
-              type="button"
-              variant={selectionActive ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-11 min-w-11 gap-1.5 px-2 text-muted-foreground hover:text-foreground md:h-8"
-              aria-pressed={selectionActive}
-              onClick={() => setSelectionActive((v) => !v)}
-            >
-              <ListChecks className="size-4" />
-              <span className="max-sm:sr-only">
-                {selectionActive ? 'Отменить выделение' : 'Выделить'}
-              </span>
-            </Button>
+            <>
+              {/* Выделение задач блока: режим включается сразу во всех его колонках, в шапке
+                  каждой появляются «Все»/«Очистить», снизу — панель действий. */}
+              <Button
+                type="button"
+                variant={selectionActive ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-11 min-w-11 gap-1.5 px-2 text-muted-foreground hover:text-foreground md:h-8"
+                aria-pressed={selectionActive}
+                onClick={() => setSelectionActive((v) => !v)}
+              >
+                <ListChecks className="size-4" />
+                <span className="max-sm:sr-only">
+                  {selectionActive ? 'Отменить выделение' : 'Выделить'}
+                </span>
+              </Button>
+              {embedded && onHideWorkspace && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-11 min-w-11 gap-1.5 px-2 text-muted-foreground hover:text-foreground md:h-8"
+                  title="Скрыть пространство со страницы «Все задачи»"
+                  aria-label={`Скрыть пространство «${workspace?.name ?? 'Пространство'}»`}
+                  onClick={onHideWorkspace}
+                >
+                  <EyeOff className="size-4" />
+                  <span className="max-sm:sr-only">Скрыть</span>
+                </Button>
+              )}
+            </>
           }
           hideDone={hideDone}
           onHideDoneChange={handleHideDoneChange}
           selectionActive={selectionActive}
           onSelectionActiveChange={setSelectionActive}
+          compactHeading={!embedded}
         />
       </div>
     </div>
   );
 }
 
-// Заголовок первого блока — текущее пространство. Тот же вид, что у блоков других
-// пространств ниже, чтобы страница читалась как список пространств.
+// Заголовок блока на «Всех задачах» — его пространство: страница читается как список
+// пространств.
 function CurrentWorkspaceHeading({ name, icon }: { name: string; icon: string | null }): React.ReactElement {
   return (
     <h2 className="me-1 flex min-w-0 items-center gap-2 text-base font-semibold">

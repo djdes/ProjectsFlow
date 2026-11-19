@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { AtSign, Check, ChevronLeft, ChevronRight, Play, Search, ShieldCheck, X } from 'lucide-react';
+import { AtSign, CalendarClock, Check, ChevronLeft, ChevronRight, MessagesSquare, Play, Search, ShieldCheck, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -95,10 +95,13 @@ export function InboxSearch({
   );
 }
 
-const DUE_CHIPS: ReadonlyArray<{ key: Exclude<DueKind, 'future'>; label: string; dot: string }> = [
-  { key: 'late', label: 'Просрочено', dot: 'bg-destructive' },
-  { key: 'today', label: 'Сегодня', dot: 'bg-today' },
-  { key: 'none', label: 'Без срока', dot: 'bg-muted-foreground/60' },
+// tint — подложка чипа, когда в нём есть задачи: просроченные красным, на сегодня — цветом
+// срока «сегодня» (цвет = смысл). Раньше три одинаковых серых рамки с точкой-пикселем:
+// «Просрочено 3» читалось так же спокойно, как «Без срока 0».
+const DUE_CHIPS: ReadonlyArray<{ key: Exclude<DueKind, 'future'>; label: string; dot: string; tint: string | null }> = [
+  { key: 'late', label: 'Просрочено', dot: 'bg-destructive', tint: 'border-transparent bg-destructive-soft text-destructive' },
+  { key: 'today', label: 'Сегодня', dot: 'bg-today', tint: 'border-transparent bg-today/15 text-today' },
+  { key: 'none', label: 'Без срока', dot: 'bg-muted-foreground/60', tint: null },
 ];
 
 // Чипы срока: один выбранный за раз, повторный клик снимает. Точка — смысл срока, тем же
@@ -123,22 +126,36 @@ export function DueFilterChips({
     >
       {DUE_CHIPS.map((chip) => {
         const on = value === chip.key;
+        const count = counts[chip.key];
+        const tinted = !on && count > 0 && chip.tint !== null;
         return (
           <button
             key={chip.key}
             type="button"
             aria-pressed={on}
             onClick={() => onChange(on ? null : chip.key)}
+            data-pf-due-tinted={tinted ? '' : undefined}
             className={cn(
-              'inline-flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-meta transition-colors active:bg-active md:min-h-7 md:px-2.5',
+              'inline-flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-meta transition-colors active:bg-active max-[359px]:text-2xs md:min-h-7 md:px-2.5',
               on
                 ? 'border-primary bg-primary-soft text-foreground'
-                : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
+                : tinted
+                  ? cn(chip.tint, 'font-medium')
+                  : cn(
+                      // Телефон — мягкая подложка без рамки: рамок в шапке и так четыре ряда.
+                      'border-border text-muted-foreground hover:bg-hover hover:text-foreground max-md:border-transparent max-md:bg-panel',
+                      count === 0 && 'text-muted-foreground/75',
+                    ),
             )}
           >
-            <span aria-hidden className={cn('hidden size-1.5 shrink-0 rounded-full min-[360px]:inline-block', chip.dot)} />
+            <span aria-hidden className={cn('hidden size-1.5 shrink-0 rounded-full min-[360px]:inline-block', chip.dot, count === 0 && !on && 'opacity-50')} />
             {chip.label}
-            <span className="shrink-0 tabular-nums text-muted-foreground" data-pf-due-count={chip.key}>{counts[chip.key]}</span>
+            <span
+              className={cn('shrink-0 tabular-nums', tinted ? 'font-semibold' : 'text-muted-foreground')}
+              data-pf-due-count={chip.key}
+            >
+              {count}
+            </span>
           </button>
         );
       })}
@@ -178,6 +195,37 @@ export function ReplyFilterChip({
   );
 }
 
+// «Только из групп»: задачи, поставленные в рабочих Telegram-группах (groupOrigin, db/190).
+export function GroupFilterChip({
+  active,
+  count,
+  onToggle,
+}: {
+  active: boolean;
+  count: number;
+  onToggle: () => void;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={`Только из групп: ${count}`}
+      title="Только задачи, поставленные в рабочих Telegram-группах"
+      onClick={onToggle}
+      className={cn(
+        'inline-flex min-h-11 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2 text-meta transition-colors active:bg-active md:min-h-7 md:px-2.5',
+        active
+          ? 'border-primary bg-accent text-foreground'
+          : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
+      )}
+    >
+      <MessagesSquare aria-hidden className="size-3.5 shrink-0" />
+      <span className="max-sm:hidden">Только из групп</span>
+      <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
+    </button>
+  );
+}
+
 // Заголовок очереди над колонками: точка-«очередь» синим (цвет статуса «в очереди»),
 // название по текущей группировке, число карточек и листание ряда колонок вбок.
 export function QueueHeader({
@@ -195,9 +243,11 @@ export function QueueHeader({
   const { back: canScrollBack, forward: canScrollForward } = useScrollEdges(scrollTarget);
   return (
     <div className="flex h-7 items-center gap-2 px-0.5">
-      <span aria-hidden className="size-3 rounded-full border-[2.4px] border-primary" />
-      <h2 className="text-ui font-semibold">{label}</h2>
-      <span className="text-meta tabular-nums text-muted-foreground">{count}</span>
+      <span aria-hidden className="size-3 shrink-0 rounded-full border-[2.4px] border-primary" />
+      {/* Узкий ряд очереди (планшет с панелью) — название в одну строку с «…», а не
+          столбиком «Очередь / по / проектам». */}
+      <h2 className="min-w-0 truncate text-ui font-semibold">{label}</h2>
+      <span className="shrink-0 text-meta tabular-nums text-muted-foreground">{count}</span>
       <span className="flex-1" />
       {/* Листание — для мыши: на тач-экранах ряд листается пальцем. */}
       <div className="hidden items-center gap-1 sm:flex">
@@ -224,7 +274,7 @@ export function QueueHeader({
   );
 }
 
-// Иконка статуса «Вручную»: наполовину залитый круг — «начато, делаю сам».
+// Иконка статуса «В работе»: наполовину залитый круг — «начато, делаю сам».
 export function ManualIcon({ className }: { className?: string }): React.ReactElement {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={cn('size-3.5 shrink-0', className)}>
@@ -264,16 +314,17 @@ export function InboxSectionSwitch({
         aria-pressed={on}
         onClick={() => onChange(key)}
         className={cn(
-          'relative flex min-h-0 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 text-ui whitespace-nowrap transition-colors active:bg-active',
+          // ≤359px рядом стоят поиск, фильтры и выделение — подписи мельче и плотнее.
+          'relative flex min-h-0 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 text-ui whitespace-nowrap transition-colors active:bg-active max-[359px]:gap-0.5 max-[359px]:px-1 max-[359px]:text-2xs',
           on
             ? 'bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
             : 'font-medium text-muted-foreground',
         )}
       >
-        {label}
-        <span className="tabular-nums text-muted-foreground">{count}</span>
+        <span className="min-w-0 truncate">{label}</span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
         {attention && (
-          <span aria-hidden className="size-1.5 rounded-full bg-approval" />
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-approval" />
         )}
       </button>
     );
@@ -284,19 +335,19 @@ export function InboxSectionSwitch({
       aria-label="Раздел"
       className={cn('flex h-12 rounded-lg border border-transparent bg-foreground/[0.06] p-0.5 dark:border-border dark:bg-panel', className)}
     >
-      {item('now', 'В работе', nowCount, nowAttention)}
+      {item('now', 'Сейчас', nowCount, nowAttention)}
       {item('queue', 'Очередь', queueCount)}
     </div>
   );
 }
 
 // Свайп карточки вправо на тач-экране — «дальше по процессу» (из очереди в работу, из
-// «Вручную» в готово или на утверждение, на полке приёмки — принять). Под карточкой
+// «В работе» в готово или на утверждение, на полке приёмки — принять). Под карточкой
 // проступает подложка с действием цветом его статуса; за порогом она становится плотной —
 // отпустите, и действие выполнится. Мышью жест не срабатывает: на десктопе есть плашка.
 export type SwipeAction = {
   readonly label: string;
-  readonly tone: 'manual' | 'done' | 'approval';
+  readonly tone: 'manual' | 'done' | 'approval' | 'snooze';
   readonly onCommit: () => void;
 };
 
@@ -304,28 +355,40 @@ const SWIPE_TONE: Record<SwipeAction['tone'], { readonly soft: string; readonly 
   manual: { soft: 'bg-manual-soft text-manual-ink', armed: 'bg-manual text-background' },
   done: { soft: 'bg-done-soft text-done-ink', armed: 'bg-done text-background' },
   approval: { soft: 'bg-approval-soft text-approval-ink', armed: 'bg-approval text-background' },
+  // «Отложить» — цветом срока «сегодня»: жест про срок, а не про статус.
+  snooze: { soft: 'bg-today/15 text-today', armed: 'bg-today text-background' },
 };
 
 // Функция, а не таблица элементов: JSX на уровне модуля исполнялся бы при импорте (в том
 // числе в node-тестах, где нет React-рантайма).
 function swipeIcon(tone: SwipeAction['tone']): React.ReactElement {
   if (tone === 'manual') return <Play className="size-3.5 fill-current" />;
+  if (tone === 'snooze') return <CalendarClock className="size-4" />;
   if (tone === 'done') return <Check className="size-4" strokeWidth={2.6} />;
   return <ShieldCheck className="size-4" />;
 }
 
 export function SwipeToAct({
   action,
+  back = null,
   disabled = false,
   children,
 }: {
-  action: SwipeAction;
+  // Свайп вправо — «дальше по процессу».
+  action: SwipeAction | null;
+  // Свайп влево — «отложить» (срок).
+  back?: SwipeAction | null;
   disabled?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const { animations } = useMotion();
-  const { ref, offset, armed } = useCardSwipe({ disabled, onCommit: action.onCommit });
-  const tone = SWIPE_TONE[action.tone];
+  const { ref, offset, armed } = useCardSwipe({
+    disabled,
+    onCommit: action?.onCommit ?? null,
+    onCommitBack: back?.onCommit ?? null,
+  });
+  const shown = offset > 0 ? action : offset < 0 ? back : null;
+  const tone = shown ? SWIPE_TONE[shown.tone] : null;
   return (
     // data-pf-no-edge-swipe — свайп карточки не должен открывать боковое меню. Обрезаем
     // уехавшую карточку только во время жеста: в покое её свечение (непрочитанная,
@@ -333,24 +396,26 @@ export function SwipeToAct({
     <div
       ref={ref}
       data-pf-no-edge-swipe
-      className={cn('relative rounded-lg', offset > 0 && 'overflow-hidden')}
+      className={cn('relative rounded-lg', offset !== 0 && 'overflow-hidden')}
     >
-      {offset > 0 && (
+      {shown && tone && (
         <div
           aria-hidden
           className={cn(
-            'pointer-events-none absolute inset-0 flex items-center gap-1.5 rounded-lg ps-3 text-meta font-semibold transition-colors duration-150',
+            'pointer-events-none absolute inset-0 flex items-center gap-1.5 rounded-lg text-meta font-semibold transition-colors duration-150',
+            // Подпись — с той стороны, откуда уехала карточка.
+            offset > 0 ? 'ps-3' : 'justify-end pe-3',
             armed ? tone.armed : tone.soft,
           )}
         >
-          {swipeIcon(action.tone)}
-          {action.label}
+          {swipeIcon(shown.tone)}
+          {shown.label}
         </div>
       )}
       <div
         className="relative"
         style={{
-          transform: offset > 0 ? `translateX(${offset}px)` : undefined,
+          transform: offset !== 0 ? `translateX(${offset}px)` : undefined,
           // Возврат на место — только когда палец отпущен и анимации не выключены.
           transition: offset === 0 && animations ? 'transform 180ms ease-out' : undefined,
         }}

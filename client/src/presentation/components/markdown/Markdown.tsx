@@ -27,6 +27,15 @@ const BASE_PROSE = cn(
   // блок-картинка: небольшой симметричный отступ (prose по умолчанию даёт ~2em)
   '[&_figure]:my-2 [&_figure]:flex [&_figure]:flex-col [&_figure]:items-start [&_figure_img]:my-0',
   '[&_table]:block [&_table]:w-fit [&_table]:max-w-full [&_table]:overflow-x-auto',
+  // инлайн-код: typography дорисовывает обратные кавычки через ::before/::after и делает
+  // код жирным — убираем; вместо этого лёгкая подложка обычного веса (токен muted, обе темы).
+  // Блоки кода (pre > code) не трогаем: подложка у них своя, на pre.
+  '[&_code]:before:content-none [&_code]:after:content-none',
+  '[&_:not(pre)>code]:rounded [&_:not(pre)>code]:bg-muted [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-px',
+  '[&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.875em] [&_:not(pre)>code]:font-normal',
+  // GFM-чеклист (`- [ ] пункт`): маркер пункта — сам чекбокс. Без этого prose рисовал ещё и
+  // точку списка, и у каждого пункта было два маркера «• ☐» (карточки доски, «Входящие»).
+  '[&_ul.contains-task-list]:list-none [&_ul.contains-task-list]:ps-0 [&_li.task-list-item]:ps-0',
 );
 
 // memo: полный remark/rehype-парсинг синхронный и дорогой; на досках он висит в каждой
@@ -57,6 +66,22 @@ function MarkdownImpl({
         remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA]]}
         components={{
+          // Ссылки из описаний и комментариев — в новой вкладке: иначе переход уводил со
+          // страницы задачи. Клик не всплывает в контейнеры с onClick (открытие редактора).
+          a: (anchorProps) => {
+            const { node, children: linkChildren, ...props } = anchorProps;
+            void node;
+            return (
+              <a
+                {...props}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {linkChildren}
+              </a>
+            );
+          },
           input: (inputProps) => {
             // node не должен утекать в DOM-атрибуты при spread'е props.
             const { node, ...props } = inputProps;

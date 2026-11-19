@@ -4,7 +4,9 @@ import {
   projectRowVisibility,
   deriveMembership,
   deriveOwnersCount,
+  deriveSharedMembership,
   type ProjectAccessRow,
+  type ProjectWorkspaceAccessRow,
   type WorkspaceMemberAccessRow,
 } from './workspaceMembershipView.js';
 
@@ -112,4 +114,60 @@ test('deriveOwnersCount: inbox всегда 1, иначе — счётчик ws-
   assert.equal(deriveOwnersCount({ isInbox: true }, 5), 1);
   assert.equal(deriveOwnersCount({ isInbox: false }, 2), 2);
   assert.equal(deriveOwnersCount({ isInbox: false }, 0), 0);
+});
+
+// --- Общие проекты (db/182): гости подключённых пространств ---
+
+function access(
+  workspaceId: string,
+  role: WorkspaceMemberAccessRow['role'],
+  excluded = false,
+): ProjectWorkspaceAccessRow {
+  return { workspaceId, userId: 'u2', role, createdAt: WM_CREATED, excluded };
+}
+
+test('deriveSharedMembership: home membership wins over a stronger connected role', () => {
+  const m = deriveSharedMembership(proj({ workspaceId: 'home' }), 'u2', [
+    access('home', 'viewer'),
+    access('office', 'lead'),
+  ]);
+  assert.equal(m?.role, 'viewer');
+  assert.equal(m?.guest, undefined);
+});
+
+test('deriveSharedMembership: connected owner/lead is capped at editor and marked guest', () => {
+  for (const role of ['owner', 'lead', 'editor'] as const) {
+    const m = deriveSharedMembership(proj({ workspaceId: 'home' }), 'u2', [access('office', role)]);
+    assert.equal(m?.role, 'editor');
+    assert.equal(m?.guest, true);
+  }
+  const viewer = deriveSharedMembership(proj({ workspaceId: 'home' }), 'u2', [access('office', 'viewer')]);
+  assert.equal(viewer?.role, 'viewer');
+  assert.equal(viewer?.guest, true);
+});
+
+test('deriveSharedMembership: hidden in the home workspace means hidden everywhere', () => {
+  assert.equal(
+    deriveSharedMembership(proj({ workspaceId: 'home' }), 'u2', [access('home', 'editor', true), access('office', 'editor')]),
+    null,
+  );
+});
+
+test('deriveSharedMembership: hidden in one connected workspace keeps the other path', () => {
+  const m = deriveSharedMembership(proj({ workspaceId: 'home' }), 'u2', [
+    access('office', 'editor', true),
+    access('sales', 'viewer'),
+  ]);
+  assert.equal(m?.role, 'viewer');
+  assert.equal(
+    deriveSharedMembership(proj({ workspaceId: 'home' }), 'u2', [access('office', 'editor', true)]),
+    null,
+  );
+});
+
+test('deriveSharedMembership: the project creator is owner only through the home workspace', () => {
+  assert.equal(deriveSharedMembership(proj({ workspaceId: 'home' }), 'u-owner', [{ ...access('home', 'editor'), userId: 'u-owner' }])?.role, 'owner');
+  const guest = deriveSharedMembership(proj({ workspaceId: 'home' }), 'u-owner', [{ ...access('office', 'editor'), userId: 'u-owner' }]);
+  assert.equal(guest?.role, 'editor');
+  assert.equal(guest?.guest, true);
 });

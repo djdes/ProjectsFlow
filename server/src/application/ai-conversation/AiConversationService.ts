@@ -96,7 +96,7 @@ export class AiConversationService {
     },
   ): Promise<AiConversation[]> {
     if (query.projectId) {
-      await requireProjectAccess(this.deps.projectAccess, query.projectId, userId, 'read_project');
+      await requireProjectAccess(this.deps.projectAccess, query.projectId, userId, 'read_project_data');
     }
     // `scope` filters by project linkage, not by kind, because a personal conversation
     // can now be attached to a project too:
@@ -135,7 +135,7 @@ export class AiConversationService {
       // The only gate against attaching a conversation to somebody else's project.
       // Membership (or admin bypass) with `read_project` is required — the same check
       // every project-scoped route uses; a non-member gets 404, a too-weak role 403.
-      await requireProjectAccess(this.deps.projectAccess, projectId, userId, 'read_project');
+      await requireProjectAccess(this.deps.projectAccess, projectId, userId, 'read_project_data');
       workspaceId = await this.deps.projectAccess.projects.getWorkspaceId(projectId);
     }
 
@@ -160,7 +160,7 @@ export class AiConversationService {
       this.deps.projectAccess,
       projectId,
       userId,
-      'read_project',
+      'read_project_data',
     );
     const existing = await this.deps.repo.findProjectStudioForOwner(userId, projectId);
     if (existing) return existing;
@@ -258,7 +258,7 @@ export class AiConversationService {
         this.deps.projectAccess,
         conversation.projectId,
         userId,
-        'read_project',
+        'read_project_data',
       );
       dispatcherUserId = access.project.dispatcherUserId;
     } else {
@@ -443,7 +443,7 @@ export class AiConversationService {
         this.deps.projectAccess,
         conversation.projectId,
         userId,
-        'read_project',
+        'read_project_data',
       );
     }
     return conversation;

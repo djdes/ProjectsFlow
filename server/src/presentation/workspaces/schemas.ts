@@ -72,6 +72,8 @@ export const saveWorkspaceAssigneeDigestSchema = z
     eodReminderEnabled: z.boolean().default(false),
     eodReminderHour: z.number().int().min(0).max(23).default(17),
     eodReminderMinute: z.number().int().min(0).max(59).default(20),
+    // Старый клиент поле не шлёт — не выключаем напоминания молча.
+    urgentRemindersEnabled: z.boolean().default(true),
   })
   .refine((value) => !value.enabled || value.telegramGroupChatId !== null, {
     message: 'Выберите Telegram-группу для рассылки',
@@ -133,4 +135,30 @@ export const createWorkspaceInviteSchema = z.object({
     .nullable()
     .optional()
     .transform((v) => (v && v.length > 0 ? v : null)),
+});
+
+// Рабочие Telegram-группы (db/181): ссылка «Подключить группу» и ручное добавление по id.
+export const createTelegramGroupLinkSchema = z.object({
+  purpose: z.enum(['work', 'main']).default('work'),
+});
+
+// Проекты рабочей группы (db/189): список целиком, пустой — все проекты пространства.
+export const setTelegramGroupProjectsSchema = z.object({
+  projectIds: z.array(z.string().uuid()).max(200),
+});
+
+export const addTelegramWorkGroupSchema = z.object({
+  // У групп и супергрупп Telegram id отрицательный.
+  chatId: z.number().int().negative().refine(Number.isSafeInteger, 'Некорректный id группы'),
+});
+
+// «Из соседних пространств»: пакетное приглашение по id (почту сервер берёт из базы).
+export const inviteNeighborsSchema = z.object({
+  userIds: z.array(z.string().trim().min(1).max(36)).min(1).max(50),
+  role: z.enum(['editor', 'viewer']),
+});
+
+// Режим рабочей группы (spec 2026-11-17, раздел 3).
+export const setTelegramGroupModeSchema = z.object({
+  mode: z.enum(['standard', 'incident', 'mixed']),
 });

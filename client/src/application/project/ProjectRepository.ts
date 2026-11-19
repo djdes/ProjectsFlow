@@ -499,6 +499,11 @@ export interface ProjectRepository {
   // Мультизадачный воркер проекта: вкл/выкл параллельное выполнение задач диспетчером.
   // Любой участник проекта (viewer+). Сервер вернёт обновлённый проект.
   setMultiTaskWorker(projectId: string, enabled: boolean): Promise<Project>;
+  // Привычные названия + короткое описание для рабочих Telegram-групп (db/192). Владелец/руководитель.
+  setGroupHints(
+    projectId: string,
+    hints: { aliases: readonly string[]; shortDescription: string | null; groupFullRunDefault?: boolean },
+  ): Promise<Project>;
   // Публичная ссылка доски (Publish to web, db/096). Owner-only. publish → возвращает
   // slug + полный url; unpublish снимает; setPublicIndexing тогглит индексацию поисковиками.
   publish(projectId: string): Promise<{ slug: string; url: string }>;
@@ -699,6 +704,12 @@ export interface ProjectRepository {
   // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах
   // (без caller'а самого). Используется UI-выбором ответственного во входящих.
   listSharedMembers(): Promise<SharedMember[]>;
+  // «Доступ пространств» проекта (db/182): подключённые пространства и правила видимости.
+  getWorkspaceAccess(projectId: string): Promise<import('@/domain/project/ProjectSharing').ProjectSharing>;
+  saveWorkspaceAccess(
+    projectId: string,
+    input: import('@/domain/project/ProjectSharing').SaveProjectSharingInput,
+  ): Promise<import('@/domain/project/ProjectSharing').ProjectSharing>;
 
   // Аналитика/активность проекта (окно активности проекта в шапке).
   // recordProjectView — fire-and-forget при открытии проекта (сервер троттлит).

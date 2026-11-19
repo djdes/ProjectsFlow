@@ -175,7 +175,11 @@ test('task properties restore the account order for another project and omit cre
   const view = await mount(t, React.createElement(TaskProperties, { taskId: 'another-project-task', items }), { prefs: { taskPropertyOrder: ['files', 'created', 'deadline', 'project'] } });
   try {
     const rows = [...view.host.querySelectorAll('[data-pf-task-property]')].map((row) => row.getAttribute('data-pf-task-property'));
-    assert.deepEqual(rows.slice(0, 3), ['files', 'deadline', 'project']);
+    // Сохранённые строки идут в сохранённом порядке; новые встают к своему соседу
+    // по дефолтному списку («Повтор» — сразу под «Сроком»).
+    assert.deepEqual(rows.filter((key) => key === 'files' || key === 'deadline' || key === 'project'), ['files', 'deadline', 'project']);
+    assert.equal(rows[0], 'files');
+    assert.equal(rows[rows.indexOf('deadline') + 1], 'recurrence');
     assert.ok(!rows.includes('created'));
     assert.ok(rows.includes('status'));
   } finally { await view.close(); }

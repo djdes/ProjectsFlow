@@ -14,6 +14,8 @@ export type SearchTasksDeps = {
   // палитры по текущему пространству); ОПУСКАЕТСЯ для agent-токена, у которого нет
   // «текущего пространства» — он ищет по всем проектам владельца (by-design глобально).
   readonly resolveActiveWorkspace?: ResolveActiveWorkspace;
+  // Общий проект (db/182): id задач из списка, которые человек видит. Без него — все.
+  readonly visibleTaskIds?: (userId: string, taskIds: readonly string[]) => Promise<ReadonlySet<string>>;
 };
 
 // Глобальный поиск по задачам. Скоуп: admin (isAdmin) — все задачи; иначе — проекты, где
@@ -46,15 +48,18 @@ export class SearchTasks {
     );
 
     const seen = new Set<string>();
-    const merged: TaskSearchResult[] = [];
+    const found: TaskSearchResult[] = [];
     for (const batch of batches) {
       for (const result of batch) {
         if (seen.has(result.taskId)) continue;
         seen.add(result.taskId);
-        merged.push(result);
-        if (merged.length === DEFAULT_LIMIT) return merged;
+        found.push(result);
       }
     }
-    return merged;
+    // Задачи общих проектов, скрытые от человека правилами, в выдачу не попадают.
+    const allowed = this.deps.visibleTaskIds
+      ? await this.deps.visibleTaskIds(userId, found.map((result) => result.taskId))
+      : null;
+    return found.filter((result) => !allowed || allowed.has(result.taskId)).slice(0, DEFAULT_LIMIT);
   }
 }

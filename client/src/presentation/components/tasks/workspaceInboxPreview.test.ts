@@ -21,6 +21,7 @@ function task(id: string, overrides: Partial<AssignedTask> = {}): AssignedTask {
     createdAt: new Date('2026-10-01T09:00:00.000Z'),
     updatedAt: new Date('2026-10-01T09:00:00.000Z'),
     ralphMode: 'normal',
+    runMode: 'quick',
     ralphCancelRequestedAt: null,
     ralphCancelRequestedBy: null,
     ralphCancelRequestedByDisplayName: null,

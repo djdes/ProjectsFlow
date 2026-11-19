@@ -15,7 +15,7 @@ export class GetKbDocument {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string, path: string): Promise<KbDocument> {
-    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
+    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project_data');
     if (project.kbKind === 'none') throw new KbNotConnectedError();
     const doc = await this.deps.kb.read(project, path, ownerUserId);
     if (!doc) throw new KbDocumentNotFoundError(path);

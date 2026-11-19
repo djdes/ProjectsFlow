@@ -13,7 +13,7 @@ export class GetAutomationConfig {
   constructor(private readonly deps: Deps) {}
 
   async execute(input: { projectId: string; userId: string }): Promise<AutomationConfig> {
-    await requireProjectAccess(this.deps, input.projectId, input.userId, 'read_project');
+    await requireProjectAccess(this.deps, input.projectId, input.userId, 'read_project_data');
     const saved = await this.deps.automation.getConfig(input.projectId);
     if (!saved) return defaultAutomationConfig(input.projectId);
     return { ...saved, criteria: mergeCriteriaWithDefaults(saved.criteria) };

@@ -12,7 +12,7 @@ module.exports = {
       },
       instances: 1,
       exec_mode: "fork",
-      max_memory_restart: "300M",
+      max_memory_restart: "1024M",
       out_file: "/var/www/projectsflow/data/logs/projectsflow.out.log",
       error_file: "/var/www/projectsflow/data/logs/projectsflow.err.log",
       time: true,

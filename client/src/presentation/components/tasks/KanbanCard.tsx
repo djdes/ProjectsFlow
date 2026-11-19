@@ -12,18 +12,22 @@ import { OPEN_TASK_CARD_CLASS, TASK_CARD_BODY_CLASS, taskCardTitleClass } from '
 import { TaskTitleText } from './TaskTitleText';
 import { splitTitleBody } from '@/lib/taskTitleBody';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
-import type { Task, TaskStatus } from '@/domain/task/Task';
+import type { RunMode, Task, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { ClaudeIcon } from './ClaudeIcon';
 import { AssigneeBadge } from './AssigneeBadge';
 import { InboxCheckbox } from './InboxCheckbox';
 import { RalphModeBadge } from './RalphMode';
 import { DeadlineBadge } from './DeadlineBadge';
+import { TaskRecurrenceBadge } from './TaskRecurrenceBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { TASK_TYPE_META } from '@/domain/task/taskTypeMeta';
+import { useTaskOriginLabel } from '@/presentation/hooks/useTaskOriginLabel';
+import { TaskGroupOriginBadge } from './TaskGroupOriginBadge';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, canSendToWorker, canTakeToManual, quickPromoteNext } from './statusLabels';
-import { WORKER_HANDOFF_LABEL, WorkerHandoffIcon } from './workerHandoff';
+import { WorkerHandoffIcon } from './workerHandoff';
+import { WorkerHandoffMenu } from './WorkerHandoffMenu';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
@@ -47,7 +51,8 @@ type Props = {
   showShortId?: boolean;
   // Если задан — на карточке появляются быстрые переносы без drag'а: стрелка → «шаг
   // вперёд» (quickPromoteNext) и «Взять в работу» (target = 'manual').
-  onQuickPromote?: (task: Task, target?: TaskStatus) => void;
+  // runMode — выбран в меню «Передать воркеру» (только для target = 'todo').
+  onQuickPromote?: (task: Task, target?: TaskStatus, runMode?: RunMode) => void;
   // Вызывается после изменения состояния agent-job (enqueue / cancel) — триггерит
   // refetch tasks в родителе чтобы обновить бейдж.
   onTaskChanged?: () => void;
@@ -170,6 +175,8 @@ function KanbanCardImpl({
   // Срочный приоритет — красное свечение. Перебивает синее «непрочитано»: два ореола на
   // одной карточке спорят друг с другом, а «сделай сейчас» важнее, чем «посмотри».
   const urgent = !open && !preview && !selecting && task.priority === 1;
+  // Общий проект (db/182): задача создана в другом пространстве — подписываем откуда.
+  const originLabel = useTaskOriginLabel(task);
   // Мне здесь адресовали комментарий, а я не ответил — бейдж «Ответить» первым в мете.
   const { questionFor } = useAwaitingReply();
   const question = preview ? null : questionFor(task.id);
@@ -222,8 +229,11 @@ function KanbanCardImpl({
       (task.attachmentCount ?? 0) > 0 ||
       (task.ralphMode && task.ralphMode !== 'normal') ||
       task.taskType ||
+      originLabel ||
+      task.groupOrigin ||
       task.priority ||
       task.deadline ||
+      task.recurrence ||
       task.status === 'in_progress' ||
       task.status === 'awaiting_clarification',
   );
@@ -232,10 +242,10 @@ function KanbanCardImpl({
   // карточка не залитая плашка, а белая карточка на цветном кольце колонки.
   const doneCard = !preview && task.status === 'done';
 
-  // Цель «шага вперёд» для кнопки на hover: Черновики→Вручную, Вручную→Воркер, Воркер→Готово.
+  // Цель «шага вперёд» для кнопки на hover: Черновики→В работе, В работе→Воркер, Воркер→Готово.
   // null (напр. в «Готово») — кнопку не показываем.
-  // «Вручную» — своя кнопка «Взять в работу» (как во «Входящих»): безымянная стрелка его
-  // не выдавала. Поэтому стрелку, ведущую в «Вручную», не показываем — действие одно.
+  // «В работе» — своя кнопка «Взять в работу» (как во «Входящих»): безымянная стрелка его
+  // не выдавала. Поэтому стрелку, ведущую в «В работе», не показываем — действие одно.
   const canTake = !!onQuickPromote && canTakeToManual(task.status);
   const quickNext = onQuickPromote ? quickPromoteNext(task.status, workerEnabled) : null;
   const promoteNext = quickNext === 'manual' && canTake ? null : quickNext;
@@ -272,7 +282,20 @@ function KanbanCardImpl({
       </span>
     ) : null;
     const promote =
-      onQuickPromote && promoteNext ? (
+      onQuickPromote && promoteNext === 'todo' ? (
+        // Шаг вперёд в «Воркер» = передача воркеру: сначала выбор режима запуска.
+        <WorkerHandoffMenu
+          key="promote"
+          runMode={task.runMode}
+          onPick={(mode) => onQuickPromote(task, 'todo', mode)}
+          className={cn(
+            'group/promote inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
+            big ? bigAction : 'size-6',
+          )}
+        >
+          <ArrowRight className={big ? 'size-4' : 'size-3'} />
+        </WorkerHandoffMenu>
+      ) : onQuickPromote && promoteNext ? (
         <Button
           key="promote"
           variant="ghost"
@@ -310,29 +333,23 @@ function KanbanCardImpl({
           onQuickPromote?.(task, 'manual');
         }}
         aria-label="Взять в работу"
-        title="Взять в работу — в «Вручную»"
+        title="Взять в работу — в «В работе»"
       >
         <Play className={cn('fill-current', big ? 'size-4' : 'size-3')} />
       </Button>
     ) : null;
     const worker = showWorkerAction && workerEnabled && onQuickPromote && canSendToWorker(task.status) ? (
-      <Button
+      <WorkerHandoffMenu
         key="worker"
-        variant="ghost"
-        size="icon"
+        runMode={task.runMode}
+        onPick={(mode) => onQuickPromote(task, 'todo', mode)}
         className={cn(
-          'shrink-0 cursor-pointer rounded-[5px] text-primary hover:bg-hover',
+          'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[5px] text-primary hover:bg-hover',
           big ? bigAction : 'size-6',
         )}
-        onClick={(e) => {
-          e.stopPropagation();
-          onQuickPromote(task, 'todo');
-        }}
-        aria-label={WORKER_HANDOFF_LABEL}
-        title={WORKER_HANDOFF_LABEL}
       >
         <WorkerHandoffIcon className={big ? 'size-4' : 'size-3'} />
-      </Button>
+      </WorkerHandoffMenu>
     ) : null;
     const withdrawButton = canWithdraw ? (
       <Button
@@ -389,6 +406,7 @@ function KanbanCardImpl({
     <span className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden max-sm:flex-wrap max-sm:gap-y-1">
       {question && <AwaitingReplyBadge question={question} />}
       {task.deadline && <DeadlineBadge deadline={task.deadline} status={task.status} />}
+      {task.recurrence && <TaskRecurrenceBadge recurrence={task.recurrence} />}
       {task.priority ? <PriorityBadge priority={task.priority} /> : null}
       {checklist && (
         <span
@@ -415,6 +433,15 @@ function KanbanCardImpl({
         </span>
       )}
       <RalphModeBadge mode={task.ralphMode} />
+      <TaskGroupOriginBadge origin={task.groupOrigin} createdAt={task.createdAt} className="max-w-[12rem]" />
+      {originLabel && (
+        <span
+          className="shrink-0 truncate whitespace-nowrap rounded bg-muted px-1.5 py-px text-muted-foreground"
+          title={`Создана в пространстве «${originLabel}»`}
+        >
+          {originLabel}
+        </span>
+      )}
       {/* Тип задачи (db/153). Показываем только когда он определён — «без типа» это
           нормальное состояние большинства задач, и плашка про него была бы шумом. */}
       {task.taskType && (
@@ -519,6 +546,9 @@ function KanbanCardImpl({
           // на цветном кольце). Побочно: плашки мета/действий на hover'е красятся сплошным
           // bg-card, и на незалитой карточке они наконец сходятся с ней в цвете.
           doneCard && 'border-success/25 hover:border-success/45',
+          // «На уточнении» визуально живёт в колонке «Воркер», но это НЕ очередь: задача ждёт
+          // человека — янтарный контур, чтобы она не выглядела стоящей в очереди.
+          !preview && task.status === 'awaiting_clarification' && 'border-warning/60 hover:border-warning/80',
           // Приоритет — флажком в нижней строке, а не цветной полосой слева (дизайн C4: без
           // полос-рамок; цвет живёт в метке).
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',

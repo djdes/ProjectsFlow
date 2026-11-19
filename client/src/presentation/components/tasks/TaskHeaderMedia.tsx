@@ -32,6 +32,9 @@ type Props = {
   // вместе с верхними кнопками (peek/пред-след). Наведение на шапку зовёт onHoverChange.
   hovered?: boolean;
   onHoverChange?: (enter: boolean) => void;
+  // Телефон: ряд «Иконка / Обложка» показываем, только когда текст задачи начали править —
+  // до этого окно открывается сразу текстом, без ряда редких кнопок над ним.
+  revealOnPhone?: boolean;
 };
 
 function clamp(n: number, min: number, max: number): number {
@@ -69,6 +72,7 @@ export function TaskHeaderMedia({
   onSave,
   hovered = false,
   onHoverChange,
+  revealOnPhone = true,
 }: Props): React.ReactElement {
   // Оптимистичные локальные значения (окно показывает `task` из пропсов, который не
   // рефетчится синхронно). Пересеиваем при смене задачи.
@@ -286,6 +290,7 @@ export function TaskHeaderMedia({
               'flex items-center gap-1 py-2 transition-opacity duration-150',
               'opacity-100 focus-within:opacity-100',
               hovered ? 'sm:opacity-100' : 'sm:opacity-0',
+              !revealOnPhone && 'max-sm:hidden',
             )}
           >
             {/* На телефоне подписи короткие («Иконка», «Обложка» — как в шапке проекта):

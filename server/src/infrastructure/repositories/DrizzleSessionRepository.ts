@@ -13,6 +13,7 @@ function toSession(row: SessionRow): Session {
     userId: row.userId,
     expiresAt: row.expiresAt,
     createdAt: row.createdAt,
+    impersonatorSessionId: row.impersonatorSessionId ?? null,
   };
 }
 
@@ -24,6 +25,7 @@ export class DrizzleSessionRepository implements SessionRepository {
       id: input.id,
       userId: input.userId,
       expiresAt: input.expiresAt,
+      impersonatorSessionId: input.impersonatorSessionId ?? null,
     });
     const rows = await this.db.select().from(sessions).where(eq(sessions.id, input.id)).limit(1);
     const row = rows[0];

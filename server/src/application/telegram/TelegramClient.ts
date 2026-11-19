@@ -214,6 +214,15 @@ export interface TelegramClient {
   // тестовые фейки могут не реализовывать. null — бот не в чате / нет прав / ошибка
   // (мягкий фоллбэк, не кидаем — резолв имени не должен ронять сохранение настроек).
   getChat?(chatId: number): Promise<TelegramChatInfo | null>;
+  // Администраторы группы (без ботов): подключать группу к пространству может только её
+  // администратор. null — бот не в группе / ошибка. Опционально для тестовых фейков.
+  // isBot/username — чтобы узнать, администратор ли сам бот (участники группы, db/191).
+  getChatAdministrators?(chatId: number): Promise<ReadonlyArray<{
+    userId: number;
+    status: string;
+    isBot?: boolean;
+    username?: string;
+  }> | null>;
   // Скачать входящее Telegram-вложение по file_id (getFile + /file/bot...). Опционально для
   // тестовых клиентов; если реализации нет, текстовая задача всё равно создаётся без падения.
   downloadFile?(fileId: string): Promise<TelegramDownloadedFile | null>;
@@ -235,4 +244,9 @@ export const TELEGRAM_ALLOWED_UPDATES = [
   'message',
   'callback_query',
   'inline_query',
+  // Бота добавили в группу или удалили из неё — черновик/отключение рабочей группы (db/189).
+  'my_chat_member',
+  // Участник вступил/вышел/стал администратором (db/191). Telegram присылает, только если бот —
+  // администратор группы, и только если тип назван в allowed_updates явно.
+  'chat_member',
 ] as const;

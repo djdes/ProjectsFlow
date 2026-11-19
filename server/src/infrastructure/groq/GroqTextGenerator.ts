@@ -1,4 +1,5 @@
-import { fetch as undiciFetch, ProxyAgent, type Dispatcher } from 'undici';
+import { fetch as undiciFetch, type Dispatcher } from 'undici';
+import { createProxyDispatcher } from '../http/createProxyDispatcher.js';
 import type {
   GenerateLlmText,
   GenerateLlmTextInput,
@@ -42,7 +43,7 @@ export class GroqTextGenerator implements GenerateLlmText {
     this.apiKey = options.apiKey.trim();
     this.apiBaseUrl = (options.apiBaseUrl?.trim() || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
     this.model = options.model?.trim() || DEFAULT_MODEL;
-    this.dispatcher = options.proxyUrl?.trim() ? new ProxyAgent(options.proxyUrl.trim()) : undefined;
+    this.dispatcher = createProxyDispatcher(options.proxyUrl);
     this.fetchImpl = options.fetchImpl ?? undiciFetch;
   }
 

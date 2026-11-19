@@ -13,7 +13,7 @@ export class ListSecretKeys {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, userId: string): Promise<StoredSecret[]> {
-    await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, userId, 'read_project_data');
     return this.deps.repo.listKeys(projectId);
   }
 }

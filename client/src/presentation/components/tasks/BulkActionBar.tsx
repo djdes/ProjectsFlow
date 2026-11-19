@@ -43,6 +43,7 @@ import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { copyTextFromPromise } from './copyToClipboard';
 import type { DigestChannel, DigestRecipient } from '@/application/task/TaskRepository';
 import type { BulkResult, BulkTaskActions } from '@/presentation/hooks/useBulkTaskActions';
+import { undoBulk, type BulkTaskSnapshot, type BulkUndoKind } from './bulkUndo';
 
 const ALL_PRIORITIES: readonly TaskPriority[] = [1, 2, 3, 4];
 
@@ -64,6 +65,9 @@ type Props = {
   moveDisabledReason?: string | null;
   bulk: BulkTaskActions;
   onExit: () => void;
+  // Прежние значения выбранных задач — для «Отменить» в тосте после массового действия.
+  // Не передан — тост без отмены (как раньше).
+  snapshot?: (ids: readonly string[]) => ReadonlyMap<string, BulkTaskSnapshot>;
 };
 
 // Плавающая панель массовых действий (появляется при N ≥ 1 выбранных). Слева —
@@ -77,6 +81,7 @@ export function BulkActionBar({
   moveDisabledReason = null,
   bulk,
   onExit,
+  snapshot,
 }: Props): React.ReactElement | null {
   const { projectRepository, taskRepository, digestSettingsRepository } = useContainer();
   const { user } = useCurrentUser();
@@ -179,13 +184,30 @@ export function BulkActionBar({
   if (count === 0) return null;
 
   // Выполнить массовое действие: toast по результату, выход из режима при полном успехе.
-  const run = async (label: string, fn: () => Promise<BulkResult>): Promise<void> => {
+  // undo — что вернуть по «Отменить» (снимок прежних значений берём ДО действия).
+  const run = async (label: string, fn: () => Promise<BulkResult>, undo?: BulkUndoKind): Promise<void> => {
     if (busy) return;
     setBusy(true);
+    const before = undo && snapshot ? snapshot(selectedIds) : null;
     try {
       const res = await fn();
       if (res.failed === 0) {
-        toast.success(`${label}: ${res.ok}`);
+        toast.success(
+          `${label}: ${res.ok}`,
+          before && undo && before.size > 0
+            ? {
+                action: {
+                  label: 'Отменить',
+                  onClick: () => {
+                    void undoBulk(undo, before, bulk).then((r) => {
+                      if (r.failed === 0) toast.success('Отменено');
+                      else toast.error(`Отменено ${r.ok} из ${r.ok + r.failed}`);
+                    });
+                  },
+                },
+              }
+            : undefined,
+        );
         onExit();
       } else {
         toast.error(`${label}: ${res.ok} из ${res.ok + res.failed}, не удалось ${res.failed}`);
@@ -289,7 +311,7 @@ export function BulkActionBar({
                     key={m.id}
                     className="gap-2"
                     onClick={() =>
-                      void run('Ответственный изменён', () => bulk.assign(selectedIds, m.id))
+                      void run('Ответственный изменён', () => bulk.assign(selectedIds, m.id), 'assign')
                     }
                   >
                     <span className="truncate">{m.displayName}</span>
@@ -312,7 +334,7 @@ export function BulkActionBar({
           value={null}
           disabled={disabled}
           onChange={(d) => {
-            if (d) void run('Срок задан', () => bulk.setDeadline(selectedIds, d));
+            if (d) void run('Срок задан', () => bulk.setDeadline(selectedIds, d), 'deadline');
           }}
         />
         <Button
@@ -320,7 +342,7 @@ export function BulkActionBar({
           size="icon"
           disabled={disabled}
           className="size-8 text-muted-foreground hover:text-foreground"
-          onClick={() => void run('Срок снят', () => bulk.setDeadline(selectedIds, null))}
+          onClick={() => void run('Срок снят', () => bulk.setDeadline(selectedIds, null), 'deadline')}
           aria-label="Снять срок у выбранных"
           title="Снять срок"
         >
@@ -343,7 +365,7 @@ export function BulkActionBar({
                 <DropdownMenuItem
                   key={p}
                   className="gap-2"
-                  onClick={() => void run('Приоритет задан', () => bulk.setPriority(selectedIds, p))}
+                  onClick={() => void run('Приоритет задан', () => bulk.setPriority(selectedIds, p), 'priority')}
                 >
                   <span className={cn('size-2 rounded-full', meta.dotColor)} aria-hidden />
                   <span className={meta.textColor}>{meta.label}</span>
@@ -352,7 +374,7 @@ export function BulkActionBar({
             })}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => void run('Приоритет снят', () => bulk.setPriority(selectedIds, null))}
+              onClick={() => void run('Приоритет снят', () => bulk.setPriority(selectedIds, null), 'priority')}
             >
               Снять приоритет
             </DropdownMenuItem>
@@ -378,7 +400,7 @@ export function BulkActionBar({
             {moveTargets.map((t) => (
               <DropdownMenuItem
                 key={t.status}
-                onClick={() => void run('Перемещено', () => bulk.moveToColumn(selectedIds, t.status))}
+                onClick={() => void run('Перемещено', () => bulk.moveToColumn(selectedIds, t.status), 'column')}
               >
                 {t.label}
               </DropdownMenuItem>
@@ -411,7 +433,7 @@ export function BulkActionBar({
             {(projectTargets ?? []).map((p) => (
               <DropdownMenuItem
                 key={p.id}
-                onClick={() => void run('Перенесено', () => bulk.moveToProject(selectedIds, p.id))}
+                onClick={() => void run('Перенесено', () => bulk.moveToProject(selectedIds, p.id), 'project')}
               >
                 <span className="truncate">{p.name}</span>
               </DropdownMenuItem>
@@ -435,7 +457,7 @@ export function BulkActionBar({
                 <DropdownMenuItem
                   key={mode}
                   className="items-start gap-2 py-2"
-                  onClick={() => void run('Режим Ralph задан', () => bulk.setRalphMode(selectedIds, mode))}
+                  onClick={() => void run('Режим Ralph задан', () => bulk.setRalphMode(selectedIds, mode), 'ralph')}
                 >
                   <span aria-hidden>{m.icon}</span>
                   <div className="flex min-w-0 flex-col">

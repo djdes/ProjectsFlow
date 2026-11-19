@@ -1,8 +1,13 @@
 import type {
   AdminProject,
   AdminRepository,
-  AdminUser,
+  PlatformStats,
+  AdminPlanTerm,
+  AdminUserListQuery,
+  AdminUserOverview,
+  AdminUserPage,
   AdminUserPatch,
+  AdminUserDeletionPreview,
   AdminUserProjectDispatcher,
   AdminUserProjectFavorite,
   EmailTemplateMeta,
@@ -13,18 +18,42 @@ import type { PlanId } from '@/domain/usage/Usage';
 import { httpClient } from './httpClient';
 
 export class HttpAdminRepository implements AdminRepository {
+  getPlatformStats(): Promise<PlatformStats> {
+    return httpClient.get<PlatformStats>('/admin/stats');
+  }
+
   async listProjects(): Promise<AdminProject[]> {
     const { projects } = await httpClient.get<{ projects: AdminProject[] }>('/admin/projects');
     return projects;
   }
 
-  async listUsers(): Promise<AdminUser[]> {
-    const { users } = await httpClient.get<{ users: AdminUser[] }>('/admin/users');
-    return users;
+  listUsers(query: AdminUserListQuery): Promise<AdminUserPage> {
+    const params = new URLSearchParams(Object.entries(query).map(([k, v]) => [k, String(v)]));
+    return httpClient.get<AdminUserPage>(`/admin/users?${params.toString()}`);
+  }
+
+  getUserOverview(id: string): Promise<AdminUserOverview> {
+    return httpClient.get<AdminUserOverview>(`/admin/users/${id}/overview`);
+  }
+
+  async signOutEverywhere(id: string): Promise<void> {
+    await httpClient.post<unknown>(`/admin/users/${id}/sign-out-all`, {});
+  }
+
+  sendPasswordReset(id: string): Promise<{ email: string }> {
+    return httpClient.post<{ email: string }>(`/admin/users/${id}/password-reset`, {});
+  }
+
+  bulkSetPlan(input: { userIds: readonly string[]; plan: 'prime' | 'vip'; term: AdminPlanTerm }): Promise<{ updated: number; missing: readonly string[] }> {
+    return httpClient.post<{ updated: number; missing: readonly string[] }>('/admin/users/bulk/plan', input);
   }
 
   async updateUser(id: string, patch: AdminUserPatch): Promise<void> {
     await httpClient.patch<unknown>(`/admin/users/${id}`, patch);
+  }
+
+  getUserDeletionPreview(id: string): Promise<AdminUserDeletionPreview> {
+    return httpClient.get<AdminUserDeletionPreview>(`/admin/users/${id}/deletion-preview`);
   }
 
   async deleteUser(id: string): Promise<void> {

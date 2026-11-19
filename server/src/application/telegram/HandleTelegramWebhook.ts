@@ -1,3 +1,6 @@
+import { csharpFixerConfig } from './composer/csharpFixerIntake.js';
+import { incidentSigningKey, readIncidentOrigin } from './composer/incidentIntake.js';
+import { mixedRouteOf } from './composer/mixedRouting.js';
 import type {
   TelegramClient,
   InlineKeyboardMarkup,
@@ -12,7 +15,13 @@ import {
   type ReplyCommentCandidate,
 } from './replyCommentTarget.js';
 import type { TelegramGroupOwnerRepository } from './TelegramGroupOwnerRepository.js';
+import type { ManageTelegramWorkGroups, ResolvedWorkGroup } from './ManageTelegramWorkGroups.js';
+import { TRANSFER_CALLBACK_PREFIX, WORK_GROUP_CODE_PREFIX } from './ManageTelegramWorkGroups.js';
+import type { SyncTelegramGroupMembers } from './SyncTelegramGroupMembers.js';
+import type { TelegramGroupOnboarding } from './TelegramGroupOnboarding.js';
+import { ONBOARDING_CALLBACK_PREFIX, ONBOARDING_START_PREFIX } from './TelegramGroupOnboarding.js';
 import type { UserRepository } from '../user/UserRepository.js';
+import type { VisibleTaskLike } from '../project/TaskVisibility.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { TaskAttachmentRepository } from '../task/TaskAttachmentRepository.js';
@@ -82,8 +91,10 @@ export type TelegramUpdate = {
   readonly update_id: number;
   readonly message?: {
     readonly message_id: number;
+    readonly message_thread_id?: number;
     readonly from?: {
       readonly id: number;
+      readonly is_bot?: boolean;
       readonly username?: string;
       readonly first_name?: string;
       readonly last_name?: string;
@@ -168,9 +179,23 @@ export type TelegramUpdate = {
     // Ответ с цитатой: выделенный фрагмент сообщения, на которое отвечают (Bot API 7.0).
     // По нему reply на сводку находит задачу, к которой относится комментарий.
     readonly quote?: { readonly text: string };
+    // Сервисные сообщения группы (приходят и в privacy mode): кого добавили и переезд группы
+    // в супергруппу с новым id (рабочие группы, db/181).
+    readonly new_chat_members?: ReadonlyArray<{
+      readonly id: number;
+      readonly is_bot?: boolean;
+      readonly username?: string;
+    }>;
+    readonly left_chat_member?: { readonly id: number; readonly is_bot?: boolean };
+    readonly migrate_to_chat_id?: number;
+    readonly migrate_from_chat_id?: number;
   };
   // Нажатие inline-кнопки (конструктор задач, Принять/Отказать, /tasks-навигация).
   readonly callback_query?: TelegramCallbackQuery;
+  // Бота добавили в группу или удалили из неё (db/189): черновик/отключение рабочей группы.
+  readonly my_chat_member?: TelegramMyChatMember;
+  // Участник группы вступил/вышел/сменил права (db/191). Приходит, только если бот — админ.
+  readonly chat_member?: TelegramChatMemberUpdated;
   // Inline-режим (Phase D): `@ProjectsFlow_Bot ...` в поле ввода.
   readonly inline_query?: {
     readonly id: string;
@@ -178,6 +203,30 @@ export type TelegramUpdate = {
     readonly query: string;
   };
 };
+
+// https://core.telegram.org/bots/api#chatmemberupdated — только нужные поля.
+export type TelegramMyChatMember = {
+  readonly chat: { readonly id: number; readonly type: string; readonly title?: string };
+  readonly from: { readonly id: number };
+  readonly new_chat_member: { readonly status: string; readonly user?: { readonly id: number } };
+  readonly old_chat_member?: { readonly status: string };
+};
+
+// https://core.telegram.org/bots/api#chatmemberupdated — событие об обычном участнике группы.
+export type TelegramChatMemberUpdated = {
+  readonly chat: { readonly id: number; readonly type: string };
+  readonly new_chat_member: {
+    readonly status: string;
+    readonly user: { readonly id: number; readonly is_bot?: boolean };
+    // Только у restricted: состоит ли человек в группе.
+    readonly is_member?: boolean;
+  };
+};
+
+// Callback выбора пространства для черновика группы: wd:<chatId>:<workspaceId>.
+const DRAFT_WORKSPACE_CALLBACK_PREFIX = 'wd:';
+const BOT_IN_GROUP_STATUSES = new Set(['member', 'administrator', 'creator', 'restricted']);
+const BOT_GONE_STATUSES = new Set(['left', 'kicked']);
 
 type TelegramMessage = NonNullable<TelegramUpdate['message']>;
 type TelegramAttachmentKind = TelegramDraftAttachment['kind'];
@@ -349,6 +398,24 @@ type Deps = {
   readonly messageTasks?: Pick<TelegramMessageTaskRepository, 'listByMessage' | 'attach'>;
   // Привязка группового чата к владельцу (db/099) — для гибрид-маршрутизации задач из групп.
   readonly groupOwners: TelegramGroupOwnerRepository;
+  // Рабочие группы пространства (db/181): привязка по коду из deep link, «чья группа», переезд
+  // группы на новый id. Без них группы ведут себя как раньше.
+  readonly workGroups?: Pick<ManageTelegramWorkGroups, 'bindFromCode' | 'resolveChat' | 'migrateChat'> &
+    Partial<Pick<ManageTelegramWorkGroups, 'handleBotAdded' | 'handleBotRemoved' | 'chooseDraftWorkspace' | 'decideTransferFromTelegram'>>;
+  // Участники рабочих групп (db/191): авторы сообщений, вступления/выходы, права бота.
+  readonly groupMembers?: Pick<
+    SyncTelegramGroupMembers,
+    'recordMessageAuthor' | 'handleMemberUpdate' | 'handleBotRightsChanged'
+  >;
+  // Подключение людей, написавших задачу в рабочей группе (нет аккаунта или вне пространства).
+  readonly onboarding?: Pick<
+    TelegramGroupOnboarding,
+    'prompt' | 'handlePrivateStart' | 'handleJoinCallback' | 'completeAfterPairing'
+  >;
+  readonly isWorkspaceMember?: (workspaceId: string, userId: string) => Promise<boolean>;
+  // Пауза перед приветствием, когда бота добавили в группу: если за это время группу подключили
+  // кнопкой (тот же Telegram шлёт /start с кодом), приветствие не нужно. По умолчанию 3 с.
+  readonly greetingDelayMs?: number;
   readonly createComment: CreateTaskComment;
   // Инлайн «✅ Завершить» / «↩️ Отменить» на задачных уведомлениях (nd:/nu: callback).
   readonly moveTask: MoveTask;
@@ -403,6 +470,8 @@ export class HandleTelegramWebhook {
   private readonly processedVoiceSources = new Map<string, number>();
   // Комментарии к сводке, ждущие выбора задачи кнопкой (rc:<id>:<n>).
   private readonly pendingReplyComments = new PendingReplyComments();
+  // Группы, только что подключённые кодом: им приветствие «как меня подключить» не нужно.
+  private readonly recentlyBoundChats = new Map<number, number>();
 
   constructor(private readonly deps: Deps) {}
 
@@ -424,10 +493,21 @@ export class HandleTelegramWebhook {
       // Предложения закрыть (db/101): pd: подтвердить, px: отклонить.
       if (data.startsWith('pd:')) return this.handleCloseProposalConfirm(cq, data.slice(3));
       if (data.startsWith('px:')) return this.handleCloseProposalDismiss(cq, data.slice(3));
+      if (data.startsWith(ONBOARDING_CALLBACK_PREFIX) && this.deps.onboarding) {
+        return this.deps.onboarding.handleJoinCallback(cq, data.slice(ONBOARDING_CALLBACK_PREFIX.length));
+      }
+      if (data.startsWith(TRANSFER_CALLBACK_PREFIX)) {
+        return this.handleTransferDecision(cq, data.slice(TRANSFER_CALLBACK_PREFIX.length));
+      }
+      if (data.startsWith(DRAFT_WORKSPACE_CALLBACK_PREFIX)) {
+        return this.handleDraftWorkspaceChoice(cq, data.slice(DRAFT_WORKSPACE_CALLBACK_PREFIX.length));
+      }
       if (data.startsWith('ba:')) return this.handleAssigneeCallback(cq);
       if (data.startsWith('bt:')) return this.handleBrowseCallback(cq);
       return this.deps.composer.handleCallback(cq);
     }
+    if (update.my_chat_member) return this.handleMyChatMember(update.my_chat_member);
+    if (update.chat_member) return this.handleChatMember(update.chat_member);
     // Inline-режим (Phase D).
     if (update.inline_query) {
       return this.handleInlineQuery(
@@ -477,17 +557,50 @@ export class HandleTelegramWebhook {
           ? 'Этот Telegram или аккаунт ProjectsFlow уже подключён. Для смены привязки сначала отключите Telegram в профиле.'
           : 'Ссылка подключения устарела или уже использована. Откройте профиль ProjectsFlow и нажмите «Подключить Telegram» ещё раз.';
       await this.reply(chatId, message);
+      // Telegram привязан самим владельцем аккаунта — пора создать задачи, ждавшие этого
+      // человека в рабочих группах (db/181).
+      if (result === 'connected' && this.deps.onboarding) {
+        await this.deps.onboarding.completeAfterPairing(msg.from.id).catch((err) => {
+          console.warn('[tg-webhook] onboarding after pairing failed:', err);
+        });
+      }
       return;
     }
 
+    // Личка: «/start wj_<id>» — кнопка «Подключиться» под инструкцией в рабочей группе (db/181).
+    const onboardingStart = new RegExp(
+      `^/start(?:@[a-zA-Z0-9_]+)?\\s+${ONBOARDING_START_PREFIX}([A-Za-z0-9_-]{12})$`,
+    ).exec(text);
+    if (onboardingStart && msg.chat.type === 'private' && this.deps.onboarding) {
+      return this.deps.onboarding.handlePrivateStart({ id: onboardingStart[1]!, chatId, from: msg.from });
+    }
+
+    // Сервисные сообщения группы. Переезд в супергруппу меняет id — переносим привязки.
+    if (isGroup && (msg.migrate_to_chat_id || msg.migrate_from_chat_id)) {
+      const fromChatId = msg.migrate_to_chat_id ? chatId : (msg.migrate_from_chat_id ?? chatId);
+      const toChatId = msg.migrate_to_chat_id ?? chatId;
+      if (fromChatId !== toChatId) {
+        await this.deps.workGroups?.migrateChat(fromChatId, toChatId).catch((err) => {
+          console.warn('[tg-webhook] chat migration failed:', err);
+        });
+      }
+      return;
+    }
+    if (isGroup && this.deps.groupMembers) await this.trackGroupMembers(msg);
+    // Бота добавили в группу вручную — здороваемся и сразу называем id группы.
+    if (isGroup && msg.new_chat_members?.some((member) => this.isThisBot(member))) {
+      return this.greetAddedBot(chatId);
+    }
+
     // Voice messages are the one deliberate exception to the group mention gate. Only a group
-    // explicitly linked to a ProjectsFlow account is considered a work chat; unrelated groups
-    // remain silent. The composer is invoked directly because Telegram does not deliver a bot's
-    // own outgoing transcription back to that bot as a new update.
+    // explicitly linked to a ProjectsFlow account (owner /start or a workspace work group) is
+    // considered a work chat; unrelated groups remain silent. The composer is invoked directly
+    // because Telegram does not deliver a bot's own outgoing transcription back as a new update.
     if (isGroup && msg.voice && this.deps.voiceTranscriber?.enabled) {
       const ownerUserId = await this.deps.groupOwners.getOwnerUserId(chatId);
-      if (ownerUserId !== null) {
-        return this.handleGroupVoice(msg, attachments, sourceKey, ownerUserId);
+      const workGroup = await this.workGroupFor(chatId);
+      if (ownerUserId !== null || workGroup) {
+        return this.handleGroupVoice(msg, attachments, sourceKey, ownerUserId, workGroup);
       }
     }
 
@@ -498,7 +611,10 @@ export class HandleTelegramWebhook {
       const bu = this.deps.botUsername;
       const repliedToBot = msg.reply_to_message?.from?.is_bot === true;
       const mentioned = bu ? new RegExp('@' + bu + '\\b', 'i').test(text) : false;
-      if (!repliedToBot && !mentioned) return;
+      const continuation = sourceKey.startsWith('g:') &&
+        (this.isCSharpFixerChat(chatId) || isWorkerIntakeMode((await this.workGroupFor(chatId))?.mode)) &&
+        await this.deps.composer.isCSharpFixerSource?.(sourceKey);
+      if (!repliedToBot && !mentioned && !continuation) return;
       // Вырезаем @упоминание из текста: чтобы оно не попало в текст задачи и чтобы команды
       // вида «/help@BotName» (так TG шлёт команды в группах) распознавались как «/help».
       if (bu) text = text.replace(new RegExp('@' + bu, 'ig'), '').replace(/\s+/g, ' ').trim();
@@ -526,6 +642,7 @@ export class HandleTelegramWebhook {
         return this.handleReply(tgUserId, chatId, msg.reply_to_message.message_id, text, {
           quote: msg.quote?.text ?? null,
           messageId: msg.message_id,
+          senderName: formatSenderName(msg.from),
         });
       }
       replyContext = context;
@@ -554,6 +671,13 @@ export class HandleTelegramWebhook {
 
     // Routing по первому слову.
     const cmd = text.split(/\s+/, 1)[0]?.toLowerCase() ?? '';
+    // «Подключить группу» в настройках пространства: Telegram прислал /start с кодом в выбранную
+    // группу — бот сам узнал её id и привязывает к пространству (db/181).
+    if (cmd === '/start' && isGroup && this.deps.workGroups) {
+      const code = new RegExp(`^/start\\s+${WORK_GROUP_CODE_PREFIX}([A-Za-z0-9_-]{20,64})$`).exec(text);
+      if (code) return this.handleWorkGroupBind(chatId, msg.chat.title ?? null, code[1]!, tgUserId);
+    }
+    if (cmd === '/id') return this.handleChatId(chatId, isGroup, msg.chat.title ?? null);
     // В группе /start привязывает чат к аккаунту отправителя (а не трогает его личный DM-чат).
     if (cmd === '/start')
       return isGroup
@@ -570,13 +694,22 @@ export class HandleTelegramWebhook {
     // передаём groupCtx: композер решает — создавать «как отправитель» или уронить в «Входящие»
     // владельца группы (гибрид-маршрутизация, см. spec telegram-group-multi-user-tasks).
     if (isGroup) {
+      // Рабочая группа пространства: кто ещё не может ставить задачи (нет аккаунта/Telegram или
+      // не участник), получает инструкцию с кнопкой, а текст ждёт подключения.
+      const workGroup = await this.workGroupFor(chatId);
+      // Группа инцидентов (spec 2026-11-17, раздел 3): писать может любой участник, аккаунт не нужен.
+      const incident = this.incidentOf(chatId, workGroup, text);
+      if (!this.isCSharpFixerChat(chatId) && !incident && workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, text, sourceKey))) return;
       const groupCtx: TelegramGroupContext = {
         ownerUserId: await this.deps.groupOwners.getOwnerUserId(chatId),
         senderName: formatSenderName(msg.from),
         groupTitle: msg.chat.title ?? null,
+        ...(incident ? { incident } : {}),
       };
       return this.deps.composer.startFromMessage(tgUserId, chatId, text, groupCtx, attachments, {
         sourceKey,
+        sourceMessageId: msg.message_id,
+        sourceThreadId: msg.message_thread_id ?? null,
         background: true,
         ...(replyContext ? { replyContext } : {}),
         ...(replyToMessageId !== null ? { replyToMessageId } : {}),
@@ -594,7 +727,8 @@ export class HandleTelegramWebhook {
     msg: TelegramMessage,
     attachments: readonly TelegramDraftAttachment[],
     sourceKey: string,
-    ownerUserId: string,
+    ownerUserId: string | null,
+    workGroup: ResolvedWorkGroup | null,
   ): Promise<void> {
     if (!msg.from || !msg.voice || !this.deps.voiceTranscriber) return;
     if (this.wasVoiceSourceProcessed(sourceKey)) return;
@@ -609,6 +743,19 @@ export class HandleTelegramWebhook {
         filename: downloaded.filename || fallbackFilename('voice', msg.message_id, 'audio/ogg'),
         mimeType: msg.voice.mime_type?.trim() || downloaded.mimeType || 'audio/ogg',
       });
+
+      // Рабочая группа: неподключённому — инструкция, расшифровка ждёт подключения. Сбой здесь
+      // не «ошибка расшифровки»: текст уже есть, поэтому пробрасываем — Telegram повторит доставку.
+      if (workGroup && !this.isCSharpFixerChat(msg.chat.id) && !this.incidentOf(msg.chat.id, workGroup, transcript)) {
+        let waiting: boolean;
+        try {
+          waiting = await this.promptOnboardingIfNeeded(msg, workGroup, transcript, sourceKey);
+        } catch (err) {
+          this.processedVoiceSources.delete(sourceKey);
+          throw new VoiceOnboardingError(err);
+        }
+        if (waiting) return;
+      }
 
       const botLabel = this.deps.botUsername?.trim()
         ? `@${escapeHtml(this.deps.botUsername.replace(/^@/, ''))}`
@@ -626,6 +773,7 @@ export class HandleTelegramWebhook {
         ownerUserId,
         senderName: formatSenderName(msg.from),
         groupTitle: msg.chat.title ?? null,
+        ...(this.incidentOf(msg.chat.id, workGroup, transcript) ? { incident: this.incidentOf(msg.chat.id, workGroup, transcript)! } : {}),
       };
       await this.deps.composer.startFromMessage(
         msg.from.id,
@@ -633,9 +781,10 @@ export class HandleTelegramWebhook {
         transcript,
         groupCtx,
         attachments,
-        { sourceKey, background: true, ...(msg.reply_to_message?.message_id ? { reply: true } : {}) },
+        { sourceKey, background: true, sourceMessageId: msg.message_id, sourceThreadId: msg.message_thread_id ?? null, ...(msg.reply_to_message?.message_id ? { reply: true, replyToMessageId: msg.reply_to_message.message_id } : {}) },
       );
     } catch (err) {
+      if (err instanceof VoiceOnboardingError) throw err.cause;
       this.processedVoiceSources.delete(sourceKey);
       console.warn('[tg-webhook] voice transcription failed:', err);
       await this.reply(
@@ -643,6 +792,26 @@ export class HandleTelegramWebhook {
         '⚠️ Не удалось расшифровать голосовое. Отправьте его ещё раз или напишите задачу текстом.',
       );
     }
+  }
+
+  // Обращение «воркеру» рабочей группы: режим incident целиком, а в смешанном (db/193) — только
+  // сообщение без исполнителя (с исполнителем — обычный поток группы, задача человеку).
+  // Чат из CSHARP_FIXER_* (env) пока обслуживается старым путём.
+  private incidentOf(
+    chatId: number,
+    workGroup: ResolvedWorkGroup | null,
+    text: string,
+  ): { readonly addedByUserId: string | null; readonly mode: 'incident' | 'mixed' } | null {
+    if (!workGroup || this.isCSharpFixerChat(chatId)) return null;
+    if (workGroup.mode === 'incident') return { addedByUserId: workGroup.addedByUserId, mode: 'incident' };
+    if (workGroup.mode === 'mixed' && mixedRouteOf(text) === 'worker') {
+      return { addedByUserId: workGroup.addedByUserId, mode: 'mixed' };
+    }
+    return null;
+  }
+
+  private isCSharpFixerChat(chatId: number): boolean {
+    return process.env.CSHARP_FIXER_CHAT_ID === String(chatId) && csharpFixerConfig()?.chatId === chatId;
   }
 
   private wasVoiceSourceProcessed(sourceKey: string): boolean {
@@ -735,7 +904,7 @@ export class HandleTelegramWebhook {
     chatId: number,
     replyToMessageId: number,
     text: string,
-    reply: { readonly quote: string | null; readonly messageId: number } = { quote: null, messageId: 0 },
+    reply: { readonly quote: string | null; readonly messageId: number; readonly senderName?: string } = { quote: null, messageId: 0 },
   ): Promise<void> {
     const mapping = await this.deps.ralphQuestionMessages.findByMessage(chatId, replyToMessageId);
     if (!mapping) {
@@ -744,7 +913,18 @@ export class HandleTelegramWebhook {
       return this.handleTaskReplyComment(tgUserId, chatId, replyToMessageId, text, reply);
     }
 
-    const senderUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    const linkedUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    // Группа «Инциденты»: у автора жалобы аккаунта может не быть — ответ reply'ем на вопрос
+    // принимаем от участника группы и пишем от того, на кого заведена задача (как CSharpFixer).
+    // Смешанная группа (db/193): так же — но только для задачи воркеру (с подписанным источником
+    // из этой группы); уточнения по задачам людей отвечает их адресат, как обычно.
+    const groupMode = chatId < 0 ? (await this.workGroupFor(chatId))?.mode : undefined;
+    let incidentGroup = groupMode === 'incident';
+    if (groupMode === 'mixed') {
+      const mixedTask = await this.deps.tasks.getById(mapping.taskId).catch(() => null);
+      incidentGroup = readIncidentOrigin(mixedTask?.description ?? '', incidentSigningKey())?.chatId === chatId;
+    }
+    const senderUserId = incidentGroup ? mapping.recipientUserId : linkedUserId;
     if (!senderUserId || senderUserId !== mapping.recipientUserId) {
       // Защита от того что чужой TG-аккаунт отвечает на чужое уточнение (после share
       // chat'а, например). По spec'е — отвечает только адресат.
@@ -770,8 +950,9 @@ export class HandleTelegramWebhook {
       source: 'tg-reply-projectsflow-bot',
       answeredAt: new Date().toISOString(),
     };
+    const via = incidentGroup ? `через группу Telegram${reply.senderName ? `, ${reply.senderName}` : ''}` : 'через Telegram reply';
     const body =
-      `**✅ Ответ на уточнение** (через Telegram reply)\n\n${text}\n\n` +
+      `**✅ Ответ на уточнение** (${via})\n\n${text}\n\n` +
       `<!-- ralph-answer ${JSON.stringify(answerPayload)} -->`;
 
     let comment;
@@ -829,7 +1010,9 @@ export class HandleTelegramWebhook {
     const preview = text.length > 80 ? text.slice(0, 79).trimEnd() + '…' : text;
     await this.reply(
       chatId,
-      `✅ Принято: <i>${escapeHtml(preview)}</i>\n\nЗадача возвращена в работу.`,
+      incidentGroup
+        ? '✅ Спасибо, ответ получен. Продолжаем работу и напишем здесь, когда будет результат.'
+        : `✅ Принято: <i>${escapeHtml(preview)}</i>\n\nЗадача возвращена в работу.`,
     );
   }
 
@@ -1238,6 +1421,353 @@ export class HandleTelegramWebhook {
     );
   }
 
+  // --- Рабочие группы пространства (db/181) ---
+
+  private async workGroupFor(chatId: number): Promise<ResolvedWorkGroup | null> {
+    if (!this.deps.workGroups) return null;
+    try {
+      return await this.deps.workGroups.resolveChat(chatId);
+    } catch (err) {
+      console.warn('[tg-webhook] work group lookup failed:', err);
+      return null;
+    }
+  }
+
+  // true — сообщение ушло в подключение (задачу не создаём сейчас).
+  private async promptOnboardingIfNeeded(
+    msg: TelegramMessage,
+    workGroup: ResolvedWorkGroup,
+    text: string,
+    sourceKey: string,
+  ): Promise<boolean> {
+    if (!this.deps.onboarding || !msg.from) return false;
+    const userId = await this.deps.users.findUserIdByTelegramUserId(msg.from.id);
+    if (userId && (await this.isWorkspaceMember(workGroup.workspaceId, userId))) return false;
+    await this.deps.onboarding.prompt({
+      chatId: msg.chat.id,
+      groupTitle: msg.chat.title ?? null,
+      workspaceId: workGroup.workspaceId,
+      workspaceName: workGroup.workspaceName,
+      tgUserId: msg.from.id,
+      senderName: formatSenderName(msg.from),
+      text,
+      sourceKey,
+      replyToMessageId: msg.message_id,
+      linkedUserId: userId,
+    });
+    return true;
+  }
+
+  private async isWorkspaceMember(workspaceId: string, userId: string): Promise<boolean> {
+    if (!this.deps.isWorkspaceMember) return true;
+    try {
+      return await this.deps.isWorkspaceMember(workspaceId, userId);
+    } catch (err) {
+      console.warn('[tg-webhook] membership lookup failed:', err);
+      return true;
+    }
+  }
+
+  private isThisBot(member: { readonly is_bot?: boolean; readonly username?: string }): boolean {
+    const bot = this.deps.botUsername?.replace(/^@/, '').toLowerCase();
+    return member.is_bot === true && !!bot && member.username?.toLowerCase() === bot;
+  }
+
+  private async greetAddedBot(chatId: number): Promise<void> {
+    const delay = this.deps.greetingDelayMs ?? 3_000;
+    if (delay <= 0) return this.sendGreetingIfUnbound(chatId);
+    const timer = setTimeout(() => void this.sendGreetingIfUnbound(chatId), delay);
+    timer.unref?.();
+  }
+
+  private async sendGreetingIfUnbound(chatId: number): Promise<void> {
+    const boundAt = this.recentlyBoundChats.get(chatId);
+    if (boundAt !== undefined && Date.now() - boundAt < 60_000) return;
+    if (await this.workGroupFor(chatId)) return;
+    const bot = this.deps.botUsername?.replace(/^@/, '') ?? 'ProjectsFlow_Bot';
+    await this.reply(
+      chatId,
+      `👋 Привет! Я бот ProjectsFlow.\nID этой группы: <code>${chatId}</code>\n\n` +
+        'Чтобы ставить задачи из группы, подключите её к пространству: «Настройки пространства» → ' +
+        '«Telegram-группы» → «Подключить группу».\n' +
+        `Задачи пишите так: <code>@${escapeHtml(bot)} текст задачи</code>`,
+    );
+  }
+
+  // Бота добавили в группу / удалили из неё (my_chat_member, db/189). Добавили — не рабочая
+  // группа становится черновиком пространства пригласившего (подтверждает руководитель в
+  // настройках). Удалили — рабочая группа отключается.
+  private async handleMyChatMember(update: TelegramMyChatMember): Promise<void> {
+    const workGroups = this.deps.workGroups;
+    if (!workGroups) return;
+    if (update.chat.type !== 'group' && update.chat.type !== 'supergroup') return;
+    const chatId = update.chat.id;
+    const status = update.new_chat_member.status;
+    if (BOT_GONE_STATUSES.has(status)) {
+      await workGroups.handleBotRemoved?.(chatId).catch((err) => {
+        console.warn('[tg-webhook] work group disconnect failed:', err);
+      });
+      return;
+    }
+    if (!BOT_IN_GROUP_STATUSES.has(status)) return;
+    // Бот стал администратором (начнут приходить chat_member) или перестал им быть.
+    if (this.deps.groupMembers && update.old_chat_member?.status !== status) {
+      await this.deps.groupMembers.handleBotRightsChanged(chatId, status === 'administrator').catch((err) => {
+        console.warn('[tg-webhook] group members bot rights failed:', err);
+      });
+    }
+    // Права бота поменялись, а сам он в группе был и раньше — не новое добавление.
+    if (update.old_chat_member && BOT_IN_GROUP_STATUSES.has(update.old_chat_member.status)) return;
+    const run = () =>
+      this.createGroupDraft(chatId, update.chat.title ?? null, update.from.id).catch((err) => {
+        console.warn('[tg-webhook] work group draft failed:', err);
+      });
+    // Кнопка «Подключить группу» шлёт /start с кодом сразу после добавления: даём ему успеть,
+    // тогда черновик не нужен (как с приветствием).
+    const delay = this.deps.greetingDelayMs ?? 3_000;
+    if (delay <= 0) return run();
+    const timer = setTimeout(() => void run(), delay);
+    timer.unref?.();
+  }
+
+  // Участники рабочей группы (db/191): вступившие и вышедшие из сервисных сообщений, иначе —
+  // автор сообщения. Боты не участники. Сбой не мешает обработке сообщения.
+  private async trackGroupMembers(msg: TelegramMessage): Promise<void> {
+    const members = this.deps.groupMembers;
+    if (!members || !msg.from) return;
+    const chatId = msg.chat.id;
+    const fail = (err: unknown): void => console.warn('[tg-webhook] group member tracking failed:', err);
+    if (msg.new_chat_members || msg.left_chat_member) {
+      for (const joined of msg.new_chat_members ?? []) {
+        if (!joined.is_bot) await members.handleMemberUpdate(chatId, joined.id, 'member').catch(fail);
+      }
+      const left = msg.left_chat_member;
+      if (left && !left.is_bot) await members.handleMemberUpdate(chatId, left.id, 'left').catch(fail);
+      return;
+    }
+    if (msg.from.is_bot) return;
+    await members.recordMessageAuthor(chatId, msg.from.id).catch(fail);
+  }
+
+  // chat_member: участник вступил, вышел, его повысили или ограничили (бот — админ группы).
+  private async handleChatMember(update: TelegramChatMemberUpdated): Promise<void> {
+    if (!this.deps.groupMembers) return;
+    if (update.chat.type !== 'group' && update.chat.type !== 'supergroup') return;
+    const member = update.new_chat_member;
+    if (member.user.is_bot) return;
+    await this.deps.groupMembers
+      .handleMemberUpdate(update.chat.id, member.user.id, member.status, {
+        ...(member.is_member !== undefined ? { isMember: member.is_member } : {}),
+      })
+      .catch((err) => console.warn('[tg-webhook] chat_member failed:', err));
+  }
+
+  private async createGroupDraft(chatId: number, title: string | null, inviterTgUserId: number): Promise<void> {
+    const workGroups = this.deps.workGroups;
+    if (!workGroups?.handleBotAdded) return;
+    const boundAt = this.recentlyBoundChats.get(chatId);
+    if (boundAt !== undefined && Date.now() - boundAt < 60_000) return;
+    const result = await workGroups.handleBotAdded({ id: chatId, title }, inviterTgUserId);
+    const label = title ? `Группа «${escapeHtml(title)}»` : 'Группа';
+    if (result.kind === 'draft') {
+      // Приветствие «как подключить» уже не нужно: группа ждёт подтверждения.
+      this.recentlyBoundChats.set(chatId, Date.now());
+      await this.reply(
+        chatId,
+        `🕓 ${label} добавлена в пространство «${escapeHtml(result.workspaceName)}» и ждёт подтверждения.
+
+` +
+          'Владелец или руководитель пространства подключит её в «Настройках пространства» → ' +
+          '«Рабочие Telegram-группы» и выберет проекты группы.',
+      );
+      return;
+    }
+    if (result.kind === 'choose') {
+      // Пространство выбирает пригласивший — в личке, чтобы не показывать группе чужие пространства.
+      const rows = result.options.slice(0, 20).map((option) => [
+        { text: option.name, callback_data: `${DRAFT_WORKSPACE_CALLBACK_PREFIX}${chatId}:${option.id}` },
+      ]);
+      await this.deps.client
+        .sendMessage({
+          chatId: inviterTgUserId,
+          text: `В какое пространство добавить ${label.charAt(0).toLowerCase()}${label.slice(1)}? ` +
+            'После выбора её подтвердит владелец или руководитель пространства.',
+          parseMode: 'HTML',
+          replyMarkup: { inline_keyboard: rows },
+        })
+        .catch((err) => console.warn('[tg-webhook] draft workspace choice DM failed:', err));
+    }
+    if (result.kind === 'draft_elsewhere') {
+      this.recentlyBoundChats.set(chatId, Date.now());
+      await this.reply(chatId, '⚠️ Группа уже ждёт подтверждения в другом пространстве. Подключить её можно только там.');
+      return;
+    }
+    if (result.kind === 'transfer_requested') {
+      this.recentlyBoundChats.set(chatId, Date.now());
+      await this.reply(
+        chatId,
+        '🕓 Группа раньше была подключена к другому пространству. Его владельцу отправлен запрос на перенос: ' +
+            'группа подключится, когда он одобрит его в «Настройках пространства».',
+      );
+      return;
+    }
+    // not_linked / no_workspace — черновик не создаём, приветствие объяснит подключение кодом.
+  }
+
+  // «Разрешить перенос» / «Отклонить» в личке владельца прежнего пространства группы.
+  private async handleTransferDecision(cq: TelegramCallbackQuery, payload: string): Promise<void> {
+    const match = /^([ar]):(-\d+)$/.exec(payload);
+    const workGroups = this.deps.workGroups;
+    if (!match || !workGroups?.decideTransferFromTelegram) {
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    const result = await workGroups.decideTransferFromTelegram(Number(match[2]), cq.from.id, match[1] === 'a');
+    if (result.kind === 'forbidden') {
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: 'Решить может только владелец пространства группы.',
+        showAlert: true,
+      });
+      return;
+    }
+    const decided = 'groupTitle' in result ? result : null;
+    const group = decided?.groupTitle ? `«${escapeHtml(decided.groupTitle)}»` : '';
+    const target = decided?.toWorkspaceName ? ` в «${escapeHtml(decided.toWorkspaceName)}»` : '';
+    const text =
+      result.kind === 'approved'
+        ? `✅ Перенос группы ${group}${target} разрешён.`
+        : result.kind === 'rejected'
+          ? `🚫 Перенос группы ${group}${target} отклонён: группа осталась у вас отключённой.`
+          : 'ℹ️ Запрос на перенос уже решён или отменён.';
+    await this.deps.client.answerCallbackQuery(cq.id);
+    if (cq.message) {
+      await this.deps.client
+        .editMessageText({ chatId: cq.message.chat.id, messageId: cq.message.message_id, text, parseMode: 'HTML' })
+        .catch(() => this.reply(cq.message!.chat.id, text));
+    } else {
+      await this.reply(cq.from.id, text);
+    }
+  }
+
+  private async handleDraftWorkspaceChoice(cq: TelegramCallbackQuery, payload: string): Promise<void> {
+    const match = /^(-\d+):([0-9a-f-]{36})$/i.exec(payload);
+    const workGroups = this.deps.workGroups;
+    if (!match || !workGroups?.chooseDraftWorkspace) {
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
+    const chatId = Number(match[1]);
+    const chat = await this.deps.client.getChat?.(chatId).catch(() => null);
+    const title = chat?.title ?? null;
+    const result = await workGroups.chooseDraftWorkspace({ id: chatId, title }, match[2]!, cq.from.id);
+    const text =
+      result.kind === 'draft'
+        ? `🕓 Группа добавлена в пространство «${escapeHtml(result.workspaceName)}» и ждёт подтверждения в настройках пространства.`
+        : result.kind === 'active'
+          ? 'ℹ️ Группа уже подключена к пространству.'
+          : result.kind === 'draft_elsewhere'
+            ? '⚠️ Группа уже ждёт подтверждения в другом пространстве.'
+            : result.kind === 'transfer_requested'
+              ? '🕓 Группа раньше была подключена к другому пространству: его владельцу отправлен запрос на перенос.'
+              : '⚠️ Добавить группу в это пространство могут только его владелец или руководитель.';
+    await this.deps.client.answerCallbackQuery(cq.id);
+    if (cq.message) {
+      await this.deps.client
+        .editMessageText({ chatId: cq.message.chat.id, messageId: cq.message.message_id, text, parseMode: 'HTML' })
+        .catch(() => this.reply(cq.message!.chat.id, text));
+    } else {
+      await this.reply(cq.from.id, text);
+    }
+  }
+
+  private async handleWorkGroupBind(
+    chatId: number,
+    title: string | null,
+    code: string,
+    senderTelegramUserId: number,
+  ): Promise<void> {
+    const result = await this.deps.workGroups!.bindFromCode(code, { id: chatId, title }, senderTelegramUserId);
+    const label = title ? `Группа «${escapeHtml(title)}»` : 'Группа';
+    const bot = escapeHtml(this.deps.botUsername?.replace(/^@/, '') ?? 'ProjectsFlow_Bot');
+    for (const [key, at] of this.recentlyBoundChats) {
+      if (Date.now() - at > 60_000) this.recentlyBoundChats.delete(key);
+    }
+    switch (result.kind) {
+      case 'bound':
+        this.recentlyBoundChats.set(chatId, Date.now());
+        await this.reply(
+          chatId,
+          `✅ ${label} подключена к пространству «${escapeHtml(result.workspaceName)}».\n\n` +
+            `Пишите задачи: <code>@${bot} текст задачи</code> — я перефразирую и поставлю. ` +
+            'Кто ещё не подключён к ProjectsFlow, подскажу, как подключиться за минуту.',
+        );
+        return;
+      case 'already':
+        this.recentlyBoundChats.set(chatId, Date.now());
+        await this.reply(chatId, `ℹ️ ${label} уже подключена к пространству «${escapeHtml(result.workspaceName)}».`);
+        return;
+      case 'main':
+        this.recentlyBoundChats.set(chatId, Date.now());
+        await this.reply(
+          chatId,
+          `✅ ${label} — основная группа пространства «${escapeHtml(result.workspaceName)}»: ` +
+            'сюда будут приходить сводки и напоминания.',
+        );
+        return;
+      case 'taken':
+        await this.reply(chatId, '⚠️ Эта группа уже подключена к другому пространству. Сначала отключите её там.');
+        return;
+      case 'draft_elsewhere':
+        await this.reply(chatId, '⚠️ Группа уже ждёт подтверждения в другом пространстве. Подключить её можно только там.');
+        return;
+      case 'transfer_requested':
+        await this.reply(
+          chatId,
+          '🕓 Группа раньше была подключена к другому пространству. Его владельцу отправлен запрос на перенос: ' +
+            'группа подключится, когда он одобрит его в «Настройках пространства».',
+        );
+        return;
+      case 'not_admin':
+        await this.reply(
+          chatId,
+          '⚠️ Подключить группу может только её администратор. Попросите администратора нажать ' +
+            '«Подключить группу» в настройках пространства и выбрать эту группу.',
+        );
+        return;
+      case 'invalid': {
+        // Повторная доставка того же /start после успешной привязки: код уже погашен.
+        const bound = await this.workGroupFor(chatId);
+        if (bound) {
+          if (this.recentlyBoundChats.has(chatId)) return;
+          await this.reply(chatId, `ℹ️ ${label} уже подключена к пространству «${escapeHtml(bound.workspaceName)}».`);
+          return;
+        }
+        await this.reply(
+          chatId,
+          '⚠️ Ссылка устарела или уже использована. Откройте настройки пространства и нажмите «Подключить группу» ещё раз.',
+        );
+        return;
+      }
+    }
+  }
+
+  private async handleChatId(chatId: number, isGroup: boolean, title: string | null): Promise<void> {
+    if (isGroup) {
+      await this.reply(
+        chatId,
+        `🆔 ID группы${title ? ` «${escapeHtml(title)}»` : ''}: <code>${chatId}</code>\n\n` +
+          'Вставьте его в «Настройки пространства» → «Telegram-группы» → «Добавить по ID». ' +
+          'Проще — кнопка «Подключить группу» там же: id подставится сам.',
+      );
+      return;
+    }
+    await this.reply(
+      chatId,
+      `🆔 Это личный чат, ваш Telegram ID: <code>${chatId}</code>.\n` +
+        'Чтобы узнать ID группы, добавьте меня в группу и напишите там /id.',
+    );
+  }
+
   // /start в группе → привязка чата к аккаунту отправителя (first-writer-wins). НЕ трогаем
   // личный DM-чат владельца (markTelegramStarted): это ЛС-функция, увела бы уведомления в группу.
   private async handleGroupStart(tgUserId: number, chatId: number): Promise<void> {
@@ -1300,6 +1830,13 @@ export class HandleTelegramWebhook {
     );
   }
 
+  // Общий проект (db/182): только задачи, видимые человеку (в боте нет пространства запроса —
+  // объединение правил его пространств).
+  private async visibleTasks<T extends VisibleTaskLike>(userId: string, list: readonly T[]): Promise<T[]> {
+    if (list.length === 0 || !this.deps.members.filterVisibleTasks) return [...list];
+    return this.deps.members.filterVisibleTasks(userId, list);
+  }
+
   private async handlePending(tgUserId: number, chatId: number): Promise<void> {
     const userId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
     if (!userId) {
@@ -1314,7 +1851,7 @@ export class HandleTelegramWebhook {
       description: string | null;
     }[] = [];
     for (const p of projects) {
-      const list = await this.deps.tasks.listByProject(p.id);
+      const list = await this.visibleTasks(userId, await this.deps.tasks.listByProject(p.id));
       for (const t of list) {
         if (t.status === 'awaiting_clarification') {
           pending.push({
@@ -1368,6 +1905,7 @@ export class HandleTelegramWebhook {
         `/pending — задачи «На уточнении»\n` +
         `/pause — выключить уведомления\n` +
         `/start — переподключить бота\n` +
+        `/id — ID группы для настроек пространства\n` +
         `/help — эта справка\n\n` +
         `🔗 <i>Telegram привязан ко всему аккаунту сразу — доступны все твои проекты.</i>`,
     );
@@ -1866,8 +2404,9 @@ export class HandleTelegramWebhook {
         await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к проекту.', showAlert: true });
         return;
       }
-      const tasks = (await this.deps.tasks.listByProject(projectId)).filter(
-        (t) => t.status !== 'done',
+      const tasks = await this.visibleTasks(
+        userId,
+        (await this.deps.tasks.listByProject(projectId)).filter((t) => t.status !== 'done'),
       );
       if (tasks.length === 0) {
         await this.reply(chatId, '✨ В этом проекте нет открытых задач.');
@@ -1903,7 +2442,8 @@ export class HandleTelegramWebhook {
         return;
       }
       const membership = await this.deps.members.findForProject(task.projectId, userId);
-      if (!membership) {
+      // Общий проект (db/182): скрытая правилами задача — как чужая.
+      if (!membership || (await this.visibleTasks(userId, [task])).length === 0) {
         await this.deps.client.answerCallbackQuery(cq.id, { text: 'Нет доступа к задаче.', showAlert: true });
         return;
       }
@@ -2123,6 +2663,13 @@ function replyContextOf(
   return { from: from || null, text };
 }
 
+// Сбой подключения человека после успешной расшифровки — не путать с ошибкой расшифровки.
+class VoiceOnboardingError extends Error {
+  constructor(readonly cause: unknown) {
+    super('voice onboarding failed');
+  }
+}
+
 function formatSenderName(from: {
   readonly first_name?: string;
   readonly last_name?: string;
@@ -2159,4 +2706,9 @@ function escapeHtml(s: string): string {
         return '&#39;';
     }
   });
+}
+
+// Группы, где обращения без исполнителя уходят воркеру: incident и смешанная (db/193).
+function isWorkerIntakeMode(mode: string | undefined): boolean {
+  return mode === 'incident' || mode === 'mixed';
 }

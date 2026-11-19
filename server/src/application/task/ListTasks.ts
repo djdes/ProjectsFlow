@@ -34,7 +34,11 @@ export class ListTasks {
     // Доска возвращает строго свои физические задачи. Подмешивать чужие личные не нужно:
     // личная задача всегда лежит во входящих своего ответственного (перенос владения живёт
     // в ChangeTaskAssignee), поэтому «моя» задача и так на моей доске.
-    const tasks = await this.deps.tasks.listByProject(projectId);
+    // Общий проект (db/182): только задачи, которые видны в пространстве запроса.
+    const all = await this.deps.tasks.listByProject(projectId);
+    const tasks = this.deps.members.filterVisibleTasks
+      ? await this.deps.members.filterVisibleTasks(ownerUserId, all)
+      : all;
 
     const ids = tasks.map((t) => t.id);
     const commitCounts = await this.deps.taskCommits.countsByTasks(ids);

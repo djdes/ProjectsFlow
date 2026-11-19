@@ -111,7 +111,7 @@ const DEFAULT_DEPLOY_COMMAND = 'npm run deploy';
 // Колонки-кандидаты для ежедневной сводки (визуальные статусы канбана).
 const DIGEST_STATUS_OPTIONS: { status: TaskStatus; label: string }[] = [
   { status: 'backlog', label: 'Черновики' },
-  { status: 'manual', label: 'Вручную' },
+  { status: 'manual', label: 'В работе' },
   { status: 'todo', label: 'Воркер' },
   { status: 'done', label: 'Готово' },
 ];
@@ -1048,7 +1048,7 @@ export function AutomationDialog({
                     type="number"
                     min={0}
                     max={59}
-                    value={draft.commitSyncMinute}
+                    value={String(draft.commitSyncMinute).padStart(2, '0')}
                     onChange={(e) =>
                       update({ commitSyncMinute: Math.min(59, Math.max(0, Number(e.target.value) || 0)) })
                     }
@@ -1226,7 +1226,7 @@ export function AutomationDialog({
                       type="number"
                       min={0}
                       max={59}
-                      value={digest.minute}
+                      value={String(digest.minute).padStart(2, '0')}
                       onChange={(e) =>
                         updateDigest({ minute: Math.min(59, Math.max(0, Number(e.target.value) || 0)) })
                       }

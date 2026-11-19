@@ -13,6 +13,11 @@ type Deps = {
     countRunningProjectSessions(projectId: string): Promise<number>;
   };
   readonly now?: () => Date;
+  // Общий проект (db/182): запуски по скрытым правилами задачам не показываем.
+  readonly hiddenTaskIds?: (
+    userId: string,
+    refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+  ) => Promise<ReadonlySet<string>>;
 };
 
 // Один прогон воркера (LIVE-сессия) в проекции для карточки. Плательщик (billedUserId)
@@ -89,7 +94,7 @@ export class GetProjectWorkerOverview {
       this.deps,
       projectId,
       actorUserId,
-      'read_project',
+      'read_project_data',
     );
 
     const cappedLimit = Math.max(1, Math.min(MAX_LIMIT, Math.trunc(limit) || DEFAULT_LIMIT));
@@ -98,6 +103,10 @@ export class GetProjectWorkerOverview {
       this.deps.live.countRunningProjectSessions(projectId),
       this.deps.agentTokens.listActiveProjectCapabilities(projectId),
     ]);
+
+    const hidden = this.deps.hiddenTaskIds
+      ? await this.deps.hiddenTaskIds(actorUserId, sessions.map((x) => ({ projectId, taskId: x.taskId })))
+      : new Set<string>();
 
     let taskScoped = 0;
     let nextExpiry: Date | null = null;
@@ -118,7 +127,7 @@ export class GetProjectWorkerOverview {
         projectScoped: caps.length - taskScoped,
         nextExpiryAt: nextExpiry ? nextExpiry.toISOString() : null,
       },
-      recentRuns: sessions.map(toRun),
+      recentRuns: hidden.size > 0 ? sessions.filter((x) => !hidden.has(x.taskId)).map(toRun) : sessions.map(toRun),
     };
   }
 }

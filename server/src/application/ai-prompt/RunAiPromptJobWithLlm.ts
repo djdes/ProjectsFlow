@@ -133,6 +133,7 @@ export class RunAiPromptJobWithLlm {
         // для комментария «Оригинал». Воркер Ralph их терял при пересборке — здесь не теряем.
         taskType: s['taskType'] === 'bug' || s['taskType'] === 'feature' ? s['taskType'] : null,
         existingTaskId: strOrNull(s['existingTaskId']),
+        isDuplicate: s['isDuplicate'] === true,
         sourceExcerpt: strOrNull(s['sourceExcerpt']),
       };
     });

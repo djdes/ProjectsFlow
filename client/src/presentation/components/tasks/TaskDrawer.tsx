@@ -4,13 +4,14 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ClipboardEvent,
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { Activity, AppWindow, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Reply, RotateCcw, Send, Link2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
+import { Activity, AppWindow, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Repeat, Reply, Rocket, RotateCcw, Send, Link2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { TaskPropertyKey } from '@/domain/user/UiPrefs';
 import { TaskProperties, type TaskProperty } from './TaskProperties';
@@ -46,6 +47,8 @@ import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
+import { useCommentNotifyCandidates } from '@/presentation/hooks/useCommentNotifyCandidates';
+import { defaultCommentAudience } from '@/domain/task/defaultCommentAudience';
 import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActionsMenu';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { CommentBody } from './CommentBody';
@@ -60,7 +63,8 @@ import {
 } from '@/presentation/components/attachments/files';
 import { paceAppend, runFilesLimited } from '@/presentation/components/attachments/pace';
 import { RalphModeSelect } from './RalphMode';
-import type { RalphMode, TaskStatus } from '@/domain/task/Task';
+import { RunModeSelect } from './RunMode';
+import type { RalphMode, RunMode, TaskStatus } from '@/domain/task/Task';
 import { AssigneeSelect } from './AssigneeSelect';
 import { getDefaultTaskDeadline } from '@/domain/task/defaultTaskDeadline';
 import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
@@ -69,6 +73,8 @@ import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
 import { TaskPriorityChip } from './TaskPriorityChip';
 import { TaskTypeChip } from './TaskTypeChip';
+import { TaskRecurrenceChip } from './TaskRecurrenceChip';
+import { SaveAsTemplateMenuItem } from './SaveAsTemplateMenuItem';
 import { TaskApproverRow } from './TaskApproverRow';
 import { TaskDeadlineChip } from './TaskDeadlineChip';
 import { PropertyRow, PROPERTY_VALUE_CLASS } from './PropertyRow';
@@ -86,6 +92,7 @@ import { TaskHeaderMedia, type TaskMediaPatch } from './TaskHeaderMedia';
 import { splitTitleBody, parseTitleHeading, stripInlineMarkdown } from '@/lib/taskTitleBody';
 import { TaskDrawerAttachmentRow } from './TaskDrawerAttachmentRow';
 import { CancelWorkButton } from './CancelWorkButton';
+import { PinToScreenButton } from '@/presentation/components/desktop-notes/PinToScreenButton';
 import { STATUS_LABEL } from './statusLabels';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useMobileSheet } from '@/components/ui/mobile-sheet';
@@ -98,6 +105,7 @@ import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { ProjectPublishedBanner } from '@/presentation/components/project/ProjectPublishedBanner';
 import { TaskVersionsDialog } from './TaskVersionsDialog';
 import { TaskCreatedValue } from './TaskCreatedValue';
+import { TaskGroupOriginBadge } from './TaskGroupOriginBadge';
 
 // Tiptap-редактор грузим лениво — он тяжёлый и не нужен на read-heavy экранах,
 // которые не открывают drawer. Suspense-fallback держит высоту, чтобы layout не прыгал.
@@ -466,7 +474,8 @@ function TaskRalphModeChip({
   disabled = false,
 }: {
   task: Task;
-  onChanged: () => void;
+  // updated — ответ PATCH: окно держит его, пока родитель не пришлёт свежую задачу.
+  onChanged: (updated: Task) => void;
   className?: string;
   disabled?: boolean;
 }): React.ReactElement {
@@ -485,8 +494,8 @@ function TaskRalphModeChip({
     setMode(next); // optimistic
     setSaving(true);
     try {
-      await taskRepository.update(task.projectId, task.id, { ralphMode: next });
-      onChanged();
+      const updated = await taskRepository.update(task.projectId, task.id, { ralphMode: next });
+      onChanged(updated);
     } catch (err) {
       setMode(prev);
       toast.error(`Не удалось сменить режим: ${(err as Error).message}`);
@@ -499,6 +508,54 @@ function TaskRalphModeChip({
   // «Выбрать режим…» для дефолта / имя режима когда выбран (единый вид с дедлайном).
   return (
     <RalphModeSelect
+      value={mode}
+      onChange={(v) => void change(v)}
+      disabled={saving || disabled}
+      variant="ghost"
+      className={className}
+    />
+  );
+}
+
+// Режим запуска воркера (spec §5) в ряду свойств: смена — сразу PATCH, ошибка → toast.
+function TaskRunModeChip({
+  task,
+  onChanged,
+  className,
+  disabled = false,
+}: {
+  task: Task;
+  // updated — ответ PATCH: окно держит его, пока родитель не пришлёт свежую задачу.
+  onChanged: (updated: Task) => void;
+  className?: string;
+  disabled?: boolean;
+}): React.ReactElement {
+  const { taskRepository } = useContainer();
+  const [mode, setMode] = useState<RunMode>(task.runMode);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setMode(task.runMode);
+  }, [task.runMode]);
+
+  const change = async (next: RunMode): Promise<void> => {
+    if (next === mode || saving) return;
+    const prev = mode;
+    setMode(next);
+    setSaving(true);
+    try {
+      const updated = await taskRepository.update(task.projectId, task.id, { runMode: next });
+      onChanged(updated);
+    } catch (err) {
+      setMode(prev);
+      toast.error(`Не удалось сменить режим запуска: ${(err as Error).message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <RunModeSelect
       value={mode}
       onChange={(v) => void change(v)}
       disabled={saving || disabled}
@@ -699,6 +756,8 @@ export function TaskDrawer({
   };
   // Императивные handle'ы редакторов — для «+ Подзадача» (вставить пункт и сфокусироваться).
   const bodyEditorRef = useRef<RichTextEditorHandle>(null);
+  // Задача, текст которой уже начали править в этом окне (телефон: показываем инструменты).
+  const [editingTextOf, setEditingTextOf] = useState<string | null>(null);
   const createEditorRef = useRef<RichTextEditorHandle>(null);
   // Ref на скрытый file input для кнопки «Вложение» в create-mode.
   const createFileInputRef = useRef<HTMLInputElement>(null);
@@ -1527,9 +1586,19 @@ export function TaskDrawer({
   const [statusResult, setStatusResult] = useState<Task | null>(null);
   // Inbox can retain the initial task prop. Keep the acknowledged status until the
   // parent supplies a newer version; approval may change the requested target.
-  const task = sourceTask && statusResult?.id === sourceTask.id && statusResult.updatedAt >= sourceTask.updatedAt
-    ? { ...sourceTask, status: statusResult.status, statusBeforeDone: statusResult.statusBeforeDone }
-    : sourceTask;
+  // Режимы (Ralph / запуск) — тот же приём: доска и «Входящие» держат снимок задачи с
+  // момента открытия, а refetch списка его не заменяет. Без этого LIVE и кнопка запуска
+  // читали старый runMode («Обычное изменение»), хотя на сервере уже «Полный прогон».
+  const [modeResult, setModeResult] = useState<Task | null>(null);
+  // useMemo: стабильная ссылка — LiveTab сравнивает задачу по идентичности.
+  const task = useMemo(() => {
+    const withStatus = sourceTask && statusResult?.id === sourceTask.id && statusResult.updatedAt >= sourceTask.updatedAt
+      ? { ...sourceTask, status: statusResult.status, statusBeforeDone: statusResult.statusBeforeDone }
+      : sourceTask;
+    return withStatus && modeResult?.id === withStatus.id && modeResult.updatedAt >= withStatus.updatedAt
+      ? { ...withStatus, runMode: modeResult.runMode, ralphMode: modeResult.ralphMode }
+      : withStatus;
+  }, [sourceTask, statusResult, modeResult]);
   const scrollToCommentId = state?.mode === 'edit' ? state.scrollToCommentId : undefined;
   // Контекст ответа/цитаты: выбран в треде (кнопка «Ответить» / выделение), читается
   // композером-футером (плашка «в ответ …») и уходит в createComment. db/080.
@@ -1665,6 +1734,7 @@ export function TaskDrawer({
       <span className={cn('inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-2xs font-medium', STATUS_BADGE_COLOR[task.status])}>
         {STATUS_LABEL[task.status]}
       </span>
+      <PinToScreenButton taskId={task.id} />
       {/* Копирование ссылки подтверждаем после успешной записи в буфер обмена. */}
       <Button
         variant="ghost"
@@ -1705,6 +1775,8 @@ export function TaskDrawer({
           <DropdownMenuItem onSelect={() => setVersionsOpen(true)}>
             <Clock className="text-muted-foreground" /> История версий
           </DropdownMenuItem>
+          {/* Шаблоны пространства (db/187): текст, приоритет, тип и повтор этой задачи. */}
+          <SaveAsTemplateMenuItem task={task} description={editDescription || (task.description ?? '')} />
           <div className="mbs-1 border-bs border-border px-2 py-3">
             <p className="mbe-1.5 text-meta text-muted-foreground">Создано</p>
             <TaskCreatedValue task={task} dateLabel={formatTaskCreated(task.createdAt)} className="flex-wrap gap-y-1 [&_time]:text-meta" />
@@ -1863,6 +1935,7 @@ export function TaskDrawer({
                 onSave={saveMedia}
                 hovered={topZoneHover}
                 onHoverChange={(enter) => (enter ? enterTopZone() : leaveTopZone())}
+                revealOnPhone={editingTextOf === task.id}
               />
 
               {/* Заморозка приёмкой: объясняем, ПОЧЕМУ ничего не правится. Без плашки окно
@@ -1893,7 +1966,13 @@ export function TaskDrawer({
               {/* === ОПИСАНИЕ === Заголовок и описание ОДНИМ полем сверху (1-я строка —
                   по сути заголовок). Полное editDescription редактируется напрямую,
                   сохраняется по blur / Ctrl+Cmd+Enter. Работает в любом статусе. */}
-              <div ref={bodyContainerRef} className="px-[var(--pf-drawer-px)] pbe-1 pbs-0">
+              <div
+                ref={bodyContainerRef}
+                className="px-[var(--pf-drawer-px)] pbe-1 pbs-0"
+                // Телефон: с первым фокусом в тексте открываются инструменты правки (ряд
+                // «Иконка / Обложка» здесь, панель форматирования — в самом редакторе).
+                onFocusCapture={() => setEditingTextOf(task.id)}
+              >
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
                   editorRef={bodyEditorRef}
@@ -1984,6 +2063,12 @@ export function TaskDrawer({
                   сохраняется в профиль (ui_prefs) для всех проектов. Значения и видимость
                   собираем в map по ключу, рендерим в сохранённом порядке. */}
               <div className="px-[var(--pf-drawer-px)] pbe-2.5 pbs-1">
+                {/* Задача поставлена в рабочей Telegram-группе (db/190): откуда, кто и когда. */}
+                {task.groupOrigin && (
+                  <div className="mbe-1.5 flex">
+                    <TaskGroupOriginBadge origin={task.groupOrigin} createdAt={task.createdAt} className="text-xs" />
+                  </div>
+                )}
                 {(() => {
                   const propValues: Record<TaskPropertyKey, React.ReactNode> = {
                     status: <TaskStatusField task={task} disabled={!canEdit || !currentUser} beforeChange={flushDescription} onMove={onMove} onChanged={(updated) => { setStatusResult(updated); notifyChanged(); }} />,
@@ -2027,6 +2112,15 @@ export function TaskDrawer({
                         disabled={!canEdit}
                       />
                     ),
+                    // Повтор (db/185): выполнили — сервер ставит следующую задачу по правилу.
+                    recurrence: (
+                      <TaskRecurrenceChip
+                        task={task}
+                        onChanged={() => notifyChanged()}
+                        className={PROPERTY_VALUE_CLASS}
+                        disabled={!canEdit}
+                      />
+                    ),
                     priority: (
                       <TaskPriorityChip
                         task={task}
@@ -2046,7 +2140,15 @@ export function TaskDrawer({
                     mode: (
                       <TaskRalphModeChip
                         task={task}
-                        onChanged={() => notifyChanged()}
+                        onChanged={(updated) => { setModeResult(updated); notifyChanged(); }}
+                        className={PROPERTY_VALUE_CLASS}
+                        disabled={!canEdit}
+                      />
+                    ),
+                    runMode: (
+                      <TaskRunModeChip
+                        task={task}
+                        onChanged={(updated) => { setModeResult(updated); notifyChanged(); }}
                         className={PROPERTY_VALUE_CLASS}
                         disabled={!canEdit}
                       />
@@ -2073,9 +2175,11 @@ export function TaskDrawer({
                     assignee: { icon: UserPlus, label: 'Исполнитель', value: propValues.assignee },
                     approver: { icon: ShieldCheck, label: 'Кто утверждает', value: propValues.approver },
                     deadline: { icon: CalendarClock, label: 'Срок до', value: propValues.deadline },
+                    recurrence: { icon: Repeat, label: 'Повтор', value: propValues.recurrence },
                     priority: { icon: Flag, label: 'Приоритет', value: propValues.priority },
                     taskType: { icon: Tag, label: 'Тип', value: propValues.taskType },
                     mode: { icon: Bot, label: 'Режим', value: propValues.mode },
+                    runMode: { icon: Rocket, label: 'Запуск', value: propValues.runMode },
                     files: { icon: Paperclip, label: 'Файлы', value: propValues.files },
                   };
                   return <TaskProperties taskId={task.id} items={props} />;
@@ -2188,6 +2292,7 @@ export function TaskDrawer({
               >
                 <LiveTab
                   task={task}
+                  onTaskUpdated={setModeResult}
                   fillHeight={isSplit}
                   canEdit={canEdit}
                   active={activeTab === 'live'}
@@ -2693,8 +2798,11 @@ function CommentComposer({
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState(false);
-  // Адресация уведомления (по умолчанию — все участники).
-  const [notify, setNotify] = useState<NotifyAudience>({ mode: 'all' });
+  // Адресация уведомления: пока автор не выбрал сам — дефолт сервера (руководитель).
+  const notifyCandidates = useCommentNotifyCandidates(projectId, taskId);
+  const defaultAudience = defaultCommentAudience(notifyCandidates.candidates, null, currentUser?.id ?? null);
+  const [chosenNotify, setNotify] = useState<NotifyAudience | null>(null);
+  const notify = chosenNotify ?? defaultAudience;
   const [pending, setPending] = useState<PendingFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Кандидаты в @-упоминания — все участники кроме автора.
@@ -2728,7 +2836,9 @@ function CommentComposer({
     if ((trimmed.length === 0 && pending.length === 0) || submitting) return;
     setSubmitting(true);
     try {
-      const created = await taskRepository.createComment(projectId, taskId, trimmed || ' ', notify);
+      const created = await taskRepository.createComment(projectId, taskId, trimmed, notify, {
+        attachmentCount: pending.length,
+      });
       markAnswered(taskId);
       const uploaded: TaskAttachment[] = [];
       for (const pf of pending) {
@@ -2857,9 +2967,9 @@ function CommentComposer({
         </button>
         <div className="ms-auto">
           <NotifyAudienceControl
-            projectId={projectId}
-            excludeUserId={currentUser?.id ?? null}
-            members={members}
+            candidates={notifyCandidates.candidates}
+            failed={notifyCandidates.failed}
+            defaultAudience={defaultAudience}
             value={notify}
             onChange={setNotify}
             disabled={submitting}

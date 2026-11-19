@@ -1,9 +1,12 @@
-import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '@/domain/task/Task';
+import type { DispatcherHeartbeat } from '@/domain/live/QueueLiveness';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus, TaskType } from '@/domain/task/Task';
+import type { TaskRecurrence } from '@/domain/task/TaskRecurrence';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type { TaskVersionsResult } from '@/domain/task/TaskVersion';
 import type {
   CommentNotifications,
+  CommentNotifyCandidate,
   NotifyAudience,
   TaskComment,
 } from '@/domain/task/TaskComment';
@@ -21,6 +24,8 @@ export type CreateTaskInput = {
   readonly afterTaskId?: string | null;
   // Режим работы Ralph. Если не передан — backend дефолтит 'normal'.
   readonly ralphMode?: RalphMode;
+  // Режим запуска воркера; не передан — backend дефолтит 'quick'.
+  readonly runMode?: RunMode;
   // Единственный обязательный ответственный. Для inbox-задач это владелец inbox либо
   // shared-member; для именованного проекта — его участник. Сервер валидирует доступность.
   readonly assigneeUserId: string;
@@ -34,6 +39,8 @@ export type CreateTaskInput = {
   readonly priority?: TaskPriority | null;
   // Тип задачи. null/undefined = не определён.
   readonly taskType?: TaskType | null;
+  // Правило повтора (db/185). null/undefined = не повторяется.
+  readonly recurrence?: TaskRecurrence | null;
 };
 
 export type UpdateTaskInput = {
@@ -45,6 +52,8 @@ export type UpdateTaskInput = {
   // Вертикальное положение фокуса обложки (0..100); undefined = не менять. См. db/094.
   readonly coverPosition?: number;
   readonly ralphMode?: RalphMode;
+  // Режим запуска воркера; не передан — backend дефолтит 'quick'.
+  readonly runMode?: RunMode;
   // null = очистить deadline; undefined = не менять.
   readonly deadline?: string | null;
   // null = очистить дату начала; undefined = не менять.
@@ -53,6 +62,8 @@ export type UpdateTaskInput = {
   readonly priority?: TaskPriority | null;
   // null = сбросить тип задачи; undefined = не менять.
   readonly taskType?: TaskType | null;
+  // null = больше не повторять; undefined = не менять. См. db/185.
+  readonly recurrence?: TaskRecurrence | null;
 };
 
 export type MoveTaskInput = {
@@ -94,6 +105,9 @@ export type TaskDigestResult = {
 
 export interface TaskRepository {
   get(projectId: string, taskId: string): Promise<Task>;
+  // Пульс диспетчера проекта для LIVE (задача в очереди). Опционально — тестовые фейки
+  // и старые сборки без него просто не показывают «видел очередь N с назад».
+  getDispatcherHeartbeat?(projectId: string, taskId: string): Promise<DispatcherHeartbeat>;
   list(projectId: string): Promise<Task[]>;
   create(projectId: string, input: CreateTaskInput): Promise<Task>;
   update(projectId: string, taskId: string, input: UpdateTaskInput): Promise<Task>;
@@ -152,8 +166,12 @@ export interface TaskRepository {
     taskId: string,
     body: string,
     notify?: NotifyAudience,
-    reply?: { replyToCommentId?: string | null; quotedText?: string | null },
+    // attachmentCount — сколько вложений клиент загрузит следом: при > 0 текст может
+    // быть пустым (комментарий из одной картинки).
+    options?: { replyToCommentId?: string | null; quotedText?: string | null; attachmentCount?: number },
   ): Promise<TaskComment>;
+  // Кого можно уведомить о комментарии к задаче и кто выбран по умолчанию.
+  listCommentNotifyCandidates(projectId: string, taskId: string): Promise<CommentNotifyCandidate[]>;
   // Журнал доставки уведомлений по комментарию — для меню ⋮ «Кто уведомлён».
   listCommentNotifications(
     projectId: string,

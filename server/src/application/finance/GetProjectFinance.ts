@@ -29,7 +29,7 @@ export class GetProjectFinance {
       this.deps,
       projectId,
       userId,
-      'read_project',
+      'read_project_data',
     );
     // Видимость финансов: не-владелец видит только если включён режим 'members'.
     if (!hasOwnerRights(membership.role) && project.financeVisibility !== 'members') {

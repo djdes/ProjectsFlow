@@ -89,6 +89,7 @@ const FIELD_LABEL: Record<string, string> = {
   assigneeUserId: 'ответственный',
   assignee: 'ответственный',
   ralphMode: 'режим',
+  recurrence: 'повтор',
   name: 'название',
   cover: 'обложка',
   attachments: 'файлы',

@@ -1,3 +1,11 @@
+import type { InviteCandidate, InviteNeighborStatus } from '@/domain/workspace/InviteCandidate';
+import type {
+  TelegramGroupLinkPurpose,
+  TelegramGroupMembers,
+  TelegramWorkGroup,
+  TelegramWorkGroupMode,
+  TelegramWorkGroups,
+} from '@/domain/workspace/TelegramWorkGroup';
 import type {
   Workspace,
   WorkspaceCommitSyncMode,
@@ -48,6 +56,18 @@ type MemberDto = {
 };
 
 type ProjectDto = { id: string; name: string; icon: string | null };
+
+function normalizeTelegramGroup(group: Partial<TelegramWorkGroup> & Pick<TelegramWorkGroup, 'chatId'>): TelegramWorkGroup {
+  return {
+    chatId: group.chatId,
+    title: group.title ?? null,
+    createdAt: group.createdAt ?? '',
+    status: group.status ?? 'active',
+    mode: group.mode ?? 'standard',
+    projectIds: group.projectIds ?? [],
+    transferRequest: group.transferRequest ?? null,
+  };
+}
 
 // Старый бэк отдавал 'member' — маппим в 'editor' (миграция БД переводит роли так же).
 function normalizeRole(role: string | undefined): WorkspaceRole {
@@ -224,8 +244,106 @@ export class HttpWorkspaceRepository implements WorkspaceRepository {
     return inviteFromDto(invite);
   }
 
+  async listInviteCandidates(workspaceId: string): Promise<InviteCandidate[]> {
+    const { candidates } = await httpClient.get<{ candidates: InviteCandidate[] }>(
+      `/workspaces/${workspaceId}/invite-candidates`,
+    );
+    return candidates;
+  }
+
+  async inviteNeighbors(
+    workspaceId: string,
+    userIds: readonly string[],
+    role: WorkspaceInviteRole,
+  ): Promise<Array<{ userId: string; status: InviteNeighborStatus }>> {
+    const { results } = await httpClient.post<{
+      results: Array<{ userId: string; status: InviteNeighborStatus }>;
+    }>(`/workspaces/${workspaceId}/invites/neighbors`, { userIds, role });
+    return results;
+  }
+
   async deleteInvite(workspaceId: string, inviteId: string): Promise<void> {
     await httpClient.delete<void>(`/workspaces/${workspaceId}/invites/${inviteId}`);
+  }
+
+  async listTelegramGroups(id: string): Promise<TelegramWorkGroups> {
+    const res = await httpClient.get<{
+      groups: TelegramWorkGroup[];
+      mainGroup?: { chatId: number; title: string | null } | null;
+      botUsername?: string | null;
+    }>(`/workspaces/${id}/telegram-groups`);
+    return {
+      // Старый сервер мог не прислать статус/проекты — это рабочие группы без ограничения.
+      groups: res.groups.map(normalizeTelegramGroup),
+      mainGroup: res.mainGroup ?? null,
+      botUsername: res.botUsername ?? null,
+    };
+  }
+
+  async createTelegramGroupLink(
+    id: string,
+    purpose: TelegramGroupLinkPurpose,
+  ): Promise<{ url: string; expiresAt: string }> {
+    return httpClient.post(`/workspaces/${id}/telegram-groups/link`, { purpose });
+  }
+
+  async addTelegramGroup(id: string, chatId: number): Promise<TelegramWorkGroup> {
+    const { group } = await httpClient.post<{ group: TelegramWorkGroup }>(
+      `/workspaces/${id}/telegram-groups`,
+      { chatId },
+    );
+    return normalizeTelegramGroup(group);
+  }
+
+  async removeTelegramGroup(id: string, chatId: number): Promise<void> {
+    await httpClient.delete<void>(`/workspaces/${id}/telegram-groups/${chatId}`);
+  }
+
+  async confirmTelegramGroup(id: string, chatId: number): Promise<TelegramWorkGroup> {
+    const { group } = await httpClient.post<{ group: TelegramWorkGroup }>(
+      `/workspaces/${id}/telegram-groups/${chatId}/confirm`,
+      {},
+    );
+    return normalizeTelegramGroup(group);
+  }
+
+  async getTelegramGroupMembers(id: string, chatId: number): Promise<TelegramGroupMembers> {
+    const res = await httpClient.get<Partial<TelegramGroupMembers>>(
+      `/workspaces/${id}/telegram-groups/${chatId}/members`,
+    );
+    return {
+      telegramCount: res.telegramCount ?? 0,
+      linked: res.linked ?? [],
+      botIsAdmin: res.botIsAdmin ?? null,
+    };
+  }
+
+  async decideTelegramGroupTransfer(id: string, chatId: number, decision: 'approve' | 'reject'): Promise<void> {
+    await httpClient.post<void>(`/workspaces/${id}/telegram-groups/${chatId}/transfer/${decision}`, {});
+  }
+
+  async setTelegramGroupProjects(
+    id: string,
+    chatId: number,
+    projectIds: readonly string[],
+  ): Promise<TelegramWorkGroup> {
+    const { group } = await httpClient.put<{ group: TelegramWorkGroup }>(
+      `/workspaces/${id}/telegram-groups/${chatId}/projects`,
+      { projectIds },
+    );
+    return normalizeTelegramGroup(group);
+  }
+
+  async setTelegramGroupMode(
+    id: string,
+    chatId: number,
+    mode: TelegramWorkGroupMode,
+  ): Promise<TelegramWorkGroup> {
+    const { group } = await httpClient.put<{ group: TelegramWorkGroup }>(
+      `/workspaces/${id}/telegram-groups/${chatId}/mode`,
+      { mode },
+    );
+    return normalizeTelegramGroup(group);
   }
 
   async listProjects(id: string): Promise<ProjectDto[]> {

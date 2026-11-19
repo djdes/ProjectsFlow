@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeTaskRecurrence, type TaskRecurrence } from '../../domain/task/TaskRecurrence.js';
 
 // Полный список статусов задачи. 'pending_approval' долго отсутствовал здесь по недосмотру
 // (db/150) — из-за этого задачу нельзя было перенести в «На утверждении» через API.
@@ -20,6 +21,7 @@ export const taskStatusSchema = z.enum([
 
 // Режим работы Ralph. См. spec C:/www/ralph/prompts/task-ralph-mode.md.
 export const ralphModeSchema = z.enum(['normal', 'silent', 'grillme']);
+export const runModeSchema = z.enum(['quick', 'full']);
 
 // Дата 'YYYY-MM-DD' (без времени). Жёсткий regex — backend хранит как есть, UI парсит
 // для отображения. nullable: null = очистить deadline; не передано = не менять.
@@ -35,6 +37,28 @@ const prioritySchema = z
 
 // Тип задачи (db/153). nullable: null = сбросить в «не определён».
 const taskTypeSchema = z.enum(['feature', 'bug']).nullable();
+
+// Правило повтора (db/185). nullable: null = не повторять. Дни недели — ISO (1 = пн … 7 = вс),
+// число месяца — 1..31. На выходе — канонический вид из домена (дни отсортированы, без повторов).
+export const taskRecurrenceSchema = z
+  .discriminatedUnion('kind', [
+    z.object({ kind: z.literal('daily') }),
+    z.object({ kind: z.literal('weekdays') }),
+    z.object({
+      kind: z.literal('weekly'),
+      days: z.array(z.number().int().min(1).max(7)).min(1, 'Выберите хотя бы один день недели').max(7),
+    }),
+    z.object({ kind: z.literal('monthly'), day: z.number().int().min(1).max(31) }),
+  ])
+  .transform((value, ctx): TaskRecurrence => {
+    const rule = normalizeTaskRecurrence(value);
+    if (!rule) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Некорректное правило повтора' });
+      return z.NEVER;
+    }
+    return rule;
+  })
+  .nullable();
 
 // Иконка задачи: эмодзи / lucide:Name[:color] / data-URL картинки. nullable: null = убрать иконку.
 // Лимит 2_000_000 — вмещает base64 data-URL картинки, защищая от гигантского payload'а.
@@ -58,6 +82,7 @@ export const createTaskSchema = z.object({
   // Позиция: поставить новую задачу сразу ПОСЛЕ этой (цепочка inline-создания). Только на create.
   afterTaskId: z.string().uuid().nullable().optional(),
   ralphMode: ralphModeSchema.optional(),
+  runMode: runModeSchema.optional(),
   // Единственный ответственный. Старые клиенты могут не прислать — сервер назначит actor'а.
   assigneeUserId: z.string().uuid().nullable().optional(),
   deadline: deadlineSchema.optional(),
@@ -67,6 +92,7 @@ export const createTaskSchema = z.object({
   parentTaskId: z.string().uuid().nullable().optional(),
   priority: prioritySchema.optional(),
   taskType: taskTypeSchema.optional(),
+  recurrence: taskRecurrenceSchema.optional(),
 });
 
 export const updateTaskSchema = z
@@ -76,10 +102,12 @@ export const updateTaskSchema = z
     cover: coverSchema.optional(),
     coverPosition: coverPositionSchema.optional(),
     ralphMode: ralphModeSchema.optional(),
+    runMode: runModeSchema.optional(),
     deadline: deadlineSchema.optional(),
     startDate: deadlineSchema.optional(),
     priority: prioritySchema.optional(),
     taskType: taskTypeSchema.optional(),
+    recurrence: taskRecurrenceSchema.optional(),
   })
   .refine((o) => Object.keys(o).length > 0, { message: 'Нечего обновлять' });
 
@@ -106,8 +134,11 @@ export const notifyAudienceSchema = z.object({
 
 // Лимит 10000 символов — на пару порядков больше типичного комментария, но защищает
 // от случайной вставки гигантского лога.
+// Пустой текст допустим, если клиент следом загружает вложения (attachmentCount > 0):
+// комментарий из одной картинки. Пустой комментарий без вложений отбивает CreateTaskComment.
 export const createTaskCommentSchema = z.object({
-  body: z.string().trim().min(1, 'Введите текст комментария').max(10000),
+  body: z.string().trim().max(10000),
+  attachmentCount: z.number().int().min(0).max(100).optional(),
   // Опционально: старые клиенты без поля → дефолт 'all' на роуте.
   notify: notifyAudienceSchema.optional(),
   // Ответ/цитата (db/080). Опциональны → старые клиенты не присылают.

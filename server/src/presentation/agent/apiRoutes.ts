@@ -1,4 +1,6 @@
+import { agentActivity, AgentActivityTracker } from '../../application/agent/AgentActivityTracker.js';
 import { Router, raw, type NextFunction, type Request, type Response } from 'express';
+import { INCIDENT_NOTIFY_KINDS, type IncidentNotifyKind, type NotifyIncidentGroup } from '../../application/telegram/NotifyIncidentGroup.js';
 import { contentDisposition } from '../contentDisposition.js';
 import { z } from 'zod';
 import { agentTaskCreateStatus, requireAgentTaskMove } from '../../application/agent/AgentTaskDispatchPolicy.js';
@@ -116,6 +118,7 @@ import { writeDocSchema } from '../kb/schemas.js';
 
 type Deps = {
   readonly authenticate: AuthenticateAgentToken;
+  readonly agentActivity?: AgentActivityTracker;
   readonly issueWorkerCapability: IssueProjectWorkerCapability;
   readonly revokeWorkerCapability: RevokeProjectWorkerCapability;
   readonly listProjects: ListProjects;
@@ -205,6 +208,8 @@ type Deps = {
   // Multi-user TG-уведомления (Ralph → @projectsflow_bot → юзер).
   readonly sendTelegramNotification: SendAgentTelegramNotification;
   readonly broadcastTelegramByTask: BroadcastTelegramNotificationByTask;
+  // Вопрос/«не получилось» автору инцидента — в его Telegram-группу (spec 2026-11-17, раздел 3).
+  readonly notifyIncidentGroup?: Pick<NotifyIncidentGroup, 'execute'>;
   // Нужны для members-эндпоинта (isOwner = userId === project.ownerId; hasTelegram batch).
   readonly projects: ProjectRepository;
   readonly users: UserRepository;
@@ -285,6 +290,8 @@ const updateTaskAgentSchema = z
     description: z.string().trim().min(1).max(50_000).optional(),
     // Worker может выставить режим (например 'silent' → дальше работает без вопросов).
     ralphMode: z.enum(['normal', 'silent', 'grillme']).optional(),
+    // Режим запуска воркера: 'quick' (без ревьюера) | 'full' (весь конвейер). spec §5.
+    runMode: z.enum(['quick', 'full']).optional(),
     // Срок выполнения 'YYYY-MM-DD'. null = очистить. См. db/041.
     deadline: z
       .string()
@@ -745,6 +752,12 @@ export function agentApiRouter(deps: Deps): Router {
   const router = Router();
   router.use(requireAgentToken(deps.authenticate));
   router.use(requireAgentCapabilityScope());
+  // Пульс диспетчера для LIVE: любой успешно авторизованный запрос агента = «жив».
+  const activity = deps.agentActivity ?? agentActivity;
+  router.use((req: Request, _res: Response, next: NextFunction) => {
+    if (req.user) activity.touch(req.user.id);
+    next();
+  });
 
   // The dispatcher exchanges its long-lived account token for a short-lived
   // project capability before spawning Claude. Plaintext is returned once and
@@ -994,6 +1007,7 @@ export function agentApiRouter(deps: Deps): Router {
           description: body.description,
           status: agentTaskCreateStatus(body.status),
           ralphMode: body.ralphMode,
+          runMode: body.runMode,
           deadline: body.deadline ?? null,
           priority: body.priority ?? null,
           taskType: body.taskType ?? null,
@@ -1808,6 +1822,7 @@ export function agentApiRouter(deps: Deps): Router {
           taskId,
           description: body.description,
           ralphMode: body.ralphMode,
+          runMode: body.runMode,
           deadline: body.deadline,
           priority: body.priority,
           taskType: body.taskType,
@@ -2152,6 +2167,25 @@ export function agentApiRouter(deps: Deps): Router {
       try {
         const body = telegramNotifySchema.parse(req.body);
         const respectPrefs = body.respectPrefs !== false;
+
+        // Задача из группы «Инциденты»: сообщение уходит в группу reply'ем на автора.
+        if ((INCIDENT_NOTIFY_KINDS as readonly string[]).includes(body.kind)) {
+          if (!body.taskId || !deps.notifyIncidentGroup) {
+            res.status(400).json({ error: 'invalid_body' });
+            return;
+          }
+          const r = await deps.notifyIncidentGroup.execute({
+            actorUserId: req.user!.id,
+            taskId: body.taskId,
+            kind: body.kind as IncidentNotifyKind,
+            text: body.text,
+            ...(body.ralphQuestionId ? { ralphQuestionId: body.ralphQuestionId } : {}),
+          });
+          res.json(r.status === 'ok'
+            ? { ok: true, sent: 1, skipped: [], delivered: [{ chatId: r.chatId, messageId: r.messageId }] }
+            : { ok: true, sent: 0, skipped: [{ reason: r.status, ...('description' in r ? { detail: r.description } : {}) }], delivered: [] });
+          return;
+        }
 
         // Приоритет userId. taskId-fan-out только если userId не указан.
         if (body.userId) {

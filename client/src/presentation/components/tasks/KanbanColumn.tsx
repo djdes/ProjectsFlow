@@ -8,11 +8,11 @@ import { SortableContext, type SortingStrategy } from '@dnd-kit/sortable';
 const noReflowStrategy: SortingStrategy = () => null;
 import { ListChecks, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { RalphMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { cn } from '@/lib/utils';
 import { KanbanCard } from './KanbanCard';
-import { COLUMN_SCROLL_CLASS } from './ColumnPreview';
+import { CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS } from './ColumnPreview';
 import { TaskComposer } from './TaskComposer';
 import { InlineNewCard, type InlineTaskSettings } from './InlineNewCard';
 import { STATUS_SUBTITLE } from './statusLabels';
@@ -84,6 +84,7 @@ type InlineCreateInput = {
   // Позиция: поставить сразу ПОСЛЕ этой задачи (цепочка inline-создания, порядок создания).
   afterTaskId?: string | null;
   ralphMode?: RalphMode;
+  runMode?: RunMode;
   assigneeUserId?: string;
   deadline?: string | null;
   priority?: TaskPriority | null;
@@ -105,7 +106,7 @@ type Props = {
   showShortId?: boolean;
   // Если задан — на карточках колонки появляются быстрые переносы: стрелка → «шаг вперёд»
   // и «Взять в работу» (target = 'manual'). См. KanbanCard.onQuickPromote.
-  onQuickPromote?: (task: Task, target?: TaskStatus) => void;
+  onQuickPromote?: (task: Task, target?: TaskStatus, runMode?: RunMode) => void;
   // Триггер refetch после изменения agent-job на карточке (enqueue / cancel).
   onTaskChanged?: () => void;
   // Доп. контрол в шапке колонки (слева от «+»). Сейчас используется done-колонкой
@@ -440,6 +441,7 @@ export function KanbanColumn({
         onCreate={handleInlineCreate}
         onCreated={appendSession}
         onClose={closeInline}
+        showRunMode={status === 'todo'}
       />
     ) : null;
 
@@ -705,8 +707,9 @@ export function KanbanColumn({
         onPointerDown={selectionMode ? onDragSelectStart : undefined}
         className={cn(
           // min-h — чтобы у пустой/короткой колонки была зона для drop'а (высота по контенту).
-          // Дизайн C4: отступ 6px и зазор между карточками 5px — плотнее Notion.
-          'flex min-h-[4rem] flex-col gap-[5px] p-1.5 pbs-0.5 transition-colors',
+          // Дизайн C4: отступ 6px и зазор между карточками 5px — плотнее Notion (на телефоне 10px).
+          'flex min-h-[4rem] flex-col p-1.5 pbs-0.5 transition-colors',
+          CARD_STACK_GAP_CLASS,
           COLUMN_SCROLL_CLASS,
           // Телефон: колонка почти во всю ширину экрана, и почти любой вертикальный свайп
           // начинается внутри её списка. overscroll-contain запирал такой свайп в колонке —
@@ -721,11 +724,12 @@ export function KanbanColumn({
           isOver && !lockOffer && 'rounded-be-xl bg-drop',
         )}
       >
-        {/* I6: на free-тарифе колонка «Воркер» — не список задач, а оффер (в обычном потоке,
-            колонка выглядит как нормальная). Иначе — обычный список карточек. */}
-        {lockOffer ? (
-          lockOffer
-        ) : (
+        {/* I6: на free-тарифе колонка «Воркер» — оффер (в обычном потоке, колонка выглядит как
+            нормальная). Задачи, которые уже стоят в колонке (кончился пробный час, задача из
+            Telegram или MCP — сервер ставит их сюда по умолчанию), остаются видны под оффером:
+            раньше оффер заменял список, счётчик показывал «5», а сами задачи было не открыть. */}
+        {lockOffer}
+        {(!lockOffer || listTasks.length > 0) && (
         <>
         {/* Notion-style inline-создание: сверху — уже созданные в этой сессии карточки (в
             порядке создания), ПОД ними — карточка создания (стабильный key, без ремаунта).
@@ -774,7 +778,7 @@ export function KanbanColumn({
             );
           })}
         </SortableContext>
-        {tasks.length === 0 && !inlineCard && !composing && (
+        {tasks.length === 0 && !inlineCard && !composing && !lockOffer && (
           <div className="pointer-events-none mx-0.5 rounded-lg border border-dashed border-drop-line px-3 py-5 text-center">
             <p className="text-xs font-medium text-muted-foreground">Здесь пока нет задач</p>
             {!readOnly && <p className="mbs-1 text-2xs leading-relaxed text-muted-foreground/80">Перенесите сюда задачу из другой колонки</p>}

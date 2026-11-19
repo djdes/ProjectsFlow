@@ -19,13 +19,17 @@ export const AI_PROMPT_JOB_STATUSES: readonly AiPromptJobStatus[] = [
 // 'assistant' — невидимая очередь ИИ-ассистентов продуктов (DocsFlow, ScanFlow): inputText
 //   уже самодостаточная инструкция (frontmatter + шаги), KB сервер не собирает, результат
 //   потребляет сам продукт. Ставится ТОЛЬКО через agent-API (Bearer), из браузера недоступен.
-export type AiPromptJobMode = 'improve' | 'compose' | 'compose-advanced' | 'assistant';
+// 'text' — универсальный текстовый шлюз Codex (POST /api/ai/text-jobs, db/180): inputText —
+//   JSON-конверт { v: 1, instructions, input }, KB не собирается, исполняет ai-job-worker
+//   Ralph (локальный codex exec по подписке), результат — готовый текст в improvedText.
+export type AiPromptJobMode = 'improve' | 'compose' | 'compose-advanced' | 'assistant' | 'text';
 
 export const AI_PROMPT_JOB_MODES: readonly AiPromptJobMode[] = [
   'improve',
   'compose',
   'compose-advanced',
   'assistant',
+  'text',
 ];
 
 export type AiPromptJob = {

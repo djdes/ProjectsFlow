@@ -7,6 +7,8 @@ import '@/styles/globals.css';
 interface Props {
   title?: string;
   description?: string;
+  /** Структурированные данные schema.org (один объект или массив) — уйдут в <head>. */
+  jsonLd?: object | readonly object[];
 }
 
 const SITE = 'https://projectsflow.ru/';
@@ -15,6 +17,7 @@ const {
   description =
     'Платформа для тех, кто строит с AI: ты описываешь идею — она доводит проект до готового ' +
     'результата сама. Без настройки и технической возни. Прозрачные расходы, старт бесплатно.',
+  jsonLd,
 } = Astro.props;
 const ogImage = new URL('/og.png', SITE).href;
 const canonical = new URL(Astro.url.pathname, SITE).href;
@@ -50,6 +53,11 @@ const canonical = new URL(Astro.url.pathname, SITE).href;
     <meta name="twitter:image" content={ogImage} />
 
     <title>{title}</title>
+    {
+      jsonLd && (
+        <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />
+      )
+    }
     <script is:inline>document.documentElement.classList.add('js');</script>
     <style is:global>
       html, body {

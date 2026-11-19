@@ -57,11 +57,14 @@ type AiSeg = {
   deadline: string | null;
   taskType?: 'feature' | 'bug' | null;
   sourceExcerpt?: string | null;
+  ralphMode?: string;
+  runMode?: string;
 };
 
 function makeHarness(opts?: {
   workerEnabled?: boolean;
-  projects?: { id: string; name: string }[];
+  downloadGate?: Promise<void>;
+  projects?: { id: string; name: string; workspaceId?: string }[];
   shared?: { id: string; displayName: string; email: string }[];
   aiSegments?: AiSeg[];
   aiOutcome?: 'enqueue-throw' | 'timeout' | 'fail' | 'bad';
@@ -97,6 +100,14 @@ function makeHarness(opts?: {
   delegatedInboxWorkspace?: string | null;
   // Кто из shared состоит в проекте (projectId → id). Без записи — все shared, как раньше.
   projectMembers?: Record<string, string[]>;
+  // Мок LLM для автовыбора пространства по таймауту (id пространства или функция от промпта).
+  llmWorkspacePick?: string | ((prompt: string) => string | Promise<string>);
+  // Проекты рабочей группы (db/189): chatId → id проектов. Без опции — без ограничения.
+  groupProjects?: Record<number, string[]>;
+  // Рабочие группы обычного режима (db/190): chatId → название.
+  standardGroups?: Record<number, string | null>;
+  // Мок ИИ-выбора проекта смешанной группы (db/193): id проекта или '' — «не уверен».
+  llmProjectPick?: string;
 }) {
   const projects: { id: string; name: string; workspaceId?: string }[] = opts?.projects ?? [
     { id: 'p1', name: 'Альфа' },
@@ -112,8 +123,10 @@ function makeHarness(opts?: {
 
   const drafts = new Map<string, TelegramTaskDraft>();
   const origins: Omit<TelegramTaskOrigin, 'requestedAt'>[] = [];
+  const groupOrigins: any[] = [];
   let seq = 0;
   const createTaskCalls: CreateTaskCall[] = [];
+  const moveTaskCalls: any[] = [];
   const sent: { chatId: number; text: string }[] = [];
   const edits: { messageId: number; text: string; replyMarkup?: any }[] = [];
   const answers: { text?: string }[] = [];
@@ -123,6 +136,7 @@ function makeHarness(opts?: {
   const inboxCalls: { ownerId?: string; actorId?: string; workspaceId?: string }[] = [];
   const delegatedResolverCalls: [string, string][] = [];
   const savedChoices: { chatId: number; userId: string; workspaceId: string }[] = [];
+  const llmPrompts: string[] = [];
   const workspaceChoices = new Map(Object.entries(opts?.workspaces?.choices ?? {}));
   const updatedDescriptions: string[] = [];
   const downloadedFileIds: string[] = [];
@@ -299,6 +313,7 @@ function makeHarness(opts?: {
       return [];
     },
     async downloadFile(fileId: string) {
+      await opts?.downloadGate;
       downloadedFileIds.push(fileId);
       return {
         data: Buffer.from(fileId),
@@ -388,7 +403,10 @@ function makeHarness(opts?: {
           status: input.status,
           allowInboxDelegation: input.allowInboxDelegation ?? false,
           taskType: input.taskType ?? null,
-        });
+          ralphMode: input.ralphMode,
+          runMode: input.runMode,
+          originWorkspaceId: input.originWorkspaceId,
+        } as any);
         return {
           id: `t${createTaskCalls.length}`,
           projectId: input.projectId,
@@ -475,6 +493,7 @@ function makeHarness(opts?: {
         return { id: `att${uploadedAttachments.length}` } as any;
       },
     },
+    moveTask: { async execute(input: any) { moveTaskCalls.push(input); return {} as any; } },
     updateTask: {
       async execute(input: any) {
         updatedDescriptions.push(input.description);
@@ -508,18 +527,63 @@ function makeHarness(opts?: {
           },
         }
       : {}),
+    ...(opts?.llmProjectPick !== undefined
+      ? {
+          llm: {
+            async generate(input: any) {
+              llmPrompts.push(input.input);
+              return { text: JSON.stringify({ projectId: opts.llmProjectPick, reason: 't' }), model: 'test-llm', usage: null, costUsd: null };
+            },
+          },
+        }
+      : {}),
+    ...(opts?.llmWorkspacePick !== undefined
+      ? {
+          llm: {
+            async generate(input: any) {
+              llmPrompts.push(input.input);
+              const picked =
+                typeof opts.llmWorkspacePick === 'function'
+                  ? await opts.llmWorkspacePick(input.input)
+                  : opts.llmWorkspacePick;
+              return {
+                text: JSON.stringify({ workspaceId: picked, reason: 'test_ai_pick' }),
+                model: 'test-llm',
+                usage: null,
+                costUsd: null,
+              };
+            },
+          },
+        }
+      : {}),
     idGen: () => 'uuid',
     shortIdGen: () => `s${++seq}`,
     appUrl: 'https://pf.test',
     ...(opts?.now ? { now: opts.now } : {}),
+    ...(opts?.groupProjects
+      ? {
+          groupProjects: {
+            async allowedProjectIds(chatId: number) { return opts.groupProjects![chatId] ?? []; },
+            async standardGroupInfo(chatId: number) {
+              const groups = opts.standardGroups ?? {};
+              return chatId in groups ? { title: groups[chatId] ?? null } : null;
+            },
+          },
+        }
+      : {}),
+    groupOrigins: {
+      async setGroupOrigin(taskId: string, origin: any) { groupOrigins.push({ taskId, ...origin }); },
+    },
   };
 
   const service = new TelegramComposerService(deps as any);
   return {
     service,
     origins,
+    groupOrigins,
     drafts,
     createTaskCalls,
+    moveTaskCalls,
     sent,
     edits,
     answers,
@@ -527,6 +591,7 @@ function makeHarness(opts?: {
     inboxUserIds,
     inboxCalls,
     savedChoices,
+    llmPrompts,
     delegatedResolverCalls,
     updatedDescriptions,
     downloadedFileIds,
@@ -1594,6 +1659,34 @@ test('обычное сообщение (не ответ) → всегда но�
   assert.ok(!h.edits.some((e) => /дополн/i.test(e.text)), 'карточка не обещает дополнить');
 });
 
+test('явный дубль предлагает дополнить описание с датой после подтверждения', async () => {
+  const h = makeHarness({
+    projects: [{ id: 'p1', name: 'Альфа' }],
+    now: () => new Date('2026-11-02T07:00:00Z'),
+    aiSegments: [seg1({ existingTaskId: 'old-1', isDuplicate: true, sourceExcerpt: 'Починить сборку повторно' })],
+    existingTasks: {
+      'old-1': { id: 'old-1', projectId: 'p1', description: 'Исходное описание\nРучные детали', deletedAt: null },
+    },
+  });
+  await h.service.startFromMessage(111, 500, 'Починить сборку повторно');
+  const draftId = [...h.drafts.keys()][0]!;
+  assert.equal(h.updatedDescriptions.length, 0);
+  assert.ok(h.edits.some((e) => e.text.includes('дубль')));
+  const draft = h.drafts.get(draftId)!;
+  h.drafts.set(draftId, { ...draft, autoCreateAt: new Date(Date.now() - 1000) });
+  await h.service.processDueAutoCreate();
+  assert.equal(h.updatedDescriptions.length, 0);
+  assert.equal(h.createTaskCalls.length, 0);
+  assert.equal(h.drafts.get(draftId)!.autoCreateAt, null);
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 0);
+  assert.equal(h.updatedDescriptions.length, 1);
+  const result = h.updatedDescriptions[0]!;
+  assert.ok(result.startsWith('Исходное описание\nРучные детали\n\n'));
+  assert.ok(result.includes('02.11.2026, 10:00:00 (МСК)'));
+  assert.ok(result.endsWith('Починить сборку повторно'));
+});
+
 test('existingTaskId валиден и сообщение — ответ → комментарий в существующую задачу вместо новой', async () => {
   const h = makeHarness({
     projects: [{ id: 'p1', name: 'Альфа' }],
@@ -2196,36 +2289,57 @@ test('пространство: ответственный состоит тол
   assert.equal(call.allowInboxDelegation, true);
 });
 
-test('пространство: авто-создание без выбора — в личное пространство', async () => {
+test('пространство: авто-создание без выбора (фолбэк без LLM) — бытовая задача в личное пространство', async () => {
   const h = makeHarness({ workspaces: { list: [SPACE_TEAM, SPACE_ME] } });
   await h.service.startFromMessage(111, 500, 'Купить кофе');
   const draftId = [...h.drafts.keys()][0]!;
-  assert.match(lastCard(h).text, /через 10 минут положу во «Входящие» пространства «Личное»/);
+  assert.match(lastCard(h).text, /через 10 минут сам подберу пространство и создам/);
   h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1_000) });
 
   assert.equal(await h.service.processDueAutoCreate(), 1);
   assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1@w-me');
+  assert.deepEqual(h.savedChoices, []);
 });
 
-test('пространство: авто-создание без выбора и без личного — ждём кнопку; выбор снова заводит таймер', async () => {
-  const h = makeHarness({ workspaces: { list: [SPACE_TEAM, SPACE_STUDIO] } });
-  await h.service.startFromMessage(111, 500, 'Купить кофе');
+test('пространство: если никто не выбрал — через 10 минут ИИ сам думает по проектам пространств и выбирает', async () => {
+  const h = makeHarness({
+    projects: [
+      { id: 'p-team', name: 'OrdersFlow', workspaceId: 'w-team' },
+      { id: 'p-studio', name: 'Дизайн-система', workspaceId: 'w-studio' },
+    ],
+    workspaces: { list: [SPACE_ME, SPACE_TEAM, SPACE_STUDIO] },
+    llmWorkspacePick: 'w-studio',
+  });
+  await h.service.startFromMessage(111, 500, 'Подготовить макеты иконки для витрины');
   const draftId = [...h.drafts.keys()][0]!;
-  assert.match(lastCard(h).text, /Пока пространство не выбрано, задачу не создам/);
+  assert.match(lastCard(h).text, /через 10 минут сам подберу пространство и создам/);
   h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1_000) });
 
-  await h.service.processDueAutoCreate();
-  assert.equal(h.createTaskCalls.length, 0);
-  const parked = h.drafts.get(draftId)!;
-  assert.equal(parked.status, 'composing');
-  assert.equal(parked.autoCreateAt, null); // тик больше не трогает черновик
-
-  await h.service.handleCallback(cq(`ws:${draftId}:w-studio`));
-  const armed = h.drafts.get(draftId)!;
-  assert.ok(armed.autoCreateAt, 'выбор пространства снова заводит авто-создание');
-  h.drafts.set(draftId, { ...armed, autoCreateAt: new Date(Date.now() - 1_000) });
   assert.equal(await h.service.processDueAutoCreate(), 1);
+  assert.equal(h.llmPrompts.length, 1);
+  assert.match(h.llmPrompts[0]!, /Дизайн-система/);
+  assert.match(h.llmPrompts[0]!, /OrdersFlow/);
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1@w-studio');
+  assert.equal(h.drafts.get(draftId)!.workspaceId, 'w-studio');
+  assert.equal(h.drafts.get(draftId)!.workspacePending, false);
+  // Автовыбор по таймауту не сохраняется как явный выбор пользователя для будущих задач чата.
+  assert.deepEqual(h.savedChoices, []);
+});
+
+test('пространство: два командных без личного — по таймауту бот тоже выбирает сам, а не зависает навсегда', async () => {
+  const h = makeHarness({
+    workspaces: { list: [SPACE_TEAM, SPACE_STUDIO] },
+    llmWorkspacePick: 'w-studio',
+  });
+  await h.service.startFromMessage(111, 500, 'Проверить отчёт по релизам');
+  const draftId = [...h.drafts.keys()][0]!;
+  assert.match(lastCard(h).text, /через 10 минут сам подберу пространство и создам/);
+  h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1_000) });
+
+  assert.equal(await h.service.processDueAutoCreate(), 1);
+  assert.equal(h.createTaskCalls.length, 1);
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1@w-studio');
 });
 
@@ -2338,23 +2452,45 @@ test('пространство: непривязанный участник гр
   assert.equal(h.createTaskCalls[0]!.projectId, 'inbox1@w-team');
 });
 
-test('поручение: общий личный хаб и команда требуют выбора; таймер не угадывает', async () => {
-  const h = makeHarness({ workspaces: { list: [SPACE_ME, SPACE_TEAM],
-    members: { 'w-me': ['u2'], 'w-team': ['u2'] },
-    choices: { '500:u1': { workspaceId: 'w-team', chosenAt: new Date() } } } });
+test('поручение: несколько общих пространств сначала спрашивают кнопкой, а по таймауту бот выбирает сам', async () => {
+  const h = makeHarness({
+    workspaces: {
+      list: [SPACE_ME, SPACE_TEAM],
+      members: { 'w-me': ['u2'], 'w-team': ['u2'] },
+      choices: { '500:u1': { workspaceId: 'w-team', chosenAt: new Date() } },
+    },
+    llmWorkspacePick: 'w-team',
+  });
   await h.service.startFromMessage(111, 500, 'Сделать фотографии @Вася');
   const draftId = [...h.drafts.keys()][0]!;
   assert.equal(h.drafts.get(draftId)!.workspacePending, true);
   assert.ok(buttonData(lastCard(h).replyMarkup).includes(`ws:${draftId}:w-team`));
-  assert.match(lastCard(h).text, /Пока пространство не выбрано/u);
+  assert.match(lastCard(h).text, /через 10 минут сам подберу пространство и создам/u);
+
+  // Ручное нажатие «Создать» до выбора по-прежнему просит нажать кнопку пространства:
+  await h.service.handleCallback(cq(`tc:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 0);
+
+  // А если никто не нажал кнопку за 10 минут — бот сам выбирает подходящее общее пространство:
+  h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1000) });
+  assert.equal(await h.service.processDueAutoCreate(), 1);
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox-u2@w-team');
+  assert.equal(h.createTaskCalls[0]!.ownerUserId, 'u1');
+});
+
+test('поручение: если у автора и исполнителя нет ни одного общего пространства — авто-тик не создаёт задачу', async () => {
+  const h = makeHarness({
+    workspaces: { list: [SPACE_TEAM], members: {} },
+    llmWorkspacePick: 'w-team',
+  });
+  await h.service.startFromMessage(111, 500, 'Сделать фотографии @Вася');
+  const draftId = [...h.drafts.keys()][0]!;
+  assert.match(lastCard(h).text, /Пока пространство не выбрано, задачу не создам/u);
   h.drafts.set(draftId, { ...h.drafts.get(draftId)!, autoCreateAt: new Date(Date.now() - 1000) });
   await h.service.processDueAutoCreate();
   assert.equal(h.createTaskCalls.length, 0);
   assert.equal(h.drafts.get(draftId)!.autoCreateAt, null);
-  await h.service.handleCallback(cq(`ws:${draftId}:w-team`));
-  await h.service.handleCallback(cq(`tc:${draftId}`));
-  assert.equal(h.createTaskCalls[0]!.projectId, 'inbox-u2@w-team');
-  assert.equal(h.createTaskCalls[0]!.ownerUserId, 'u1');
 });
 
 test('AI: выбранные проекты разных пространств принимаются без уточнения', async () => {
@@ -2455,7 +2591,7 @@ test('задача ответом на сообщение: то сообщени
 
 test('ответ на сообщение, из которого уже создана задача: проект, ответственный и колонка — как у неё', async () => {
   // 15.10.2026: «@бот ещё … сделать кнопку» ответом на сообщение-задачу падало во «Входящие»
-  // на автора и в «Черновики», хотя та задача — в проекте, у Васи, «Вручную».
+  // на автора и в «Черновики», хотя та задача — в проекте, у Васи, «В работе».
   const h = makeHarness({
     projects: [{ id: 'p1', name: 'Альфа' }],
     aiSegments: [seg1({ title: 'Кнопка по центру', projectId: null, projectName: null })],
@@ -2532,3 +2668,554 @@ test('AI: сегмент в проекте без явного ответств�
     ['mag', 'u2'], ['mag', 'u2'], ['mag', 'u2'],
   ]);
 });
+
+// Прод, 28.10.2026, черновик _3x6GOCD3NQc: сообщение целиком, AI-путь. Модель положила все
+// шесть пунктов в TasksFlow (угадала по «tasksflow.ru») и не нашла Михаила среди его
+// участников — в сегментах assigneeUserId: null, assigneeName: 'tepei_kms'. Задачи ушли автору.
+test('прод-регрессия: «@tepei_kms … маг производство … tasksflow.ru» — задачи Михаилу, не в TasksFlow', async () => {
+  const text = '@tepei_kms по нашим задачам маг производство, надо сегодня завтра всё закрыть, чтобы с пятницы начать новые. '
+    + '1) По листу что на утверждении, там много вопросов по ценам было, не понятно обновил или нет в 1с и новые позиции ввел или нет '
+    + '2) Гороховый и щи у тебя в работе, кидай в колонку вручную 3) То что просрочено надо делать в первую очередь '
+    + '4) Покраска подложек 5) Предложи пару блюд ГЦ ХЦ для сабa на доставку в кофейню 6) По магазину давай закрепим что утром проверяешь витрины. '
+    + 'задачи которые повторяются ежедневно будут в tasksflow.ru';
+  const seg = (id: string) => ({
+    id, title: `Пункт ${id}`, simpleBody: 'Тело', projectId: 'tf', projectName: 'TasksFlow', confidence: 0.9,
+    assigneeUserId: null, assigneeName: 'tepei_kms', deadline: null,
+  });
+  const h = makeHarness({
+    projects: [{ id: 'tf', name: 'TasksFlow' }, { id: 'mag', name: 'MAG Производство' }],
+    shared: [{ id: 'u2', displayName: 'Михаил', email: 'm@e.com' }],
+    telegramUsernames: { tepei_kms: 'u2' },
+    projectMembers: { tf: [], mag: ['u2'] },
+    aiSegments: ['1', '2', '3', '4', '5', '6'].map(seg),
+  });
+  await h.service.startFromMessage(111, 500, text);
+  const draftId = [...h.drafts.keys()][0]!;
+  const draft = h.drafts.get(draftId)!;
+  assert.equal(draft.assigneeUserId, 'u2');
+  assert.equal(draft.segments!.length, 6);
+  for (const s of draft.segments!) {
+    assert.equal(s.assigneeUserId, 'u2');
+    assert.notEqual(s.projectId, 'tf');
+  }
+  await h.service.handleCallback(cq(`ac:${draftId}`));
+  assert.equal(h.createTaskCalls.length, 6);
+  for (const c of h.createTaskCalls) {
+    assert.equal(c.assigneeUserId, 'u2');
+    assert.notEqual(c.projectId, 'tf');
+  }
+});
+
+test('CSharpFixer: an unlinked DJ immediately creates a silent worker task without AI or confirmation', async () => {
+  const saved = { ...process.env };
+  process.env.CSHARP_FIXER_CHAT_ID = '-100500';
+  process.env.CSHARP_FIXER_PROJECT_ID = 'p1';
+  process.env.CSHARP_FIXER_SIGNING_KEY = 'test-signing-key-not-a-secret-123456789';
+  try {
+    const h = makeHarness();
+    await h.service.startFromMessage(999, -100500, 'FilterMusic не открывается', gctx('u1', 'DJ Test'), [], {
+      sourceKey: 'm:-100500:77', sourceMessageId: 77, sourceThreadId: 17,
+    });
+    assert.equal(h.createTaskCalls.length, 1);
+    assert.equal(h.createTaskCalls[0]?.projectId, 'p1');
+    assert.equal(h.createTaskCalls[0]?.ownerUserId, 'u1');
+    assert.equal(h.createTaskCalls[0]?.status, 'backlog');
+    assert.equal(h.moveTaskCalls[0]?.targetStatus, 'todo');
+    assert.equal((h.createTaskCalls[0] as any)?.ralphMode, 'silent');
+    assert.match(h.createTaskCalls[0]?.description ?? '', /csharp-fixer-origin:/);
+    assert.equal(h.origins.length, 0, 'new worker owns the source-chat result outbox');
+    assert.ok(!h.sent.some(m => /привяж|Перефразирую|выбер|подтверд/i.test(m.text)));
+    assert.ok(!h.edits.some(m => /csharp-fixer-origin:/.test(m.text)), 'signature stays out of chat text');
+    await h.service.startFromMessage(999, -100500, 'FilterMusic не открывается', gctx('u1', 'DJ Test'), [], {
+      sourceKey: 'm:-100500:77', sourceMessageId: 77, sourceThreadId: 17,
+    });
+    assert.equal(h.createTaskCalls.length, 1, 'redelivery does not create another task');
+  } finally {
+    for (const key of ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY']) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
+  }
+});
+
+test('CSharpFixer: the runnable status is published only after a delayed attachment is saved', async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { CSHARP_FIXER_CHAT_ID: '-100500', CSHARP_FIXER_PROJECT_ID: 'p1',
+    CSHARP_FIXER_SIGNING_KEY: 'test-signing-key-not-a-secret-123456789' });
+  let release!: () => void;
+  const downloadGate = new Promise<void>(resolve => { release = resolve; });
+  try {
+    const h = makeHarness({ downloadGate });
+    const file = { key: 'log', kind: 'document' as const, fileId: 'log', fileUniqueId: 'log',
+      filename: 'error.log', mimeType: 'text/plain', width: null, height: null, duration: null,
+      fileSize: 10, targetSegmentIndexes: [] as number[] };
+    const intake = h.service.startFromMessage(999, -100500, 'C#Config ошибка', gctx('u1'), [file], {
+      sourceKey: 'm:-100500:79', sourceMessageId: 79,
+    });
+    for (let i = 0; i < 20 && h.createTaskCalls.length === 0; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.createTaskCalls[0]?.status, 'backlog');
+    assert.equal(h.moveTaskCalls.length, 0, 'worker cannot take the task while download is pending');
+    release();
+    await intake;
+    assert.equal(h.uploadedAttachments.length, 1);
+    assert.equal(h.moveTaskCalls[0]?.targetStatus, 'todo');
+  } finally {
+    release();
+    for (const key of ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY']) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
+  }
+});
+
+test('CSharpFixer: album parts crossing webhook batches merge before autonomous creation', async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { CSHARP_FIXER_CHAT_ID: '-100500', CSHARP_FIXER_PROJECT_ID: 'p1',
+    CSHARP_FIXER_SIGNING_KEY: 'test-signing-key-not-a-secret-123456789' });
+  try {
+    const h = makeHarness();
+    const file = (key: string) => ({ key, kind: 'document' as const, fileId: key, fileUniqueId: key,
+      filename: key+'.log', mimeType: 'text/plain', width: null, height: null, duration: null,
+      fileSize: 10, targetSegmentIndexes: [] as number[] });
+    const options = { sourceKey: 'g:-100500:999:album', sourceMessageId: 80 };
+    await h.service.startFromMessage(999, -100500, 'C#Config ошибка', gctx('u1'), [file('first')], options);
+    assert.equal(h.createTaskCalls.length, 0);
+    await h.service.startFromMessage(999, -100500, 'Дополнительный файл', gctx('u1'), [file('second')], { ...options, sourceMessageId: 81 });
+    const draft = [...h.drafts.values()][0]!;
+    assert.equal(draft.attachments.length, 2);
+    h.drafts.set(draft.id, { ...draft, autoCreateAt: new Date(0) });
+    await h.service.processDueAutoCreate();
+    assert.equal(h.createTaskCalls.length, 1);
+    assert.equal(h.uploadedAttachments.length, 2);
+    assert.equal(h.moveTaskCalls[0]?.targetStatus, 'todo');
+  } finally {
+    for (const key of ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY']) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
+  }
+});
+
+test('CSharpFixer: missing group binding does not create a task or ask the DJ for account setup', async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { CSHARP_FIXER_CHAT_ID: '-100500', CSHARP_FIXER_PROJECT_ID: 'p1',
+    CSHARP_FIXER_SIGNING_KEY: 'test-signing-key-not-a-secret-123456789' });
+  try {
+    const h = makeHarness();
+    await h.service.startFromMessage(999, -100500, 'Сломалось', gctx(null), [], {
+      sourceKey: 'm:-100500:78', sourceMessageId: 78,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+    assert.match(h.sent.at(-1)?.text ?? '', /администратор/i);
+    assert.doesNotMatch(h.sent.at(-1)?.text ?? '', /привяж|подтверд/i);
+  } finally {
+    for (const key of ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY']) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
+  }
+});
+
+test('CSharpFixer: replyToMessageId is included in signed origin when replying to a message', async () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { CSHARP_FIXER_CHAT_ID: '-100500', CSHARP_FIXER_PROJECT_ID: 'p1',
+    CSHARP_FIXER_SIGNING_KEY: 'test-signing-key-not-a-secret-123456789' });
+  try {
+    const h = makeHarness();
+    await h.service.startFromMessage(999, -100500, 'Это в FilterMusic', gctx('u1', 'DJ Test'), [], {
+      sourceKey: 'm:-100500:88', sourceMessageId: 88, sourceThreadId: 17, replyToMessageId: 44,
+    });
+    assert.equal(h.createTaskCalls.length, 1);
+    const match = /<!-- csharp-fixer-origin:([^:]+):[a-f0-9]{64} -->/.exec(h.createTaskCalls[0]?.description ?? '');
+    assert.ok(match, 'expected signed origin marker');
+    const payload = JSON.parse(Buffer.from(match[1]!, 'base64').toString('utf8'));
+    assert.equal(payload.replyToMessageId, 44);
+  } finally {
+    for (const key of ['CSHARP_FIXER_CHAT_ID', 'CSHARP_FIXER_PROJECT_ID', 'CSHARP_FIXER_SIGNING_KEY']) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
+  }
+});
+// --- Проекты рабочей группы (db/189) ---
+const GROUP_CHAT = -1001;
+const TWO_PROJECTS = [
+  { id: 'p1', name: 'Альфа' },
+  { id: 'p2', name: 'Бета' },
+  { id: 'p3', name: 'Гамма' },
+];
+
+test('группа с одним проектом: задача без «+проекта» идёт в него без вопросов', async () => {
+  const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [GROUP_CHAT]: ['p2'] } });
+  await h.service.startFromMessage(111, GROUP_CHAT, 'починить сборку', gctx('u1'));
+  const d = [...h.drafts.values()][0]!;
+  assert.equal(d.projectId, 'p2');
+});
+
+test('группа со списком: проект вне списка — «В этой группе доступны», задача не создаётся', async () => {
+  const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [GROUP_CHAT]: ['p1', 'p2'] } });
+  await h.service.startFromMessage(111, GROUP_CHAT, '+Гамма поправить парсинг', gctx('u1'));
+  assert.equal(h.drafts.size, 0);
+  assert.equal(h.createTaskCalls.length, 0);
+  assert.match(h.sent.at(-1)!.text, /В этой группе доступны: «Альфа», «Бета»/);
+});
+
+test('группа со списком: «+проект» из списка выбирается как обычно', async () => {
+  const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [GROUP_CHAT]: ['p1', 'p2'] } });
+  await h.service.startFromMessage(111, GROUP_CHAT, '+Бета поправить парсинг', gctx('u1'));
+  assert.equal([...h.drafts.values()][0]!.projectId, 'p2');
+});
+
+test('группа без списка проектов — как раньше, доступны все проекты автора', async () => {
+  const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: {} });
+  await h.service.startFromMessage(111, GROUP_CHAT, '+Гамма поправить парсинг', gctx('u1'));
+  assert.equal([...h.drafts.values()][0]!.projectId, 'p3');
+});
+
+// --- Привычные названия проектов в группе (db/192) ---
+const HINTED_PROJECTS = [
+  { id: 'p1', name: 'Конфигуратор', aliases: ['конфиг', 'кассы'] },
+  { id: 'p2', name: 'Планер' },
+];
+
+test('рабочая группа: проект по привычному названию и основе, без «+проекта»', async () => {
+  const opts = { projects: HINTED_PROJECTS, groupProjects: { [GROUP_CHAT]: ['p1', 'p2'] }, standardGroups: { [GROUP_CHAT]: 'Скрипты' } };
+  const byAlias = makeHarness(opts);
+  await byAlias.service.startFromMessage(111, GROUP_CHAT, 'в конфиг добавить поле скидки', gctx('u1'));
+  assert.equal([...byAlias.drafts.values()][0]!.projectId, 'p1');
+  const byStem = makeHarness(opts);
+  await byStem.service.startFromMessage(111, GROUP_CHAT, 'в планере пропали события', gctx('u1'));
+  assert.equal([...byStem.drafts.values()][0]!.projectId, 'p2');
+});
+
+test('рабочая группа: «+псевдоним» выбирает проект', async () => {
+  const h = makeHarness({ projects: HINTED_PROJECTS, groupProjects: { [GROUP_CHAT]: ['p1', 'p2'] }, standardGroups: { [GROUP_CHAT]: null } });
+  await h.service.startFromMessage(111, GROUP_CHAT, '+кассы добавить поле', gctx('u1'));
+  assert.equal([...h.drafts.values()][0]!.projectId, 'p1');
+});
+
+// --- Режим группы incident (spec 2026-11-17, раздел 3) ---
+const INCIDENT_CHAT = -100777;
+const INCIDENT_KEY = 'incident-signing-key-not-a-secret-1234567';
+const ictx = (addedByUserId: string | null, senderName = 'DJ') => ({
+  ...gctx('owner-of-group', senderName), incident: { addedByUserId },
+});
+async function withIncidentKey(fn: () => Promise<void>): Promise<void> {
+  const saved = process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  process.env.TELEGRAM_ORIGIN_SIGNING_KEY = INCIDENT_KEY;
+  try { await fn(); } finally {
+    if (saved === undefined) delete process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+    else process.env.TELEGRAM_ORIGIN_SIGNING_KEY = saved;
+  }
+}
+
+test('incident group: any member creates a silent full-run task in the group project with a signed origin', () =>
+  withIncidentKey(async () => {
+    const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [INCIDENT_CHAT]: ['p2'] } });
+    await h.service.startFromMessage(999, INCIDENT_CHAT, 'Не открывается отчёт', ictx('u1', 'DJ Test'), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:77`, sourceMessageId: 77, sourceThreadId: 17,
+    });
+    assert.equal(h.createTaskCalls.length, 1);
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.projectId, 'p2');
+    assert.equal(call.ownerUserId, 'u1', 'task is created by whoever connected the group');
+    assert.equal(call.status, 'backlog');
+    assert.equal(call.ralphMode, 'silent');
+    assert.equal(call.runMode, 'full');
+    assert.equal(h.moveTaskCalls[0]?.targetStatus, 'todo');
+    const match = /<!-- tg-incident-origin:([^:]+):[a-f0-9]{64} -->/.exec(call.description ?? '');
+    assert.ok(match, 'signed origin marker');
+    const payload = JSON.parse(Buffer.from(match[1]!, 'base64').toString('utf8'));
+    assert.equal(payload.chatId, INCIDENT_CHAT);
+    assert.equal(payload.userId, 999);
+    assert.equal(payload.messageThreadId, 17);
+    assert.equal(payload.projectId, 'p2');
+    assert.equal(payload.senderName, 'DJ Test');
+    // Ответ воркера — reply на исходное сообщение автора, а не на квитанцию бота.
+    assert.equal(h.origins.length, 1);
+    assert.equal(h.origins[0]?.messageId, 77);
+    assert.ok(!h.sent.some((m) => /привяж|Перефразирую|выбер|подтверд/i.test(m.text)));
+    assert.ok(![...h.sent, ...h.edits].some((m) => /tg-incident-origin|github|коммит/i.test(m.text)));
+  }));
+
+test('incident group: project is picked by name among several, otherwise the bot asks in plain words', () =>
+  withIncidentKey(async () => {
+    const h = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [INCIDENT_CHAT]: ['p1', 'p2'] } });
+    await h.service.startFromMessage(999, INCIDENT_CHAT, 'Сломалось что-то', ictx('u1'), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:1`, sourceMessageId: 1,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+    assert.match(h.sent.at(-1)?.text ?? '', /Уточните.*Альфа.*Бета/s);
+    await h.service.startFromMessage(999, INCIDENT_CHAT, 'В Бете не грузится список', ictx('u1'), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:2`, sourceMessageId: 2,
+    });
+    assert.equal(h.createTaskCalls[0]?.projectId, 'p2');
+  }));
+
+test('incident group: without signing key, projects or binding owner nothing is created', async () => {
+  const saved = process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  delete process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  const h0 = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [INCIDENT_CHAT]: ['p1'] } });
+  try {
+    await h0.service.startFromMessage(999, INCIDENT_CHAT, 'Сломалось', ictx('u1'), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:3`, sourceMessageId: 3,
+    });
+  } finally {
+    if (saved !== undefined) process.env.TELEGRAM_ORIGIN_SIGNING_KEY = saved;
+  }
+  assert.equal(h0.createTaskCalls.length, 0);
+  assert.match(h0.sent.at(-1)?.text ?? '', /администратор/i);
+  await withIncidentKey(async () => {
+    const h1 = makeHarness({ projects: TWO_PROJECTS, groupProjects: {} });
+    await h1.service.startFromMessage(999, INCIDENT_CHAT, 'Сломалось', ictx('u1'), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:4`, sourceMessageId: 4,
+    });
+    assert.equal(h1.createTaskCalls.length, 0);
+    assert.match(h1.sent.at(-1)?.text ?? '', /не выбраны/);
+    const h2 = makeHarness({ projects: TWO_PROJECTS, groupProjects: { [INCIDENT_CHAT]: ['p1'] } });
+    await h2.service.startFromMessage(999, INCIDENT_CHAT, 'Сломалось', ictx(null), [], {
+      sourceKey: `m:${INCIDENT_CHAT}:5`, sourceMessageId: 5,
+    });
+    assert.equal(h2.createTaskCalls.length, 0);
+  });
+});
+
+// --- Задачи из рабочей группы с ответственным (db/190) ---
+// «Скрипты»: SMM ставит задачу по Yesbeat разработчику. Проект живёт в своём (основном)
+// пространстве ws-home — туда задача и ложится, а на карточке пометка «из группы».
+const SCRIPTS_CHAT = -100200;
+const YESBEAT = [{ id: 'yb', name: 'Yesbeat', workspaceId: 'ws-home' }];
+function scriptsHarness(extra: Record<string, unknown> = {}) {
+  return makeHarness({
+    projects: YESBEAT,
+    groupProjects: { [SCRIPTS_CHAT]: ['yb'] },
+    standardGroups: { [SCRIPTS_CHAT]: 'Скрипты' },
+    shared: [{ id: 'u2', displayName: 'Денис', email: 'd@e.com' }, { id: 'u3', displayName: 'Ольга', email: 'o@e.com' }],
+    telegramUsernames: { djdes: 'u2', olga_smm: 'u3' },
+    projectMembers: { yb: ['u2'] },
+    aiOutcome: 'enqueue-throw',
+    ...extra,
+  } as any);
+}
+const groupCq = (data: string): TelegramCallbackQuery => ({
+  id: 'cq-g', from: { id: 111 }, message: { message_id: 99, chat: { id: SCRIPTS_CHAT } }, data,
+});
+
+test('группа: «@djdes» — задача Денису в Yesbeat, в основном пространстве проекта, с пометкой группы', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, SCRIPTS_CHAT, 'поправить плеер в Yesbeat @djdes', gctx('u1', 'SMM', 'Скрипты'));
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.projectId, 'yb');
+  assert.equal(draft.assigneeUserId, 'u2');
+  await h.service.handleCallback(groupCq(`tc:${draft.id}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  const call = h.createTaskCalls[0] as any;
+  assert.equal(call.projectId, 'yb');
+  assert.equal(call.assigneeUserId, 'u2');
+  assert.equal(call.originWorkspaceId, 'ws-home');
+  assert.deepEqual(h.groupOrigins, [
+    { taskId: 't1', chatId: SCRIPTS_CHAT, title: 'Скрипты', authorUserId: 'u1', authorName: 'Создатель' },
+  ]);
+  const dm = h.assigneeMessages.find((m) => m.userId === 'u2');
+  assert.ok(dm, 'ответственный получил уведомление');
+  const confirm = h.edits.at(-1)!.text;
+  assert.match(confirm, /Задача создана в <b>Yesbeat<\/b>/);
+  assert.match(confirm, /Открыть задачу/);
+});
+
+test('группа: ответственный по имени в ProjectsFlow тоже находится', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, SCRIPTS_CHAT, '+Yesbeat обновить сборку @Денис', gctx('u1', 'SMM', 'Скрипты'));
+  assert.equal([...h.drafts.values()][0]!.assigneeUserId, 'u2');
+});
+
+test('группа: «@мне» — ответственный сам автор', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, SCRIPTS_CHAT, '+Yesbeat проверить логи @мне', gctx('u1', 'SMM', 'Скрипты'));
+  const draft = [...h.drafts.values()][0]!;
+  assert.equal(draft.assigneeUserId, 'u1');
+  assert.doesNotMatch(draft.taskText ?? '', /мне/);
+});
+
+test('группа: ответственный не участник проекта — бот отвечает, кого можно назначить, задачу не ставит', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, SCRIPTS_CHAT, '+Yesbeat поправить плеер @olga_smm', gctx('u1', 'SMM', 'Скрипты'));
+  assert.equal(h.drafts.size, 0);
+  assert.equal(h.createTaskCalls.length, 0);
+  const reply = h.sent.at(-1)!.text;
+  assert.match(reply, /не участник проекта «Yesbeat»/);
+  assert.match(reply, /Назначить можно: Создатель, Денис/);
+});
+
+test('группа без явного ответственного — как раньше, на автора; пометка группы есть, уведомления нет', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, SCRIPTS_CHAT, 'поправить плеер', gctx('u1', 'SMM', 'Скрипты'));
+  const draft = [...h.drafts.values()][0]!;
+  await h.service.handleCallback(groupCq(`tc:${draft.id}`));
+  assert.equal(h.createTaskCalls[0]!.assigneeUserId, 'u1');
+  assert.equal(h.groupOrigins.length, 1);
+  assert.equal(h.assigneeMessages.filter((m) => m.kind === 'task_changed').length, 0);
+});
+
+test('не рабочая группа (личка) — пометки «из группы» нет, пространство как раньше', async () => {
+  const h = scriptsHarness();
+  await h.service.startFromMessage(111, 500, '+Yesbeat поправить плеер @djdes');
+  const draft = [...h.drafts.values()][0]!;
+  await h.service.handleCallback(cq(`tc:${draft.id}`));
+  assert.equal(h.createTaskCalls.length, 1);
+  assert.equal((h.createTaskCalls[0] as any).originWorkspaceId, null);
+  assert.equal(h.groupOrigins.length, 0);
+});
+
+// --- Смешанная группа (db/193): без исполнителя — воркеру, с исполнителем — человеку ---
+const MIXED_CHAT = -100300;
+const MIXED_PROJECTS = [
+  { id: 'cfg', name: 'C#Config', aliases: ['конфиг'], groupFullRunDefault: true },
+  { id: 'yb', name: 'Yesbeat', workspaceId: 'ws-home' },
+] as any[];
+const mctx = (addedByUserId: string | null, senderName = 'SMM') => ({
+  ...gctx('owner-of-group', senderName, 'Скрипты / Сайт YB'), incident: { addedByUserId, mode: 'mixed' as const },
+});
+function mixedHarness(extra: Record<string, unknown> = {}) {
+  return makeHarness({
+    projects: MIXED_PROJECTS,
+    groupProjects: { [MIXED_CHAT]: ['cfg', 'yb'] },
+    standardGroups: { [MIXED_CHAT]: 'Скрипты / Сайт YB' },
+    ...extra,
+  } as any);
+}
+const mixedSignedPayload = (description: string) => {
+  const match = /<!-- tg-incident-origin:([^:]+):[a-f0-9]{64} -->/.exec(description);
+  assert.ok(match, 'signed origin marker');
+  return JSON.parse(Buffer.from(match[1]!, 'base64').toString('utf8'));
+};
+const mixedCq = (data: string, id = 'cq-m'): TelegramCallbackQuery => ({
+  id, from: { id: 555 }, message: { message_id: 99, chat: { id: MIXED_CHAT } }, data,
+});
+
+test('смешанная группа: без исполнителя — задача воркеру, полный прогон по флагу проекта, пометка группы', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'в конфиге не сохраняется тариф', mctx('u1', 'Оля'), [], {
+      sourceKey: `m:${MIXED_CHAT}:10`, sourceMessageId: 10,
+    });
+    assert.equal(h.createTaskCalls.length, 1);
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.projectId, 'cfg');
+    assert.equal(call.ownerUserId, 'u1', 'от того, кто подключил группу: у автора аккаунта нет');
+    assert.equal(call.assigneeUserId, 'u1');
+    assert.equal(call.ralphMode, 'silent');
+    assert.equal(call.runMode, 'full');
+    assert.equal(h.moveTaskCalls[0]?.targetStatus, 'todo', 'сразу в очередь воркера');
+    const payload = mixedSignedPayload(call.description ?? '');
+    assert.equal(payload.mode, 'mixed');
+    assert.equal(payload.runMode, 'full');
+    assert.equal(payload.senderName, 'Оля');
+    assert.deepEqual(h.groupOrigins, [
+      { taskId: 't1', chatId: MIXED_CHAT, title: 'Скрипты / Сайт YB', authorUserId: null, authorName: 'Оля' },
+    ]);
+    assert.equal(h.origins[0]?.messageId, 10, 'результат — reply на сообщение автора');
+    assert.match(h.edits.at(-1)?.text ?? '', /Передал воркеру: <b>C#Config<\/b>\. Сообщу результат здесь\./);
+    assert.ok(![...h.sent, ...h.edits].some((m) => /tg-incident-origin|привяж|Перефразирую/i.test(m.text)));
+  }));
+
+test('смешанная группа: проект без флага — обычный прогон (quick), в основном пространстве проекта', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'Yesbeat: не играет плеер', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:11`, sourceMessageId: 11,
+    });
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.projectId, 'yb');
+    assert.equal(call.runMode, 'quick');
+    assert.equal(call.originWorkspaceId, 'ws-home');
+  }));
+
+test('смешанная группа: проект по транслиту «есбит»', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'на есбите пропала кнопка', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:12`, sourceMessageId: 12,
+    });
+    assert.equal(h.createTaskCalls[0]?.projectId, 'yb');
+  }));
+
+test('смешанная группа: проект не понятен по названию — ИИ выбирает из проектов группы', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness({ llmProjectPick: 'yb' });
+    await h.service.startFromMessage(999, MIXED_CHAT, 'пропала обложка трека на сайте', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:13`, sourceMessageId: 13,
+    });
+    assert.equal(h.createTaskCalls[0]?.projectId, 'yb');
+  }));
+
+test('смешанная группа: ИИ не уверен — кнопки проектов, выбрать может любой участник', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness({ llmProjectPick: '' });
+    await h.service.startFromMessage(999, MIXED_CHAT, 'что-то сломалось', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:14`, sourceMessageId: 14,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+    const ask = h.sent.at(-1) as any;
+    assert.match(ask.text, /Для какого проекта/);
+    const buttons = ask.replyMarkup.inline_keyboard.flat();
+    assert.deepEqual(buttons.map((b: any) => b.text), ['C#Config', 'Yesbeat']);
+    const draft = [...h.drafts.values()][0]!;
+    assert.equal(draft.projectId, null);
+    assert.equal(draft.autoCreateAt ?? null, null, 'без проекта — не создаём по таймеру');
+    // Проект вне группы подсунуть нельзя.
+    await h.service.handleCallback(mixedCq(`wp:${draft.id}:p-foreign`, 'x'));
+    assert.equal(h.createTaskCalls.length, 0);
+    await h.service.handleCallback(mixedCq(buttons[0].callback_data, 'y'));
+    assert.equal(h.createTaskCalls.length, 1);
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.projectId, 'cfg');
+    assert.equal(call.runMode, 'full');
+    assert.equal(call.ralphMode, 'silent');
+    assert.equal(mixedSignedPayload(call.description).projectId, 'cfg');
+    assert.match(h.edits.at(-1)?.text ?? '', /Передал воркеру: <b>C#Config<\/b>/);
+    // Повторное нажатие ничего не создаёт.
+    await h.service.handleCallback(mixedCq(buttons[1].callback_data, 'z'));
+    assert.equal(h.createTaskCalls.length, 1);
+  }));
+
+test('смешанная группа: без ключа подписи или подключившего группу — ничего не создаём', async () => {
+  const saved = process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  delete process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
+  try {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'в конфиге баг', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:15`, sourceMessageId: 15,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+    assert.match(h.sent.at(-1)?.text ?? '', /администратор/i);
+  } finally {
+    if (saved !== undefined) process.env.TELEGRAM_ORIGIN_SIGNING_KEY = saved;
+  }
+  await withIncidentKey(async () => {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'в конфиге баг', mctx(null), [], {
+      sourceKey: `m:${MIXED_CHAT}:16`, sourceMessageId: 16,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+  });
+});
+
+test('смешанная группа: с исполнителем — обычный поток группы (#75), задача человеку', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness({
+      shared: [{ id: 'u2', displayName: 'Денис', email: 'd@e.com' }],
+      telegramUsernames: { djdes: 'u2' },
+      projectMembers: { yb: ['u2'] },
+      aiOutcome: 'enqueue-throw',
+    });
+    await h.service.startFromMessage(111, MIXED_CHAT, 'поправить плеер в Yesbeat @djdes', gctx('u1', 'SMM', 'Скрипты / Сайт YB'));
+    const draft = [...h.drafts.values()][0]!;
+    assert.equal(draft.projectId, 'yb');
+    assert.equal(draft.assigneeUserId, 'u2');
+    await h.service.handleCallback({ id: 'g', from: { id: 111 }, message: { message_id: 99, chat: { id: MIXED_CHAT } }, data: `tc:${draft.id}` });
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.assigneeUserId, 'u2');
+    assert.notEqual(call.ralphMode, 'silent');
+    assert.equal(call.originWorkspaceId, 'ws-home');
+    assert.deepEqual(h.groupOrigins[0], {
+      taskId: 't1', chatId: MIXED_CHAT, title: 'Скрипты / Сайт YB', authorUserId: 'u1', authorName: 'Создатель',
+    });
+    assert.ok(h.assigneeMessages.find((m) => m.userId === 'u2'), 'исполнитель получил уведомление');
+    assert.match(h.edits.at(-1)!.text, /Задача создана в <b>Yesbeat<\/b>/);
+  }));

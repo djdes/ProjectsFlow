@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
 import type { TaskLiveRun } from '@/domain/live/TaskLiveTimeline';
 import type { LiveEvent } from '@/domain/live/LiveEvent';
@@ -20,6 +20,15 @@ export function useTaskLiveTimeline(projectId: string, taskId: string): {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const refreshRef = useRef<() => void>(() => {});
+  // Runs whose stream announced the end. A refresh that read the session list before
+  // the end must not show them running again (spinner flicker, stream reopened).
+  const ended = useRef(new Map<string, LiveSessionStatus>());
+  const snapshot = useCallback((): TaskLiveRun[] => [...cache.current.values()]
+    .map(run => {
+      const status = run.session.status === 'running' ? ended.current.get(run.session.id) : undefined;
+      return status ? { ...run, session: { ...run.session, status } } : run;
+    })
+    .sort((a, b) => a.session.startedAt.getTime() - b.session.startedAt.getTime()), []);
 
   useEffect(() => {
     let disposed = false;
@@ -28,8 +37,9 @@ export function useTaskLiveTimeline(projectId: string, taskId: string): {
     cache.current = new Map();
     setRuns([]);
     setLoading(true);
+    ended.current = new Map();
     const publish = (): void => {
-      if (!disposed) setRuns([...cache.current.values()].sort((a, b) => a.session.startedAt.getTime() - b.session.startedAt.getTime()));
+      if (!disposed) setRuns(snapshot());
     };
     const refresh = async (): Promise<void> => {
       if (disposed) return;
@@ -95,9 +105,10 @@ export function useTaskLiveTimeline(projectId: string, taskId: string): {
       window.removeEventListener(REALTIME_CONNECTED_EVENT, onChanged);
       window.removeEventListener('focus', onChanged);
     };
-  }, [projectId, taskId, liveRepository]);
+  }, [projectId, taskId, liveRepository, snapshot]);
 
-  const runningId = runs.findLast(run => run.session.status === 'running')?.session.id ?? null;
+  const latestRun = runs.at(-1);
+  const runningId = latestRun?.session.status === 'running' ? latestRun.session.id : null;
   useEffect(() => {
     if (!runningId) return;
     let disposed = false;
@@ -114,15 +125,15 @@ export function useTaskLiveTimeline(projectId: string, taskId: string): {
           const run = cache.current.get(runningId);
           if (!run) return;
           cache.current.set(runningId, { ...run, events: mergeEvents(run.events, [{ ...dto, createdAt: new Date(dto.createdAt) }]) });
-          setRuns([...cache.current.values()].sort((a, b) => a.session.startedAt.getTime() - b.session.startedAt.getTime()));
+          setRuns(snapshot());
         } catch { /* Malformed event: the next REST refresh recovers the tail. */ }
       });
       source.addEventListener('live_end', event => {
         if (disposed) return;
         let status: LiveSessionStatus = 'completed';
         try { status = JSON.parse((event as MessageEvent).data).status ?? status; } catch { /* Refresh below. */ }
-        const run = cache.current.get(runningId);
-        if (run) setRuns(current => current.map(item => item.session.id === runningId ? { ...item, session: { ...item.session, status } } : item));
+        ended.current.set(runningId, status === 'running' ? 'completed' : status);
+        setRuns(snapshot());
         source?.close();
         refreshRef.current();
       });
@@ -133,6 +144,6 @@ export function useTaskLiveTimeline(projectId: string, taskId: string): {
     };
     open();
     return () => { disposed = true; source?.close(); window.clearTimeout(retry); };
-  }, [projectId, taskId, runningId]);
+  }, [projectId, taskId, runningId, snapshot]);
   return { runs, loading, error };
 }

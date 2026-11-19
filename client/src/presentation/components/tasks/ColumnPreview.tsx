@@ -10,6 +10,11 @@ import { useExitingListItems } from '@/presentation/hooks/useExitingListItems';
 export const COLUMN_SCROLL_CLASS =
   'max-h-[calc(100dvh-14rem)] overflow-y-auto overscroll-contain pf-scroll-thin [&>*]:[content-visibility:auto] [&>*]:[contain-intrinsic-size:auto_7rem]';
 
+// Зазор между карточками в стопке: колонки доски и «Входящих», полки «На утверждении» и
+// «В работе», группы раздела «Сейчас». Дизайн C4 — 5px на десктопе. На телефоне карточки
+// выше (кнопки 44px, текст в несколько строк), и 5px склеивали их в сплошную ленту — там 10px.
+export const CARD_STACK_GAP_CLASS = 'gap-2.5 md:gap-[5px]';
+
 // Длительность схлопывания уходящей карточки. Совпадает с duration-300 обёртки ниже.
 const EXIT_MS = 300;
 
@@ -19,7 +24,7 @@ const EXIT_MS = 300;
 //
 // getId включает схлопывание уходящей карточки: выполненная карточка не выбрасывается из
 // списка мгновенно (соседи прыгали вверх рывком), а держится EXIT_MS и схлопывается по
-// высоте — тот же приём и тот же хук, что у полок «На утверждении»/«Вручную». Без getId
+// высоте — тот же приём и тот же хук, что у полок «На утверждении»/«В работе». Без getId
 // список ведёт себя как раньше — ровно то, что нужно PublicKanban'у, где карточки не уходят.
 export function ColumnPreviewList<T>({
   items,

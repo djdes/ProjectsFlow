@@ -32,6 +32,8 @@ type Harness = {
   tgCalls: string[];
   site: string[];
   tgSends: { userId: string; kind: string }[];
+  tgTexts: string[];
+  siteDetails: string[];
 };
 
 function makeHarness(opts: {
@@ -44,12 +46,16 @@ function makeHarness(opts: {
   assigneeUserId?: string | null;
   // Комментарии по id — для резолва автора родительского коммента (reply).
   comments?: Record<string, { id: string; ownerUserId: string }>;
+  // Personal inbox: listByProject holds only the owner, others come through users.
+  inbox?: { ownerId: string; users: Member[] };
 }): Harness {
   const sentEmails: Harness['sentEmails'] = [];
   const recorded: Harness['recorded'] = [];
   const tgCalls: string[] = [];
   const site: string[] = [];
   const tgSends: Harness['tgSends'] = [];
+  const tgTexts: string[] = [];
+  const siteDetails: string[] = [];
   let counter = 0;
 
   const assigneeUserId = opts.assigneeUserId === undefined ? 'B' : opts.assigneeUserId;
@@ -59,9 +65,21 @@ function makeHarness(opts: {
       : { id: 't1', description: 'описание задачи', assignee: { userId: assigneeUserId } };
 
   const service = new DispatchCommentNotifications({
-    notifications: { create: async (input: { userId: string }) => { site.push(input.userId); } } as never,
-    members: { listByProject: async () => opts.members, listApproverUserIdsForProject: async () => opts.approvers ?? [] } as never,
-    projects: { getById: async () => ({ id: 'p1', name: 'Проект' }) } as never,
+    notifications: { create: async (input: { userId: string; payload: { detail?: string } }) => {
+      site.push(input.userId);
+      siteDetails.push(input.payload.detail ?? '');
+    } } as never,
+    members: {
+      listByProject: async () => opts.members,
+      listApproverUserIdsForProject: async () => opts.approvers ?? [],
+      isProjectHidden: async () => false,
+      getNotificationPrefs: async () => null,
+      listSharedUsersInWorkspace: async () => [],
+    } as never,
+    users: { getById: async (id: string) => opts.inbox?.users.find((u) => u.userId === id)?.user ?? null } as never,
+    projects: { getById: async () => opts.inbox
+      ? { id: 'p1', name: 'inbox:x', isInbox: true, ownerId: opts.inbox.ownerId, workspaceId: 'w1' }
+      : { id: 'p1', name: 'Проект' } } as never,
     tasks: { getById: async () => task } as never,
     comments: {
       getById: async (id: string) => opts.comments?.[id] ?? null,
@@ -73,8 +91,9 @@ function makeHarness(opts: {
       },
     } as never,
     tgSend: {
-      execute: async (cmd: { userId: string; kind: string }) => {
+      execute: async (cmd: { userId: string; kind: string; text: string }) => {
         tgCalls.push(cmd.userId);
+        tgTexts.push(cmd.text);
         tgSends.push({ userId: cmd.userId, kind: cmd.kind });
         return (opts.tgResults?.[cmd.userId] ?? { status: 'ok', messageId: 1, chatId: 1 }) as never;
       },
@@ -89,7 +108,7 @@ function makeHarness(opts: {
     appUrl: 'https://app.example',
   });
 
-  return { service, sentEmails, recorded, tgCalls, tgSends, site };
+  return { service, sentEmails, recorded, tgCalls, tgSends, site, tgTexts, siteDetails };
 }
 
 const baseComment = {
@@ -341,4 +360,43 @@ test('explicit assignee audience does not notify approvers or the reply author',
   assert.deepEqual(h.tgCalls, ['B']);
   assert.deepEqual(h.site, ['B']);
   assert.equal(h.recorded.every((entry) => entry.recipientUserId === 'B'), true);
+});
+
+test('audience=selected: any workspace member with project access can be notified', async () => {
+  // C is neither assignee nor approver, but the author picked him explicitly.
+  const h = makeHarness({ members: [member('A', 'Автор'), member('B', 'Боб'), member('C', 'Кэрол')] });
+  await h.service.execute({
+    projectId: 'p1', actorUserId: 'A', source: 'team',
+    audience: { mode: 'selected', userIds: ['C', 'stranger'] },
+    comment: baseComment,
+  });
+  // A user without project access ('stranger') is silently dropped.
+  assert.deepEqual(h.tgCalls, ['C']);
+  assert.deepEqual(h.site, ['C']);
+});
+
+test('attachment-only comment is previewed as an attachment everywhere', async () => {
+  const h = makeHarness({ members: [member('A', 'Автор'), member('B', 'Боб')] });
+  await h.service.execute({
+    projectId: 'p1', actorUserId: 'A', source: 'team',
+    audience: { mode: 'selected', userIds: ['B'] },
+    comment: { ...baseComment, body: '' },
+  });
+  assert.match(h.tgTexts[0] ?? '', /📎 Вложение/);
+  assert.deepEqual(h.siteDetails, ['📎 Вложение']);
+});
+
+test('inbox task: the selected workspace lead is reachable although not an inbox member', async () => {
+  const h = makeHarness({
+    members: [member('A', 'Автор')],
+    approvers: ['L'],
+    assigneeUserId: 'A',
+    inbox: { ownerId: 'A', users: [member('L', 'Денис')] },
+  });
+  await h.service.execute({
+    projectId: 'p1', actorUserId: 'A', source: 'team',
+    audience: { mode: 'selected', userIds: ['L'] },
+    comment: baseComment,
+  });
+  assert.deepEqual(h.tgCalls, ['L']);
 });

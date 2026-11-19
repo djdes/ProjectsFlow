@@ -10,6 +10,9 @@ import type { ListApprovalQueue } from '../../application/task/ListApprovalQueue
 import type { ListTasksAwaitingMyReply } from '../../application/task/ListTasksAwaitingMyReply.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { toDto as taskToDto } from '../tasks/routes.js';
+import { onlyFromGroups } from '../tasks/groupOriginFilter.js';
+
+// Списки принимают ?fromGroups=1 — только задачи из рабочих Telegram-групп (db/190).
 
 type Deps = {
   readonly listAssignedToMe: ListTasksAssignedToMe;
@@ -42,7 +45,7 @@ export function taskAssigneesRouter(deps: Deps): Router {
   r.get('/mine', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const items = await deps.listAssignedToMe.execute(req.user!.id);
-      res.json({ items: items.map(assignedViewToDto) });
+      res.json({ items: onlyFromGroups(items, req.query, (v) => v.task).map(assignedViewToDto) });
     } catch (e) {
       next(e);
     }
@@ -52,7 +55,7 @@ export function taskAssigneesRouter(deps: Deps): Router {
   r.get('/others', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const items = await deps.listAssignedToOthers.execute(req.user!.id);
-      res.json({ items: items.map(assignedViewToDto) });
+      res.json({ items: onlyFromGroups(items, req.query, (v) => v.task).map(assignedViewToDto) });
     } catch (e) {
       next(e);
     }
@@ -64,7 +67,7 @@ export function taskAssigneesRouter(deps: Deps): Router {
   r.get('/personal', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const items = await deps.listPersonalOfColleagues.execute(req.user!.id);
-      res.json({ items: items.map(assignedViewToDto) });
+      res.json({ items: onlyFromGroups(items, req.query, (v) => v.task).map(assignedViewToDto) });
     } catch (e) {
       next(e);
     }
@@ -77,7 +80,7 @@ export function taskAssigneesRouter(deps: Deps): Router {
   r.get('/member/:userId', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const items = await deps.listMemberTasksForLead.execute(req.user!.id, req.params.userId as string);
-      res.json({ items: items.map(assignedViewToDto) });
+      res.json({ items: onlyFromGroups(items, req.query, (v) => v.task).map(assignedViewToDto) });
     } catch (e) {
       next(e);
     }

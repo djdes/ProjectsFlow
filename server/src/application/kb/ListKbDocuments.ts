@@ -15,7 +15,7 @@ export class ListKbDocuments {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string): Promise<KbDocumentSummary[]> {
-    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
+    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project_data');
     if (project.kbKind === 'none') throw new KbNotConnectedError();
     return this.deps.kb.list(project, ownerUserId);
   }

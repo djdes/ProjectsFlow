@@ -261,6 +261,13 @@ export const setMultiTaskWorkerSchema = z.object({
   enabled: z.boolean(),
 });
 
+// Привычные названия + короткое описание проекта для рабочих Telegram-групп (db/192).
+export const setGroupHintsSchema = z.object({
+  aliases: z.array(z.string().max(60)).max(20),
+  shortDescription: z.string().max(300).nullable(),
+  groupFullRunDefault: z.boolean().optional(),
+});
+
 // Включить/выключить per-member делегацию GitHub-токена. Default granter =
 // callerUserId (caller включает СВОЮ делегацию). Optional `granterUserId` —
 // для admin-on-behalf: admin указывает за кого toggle'ить.

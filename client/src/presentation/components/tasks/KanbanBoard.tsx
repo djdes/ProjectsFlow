@@ -1,6 +1,7 @@
 import { BoardSkeleton } from '@/presentation/components/loading/LoadingLayouts';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { isFromGroup } from '@/domain/task/groupOriginFilter';
 import {
   DndContext,
   DragOverlay,
@@ -24,6 +25,7 @@ import {
   CalendarClock,
   Filter,
   Flag,
+  MessagesSquare,
   Plus,
   Search,
   Users,
@@ -44,7 +46,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { toast } from '@/components/ui/sonner';
-import type { Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { RunMode, Task, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/domain/task/Task';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
@@ -71,6 +73,7 @@ import { useUsage } from '@/presentation/usage/UsageProvider';
 import { useUpgradeDialog } from '@/presentation/usage/UpgradeDialogProvider';
 import { isWorkerLockedByPlan } from './workerHandoff';
 import { BulkActionBar } from './BulkActionBar';
+import { bulkSnapshotFrom } from './bulkUndo';
 import {
   nextAnchor,
   nextSelection,
@@ -145,6 +148,10 @@ type Props = {
   viewFilters?: ViewFilters;
   viewSort?: ViewSort | null;
   canEdit?: boolean;
+  // Columns (rename, colour, hide, add/delete) and automation belong to the project's own
+  // workspace: a guest of a shared project (db/182) works with tasks but cannot manage
+  // the board. undefined — same as canEdit.
+  canManageColumns?: boolean;
 };
 
 // Локальная ISO-дата 'YYYY-MM-DD' (без UTC-сдвига) — для сравнения с deadline.
@@ -292,7 +299,9 @@ export function KanbanBoard({
   viewFilters,
   viewSort = null,
   canEdit = true,
+  canManageColumns: canManageColumnsProp,
 }: Props): React.ReactElement {
+  const canManageColumns = canEdit && (canManageColumnsProp ?? true);
   const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const moveWithUndo = useTaskMoveUndo(projectId, tasks, move);
   const { user } = useCurrentUser();
@@ -663,6 +672,9 @@ export function KanbanBoard({
   const [filterPriority, setFilterPriority] = useState<TaskPriority | null>(null);
   const [filterDeadline, setFilterDeadline] = useState<'overdue' | 'week' | null>(null);
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
+  // «Только из групп»: задачи из рабочих Telegram-групп (groupOrigin, db/190).
+  const [filterFromGroup, setFilterFromGroup] = useState(false);
+  const hasGroupTasks = useMemo(() => tasks.some(isFromGroup), [tasks]);
   const assigneeOptions = useMemo(() => {
     const byId = new Map<string, string>();
     for (const task of tasks) byId.set(task.assignee.userId, task.assignee.displayName);
@@ -675,7 +687,8 @@ export function KanbanBoard({
     filterQuery.trim().length > 0 ||
     filterPriority !== null ||
     filterDeadline !== null ||
-    filterAssignee !== null;
+    filterAssignee !== null ||
+    filterFromGroup;
 
   const filterTasks = useCallback(
     (list: Task[]): Task[] => {
@@ -692,10 +705,11 @@ export function KanbanBoard({
           if (!t.deadline || t.deadline > weekIso) return false;
         }
         if (filterAssignee !== null && t.assignee.userId !== filterAssignee) return false;
+        if (filterFromGroup && !isFromGroup(t)) return false;
         return true;
       });
     },
-    [filterActive, filterQuery, filterPriority, filterDeadline, filterAssignee],
+    [filterActive, filterQuery, filterPriority, filterDeadline, filterAssignee, filterFromGroup],
   );
 
   const resetFilters = (): void => {
@@ -703,6 +717,7 @@ export function KanbanBoard({
     setFilterPriority(null);
     setFilterDeadline(null);
     setFilterAssignee(null);
+    setFilterFromGroup(false);
   };
 
   // Вспышка полки «В работе»: key перезапускает анимацию, id — какую карточку подсветить.
@@ -1017,12 +1032,14 @@ export function KanbanBoard({
   const topAnchorFor = (status: TaskStatus): string | null =>
     status === 'done' ? null : (grouped[status][0]?.id ?? null);
 
-  const handleQuickPromote = async (task: Task, target?: TaskStatus): Promise<void> => {
-    // «Шаг вперёд» по колонкам: Черновики→Вручную→Воркер→Готово (quickPromoteNext).
+  const handleQuickPromote = async (task: Task, target?: TaskStatus, runMode?: RunMode): Promise<void> => {
+    // «Шаг вперёд» по колонкам: Черновики→В работе→Воркер→Готово (quickPromoteNext).
     // Явный target — кнопка «Взять в работу» (→ 'manual') с любой колонки.
     const next = target ?? quickPromoteNext(task.status, workerEnabled);
     if (!next) return;
     try {
+      // Режим из меню «Передать воркеру» сохраняем ДО очереди: диспетчер читает его из задачи.
+      if (next === 'todo' && runMode && runMode !== task.runMode) await update(task.id, { runMode });
       await moveWithUndo(task, { targetStatus: next, beforeTaskId: null, afterTaskId: topAnchorFor(next) });
     } catch (err) {
       toast.error(`Не удалось перенести: ${(err as Error).message}`);
@@ -1205,6 +1222,20 @@ export function KanbanBoard({
             onSelect={(key) => setFilterAssignee(key === 'all' ? null : key)}
           />
         )}
+        {(hasGroupTasks || filterFromGroup) && (
+          <button
+            type="button"
+            aria-pressed={filterFromGroup}
+            onClick={() => setFilterFromGroup((on) => !on)}
+            className={cn(
+              'inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs transition-colors hover:bg-accent',
+              filterFromGroup ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <MessagesSquare className="size-3.5" />
+            Только из групп
+          </button>
+        )}
         {filterActive && (
           <button
             type="button"
@@ -1222,7 +1253,7 @@ export function KanbanBoard({
         <div className="mbe-3 flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-3">
           <p className="text-sm text-muted-foreground">
             {canEdit
-              ? `Проект пуст — создайте первую задачу${onOpenAutomation ? ' или включите автоматизацию' : ''}.`
+              ? `Проект пуст — создайте первую задачу${canManageColumns && onOpenAutomation ? ' или включите автоматизацию' : ''}.`
               : 'В проекте пока нет задач.'}
           </p>
           <div className="flex items-center gap-1.5">
@@ -1230,7 +1261,7 @@ export function KanbanBoard({
               <Plus className="size-3.5" />
               Создать задачу
             </Button>}
-            {canEdit && onOpenAutomation && (
+            {canManageColumns && onOpenAutomation && (
               <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground" onClick={onOpenAutomation}>
                 <Bot className="size-3.5" />
                 Автоматизация
@@ -1248,7 +1279,7 @@ export function KanbanBoard({
             работает в обоих режимах: все колонки в DOM, просто проскроллены.
             items-start — каждая колонка своей высоты по контенту (не тянется до самой длинной);
             высота ряда = самой длинной колонки, вертикально скроллит страница целиком. */}
-        {/* Полка «В работе» — над колонками, вместо колонки «Вручную». Дроп в неё
+        {/* Полка «В работе» — над колонками, вместо колонки «В работе». Дроп в неё
             обрабатывает общий handleDragEnd: droppable совпадает с колонкой по id и data. */}
         <BoardWorkShelf
           // Полка = колонка 'manual', поэтому и подпись у неё та же (переименование
@@ -1372,7 +1403,7 @@ export function KanbanBoard({
                 liveTaskIds={liveTaskIds}
                 colorClasses={KANBAN_COLOR_CLASSES[color]}
                 onRename={
-                  canEdit && !approvalColumn && label.length > 0
+                  canManageColumns && !approvalColumn && label.length > 0
                     ? (l) => setLabel(status as KanbanColumnStatus, l)
                     : undefined
                 }
@@ -1418,7 +1449,7 @@ export function KanbanBoard({
                     ? () => enterSelection(status as KanbanColumnStatus)
                     : undefined
                 }
-                columnMenu={canEdit && !approvalColumn ? (
+                columnMenu={canManageColumns && !approvalColumn ? (
                   <KanbanColumnMenu
                     status={status as KanbanColumnStatus}
                     currentColor={color}
@@ -1488,7 +1519,7 @@ export function KanbanBoard({
           />
           {/* Своя колонка проекта (db/154). В личных «Входящих» не нужна: там доска
               персональная и без командного процесса. */}
-          {canEdit && !isInbox && (
+          {canManageColumns && !isInbox && (
             <KanbanAddColumnButton
               activeCount={activeCustomSlots(settings).length}
               onCreate={createColumn}
@@ -1577,6 +1608,7 @@ export function KanbanBoard({
       {/* Панель массовых действий — поверх доски, когда выбрана хотя бы одна задача. */}
       {selectionStatus !== null && selectedIds.size > 0 && (
         <BulkActionBar
+          snapshot={bulkSnapshotFrom([tasks])}
           selectedIds={selectionOrderedIds.filter((id) => selectedIds.has(id))}
           projectId={projectId}
           isInbox={isInbox}

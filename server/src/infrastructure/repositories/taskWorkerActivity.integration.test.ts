@@ -18,12 +18,16 @@ test('MariaDB: cards show the latest run and unanswered questions, excluding don
     await db.query('CREATE TEMPORARY TABLE task_comments (id CHAR(36),task_id CHAR(36),actor_kind VARCHAR(16),body TEXT,created_at TIMESTAMP)');
     for (const [id, project, status, deleted] of [
       ['retry', 'p', 'in_progress', null], ['error', 'p', 'in_progress', null], ['question', 'p', 'awaiting_clarification', null],
+      ['approval', 'p', 'pending_approval', null], ['overlap', 'p', 'in_progress', null],
       ['done', 'p', 'done', null], ['deleted', 'p', 'in_progress', '2026-10-23 10:00:00'], ['foreign', 'other', 'in_progress', null],
     ]) await db.query('INSERT INTO tasks VALUES (?,?,?,?)', [id, project, status, deleted]);
     for (const [id, task, project, status, base] of [
       ['old-failure', 'retry', 'p', 'failed', 1], ['new-run', 'retry', 'p', 'running', 10], ['failed', 'error', 'p', 'failed', 1],
+      ['approval-failed', 'approval', 'p', 'failed', 1],
       ['done-run', 'done', 'p', 'failed', 1], ['deleted-run', 'deleted', 'p', 'failed', 1], ['foreign-run', 'foreign', 'other', 'failed', 1],
     ]) await db.query("INSERT INTO live_sessions VALUES (?,?,?,?,'2026-10-23 10:00:00',NULL,?,1)", [id, task, project, status, base]);
+    await db.query("INSERT INTO live_sessions VALUES ('overlap-ok','overlap','p','completed','2026-10-23 10:00:10','2026-10-23 10:10:00',1,1)");
+    await db.query("INSERT INTO live_sessions VALUES ('overlap-dup','overlap','p','failed','2026-10-23 10:00:30','2026-10-23 10:00:35',2,2)");
     for (const taskId of ['question', 'done', 'deleted', 'foreign']) {
       await db.query("INSERT INTO task_comments VALUES (?,?,'agent',?,'2026-10-23 10:01:00')", [`q-${taskId}`, taskId, '<!-- ralph-question {"id":"q1"} -->Вопрос']);
     }

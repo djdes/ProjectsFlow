@@ -1,6 +1,17 @@
 import { ReportTelegramWorkerResult } from './application/telegram/ReportTelegramWorkerResult.js';
+import { NotifyIncidentGroup } from './application/telegram/NotifyIncidentGroup.js';
+import { DesktopNotesService } from './application/desktop-notes/DesktopNotesService.js';
+import { DrizzleDesktopNoteRepository } from './infrastructure/repositories/DrizzleDesktopNoteRepository.js';
+import { GetApprovalSummary } from './application/approval-summary/GetApprovalSummary.js';
+import { DrizzleApprovalSummaryRepository } from './infrastructure/repositories/DrizzleApprovalSummaryRepository.js';
+import { GetPlatformStats } from './application/admin/GetPlatformStats.js';
+import { DrizzlePlatformStatsRepository } from './infrastructure/repositories/DrizzlePlatformStatsRepository.js';
 import { ResolveWorkerResultDestination } from './application/telegram/ResolveWorkerResultDestination.js';
 import { MysqlTelegramWorkerResultOutbox } from './infrastructure/repositories/MysqlTelegramWorkerResultOutbox.js';
+import { MysqlMailingRepository } from './infrastructure/repositories/MysqlMailingRepository.js';
+import { MailingService } from './application/mailing/MailingService.js';
+import { RunMailingQueue } from './application/mailing/RunMailingQueue.js';
+import { parsePerMinute } from './domain/mailing/deliveryPolicy.js';
 import { MysqlTelegramTaskOriginRepository } from './infrastructure/repositories/MysqlTelegramTaskOriginRepository.js';
 import { ImageGenerationService } from './application/image-generation/ImageGenerationService.js';
 import { MysqlImageGenerationRepository } from './infrastructure/repositories/MysqlImageGenerationRepository.js';
@@ -62,6 +73,13 @@ import { NotificationHub } from './infrastructure/notifications/NotificationHub.
 import { RealtimeHub } from './infrastructure/realtime/RealtimeHub.js';
 import { ProjectEventBroadcaster } from './application/realtime/ProjectEventBroadcaster.js';
 import { PublishingNotificationRepository } from './infrastructure/notifications/PublishingNotificationRepository.js';
+import { CompositeNotificationPublisher } from './infrastructure/notifications/CompositeNotificationPublisher.js';
+import { PushNotificationDispatcher } from './application/push/PushNotificationDispatcher.js';
+import { ManagePushSubscriptions } from './application/push/ManagePushSubscriptions.js';
+import { VapidKeyProvider } from './application/push/VapidKeyProvider.js';
+import { WebPushSender, WebPushVapidKeyGenerator } from './infrastructure/push/WebPushSender.js';
+import { DrizzlePushSubscriptionRepository } from './infrastructure/repositories/DrizzlePushSubscriptionRepository.js';
+import { DrizzleVapidKeyStore } from './infrastructure/repositories/DrizzleVapidKeyStore.js';
 import { SmtpEmailSender } from './infrastructure/email/SmtpEmailSender.js';
 import { LoggingEmailSender } from './infrastructure/email/LoggingEmailSender.js';
 import type { EmailSender } from './application/notifications/EmailSender.js';
@@ -71,6 +89,7 @@ import { DeviceFlowStore } from './infrastructure/github/DeviceFlowStore.js';
 import { Register } from './application/auth/Register.js';
 import { Login } from './application/auth/Login.js';
 import { Logout } from './application/auth/Logout.js';
+import { Impersonation } from './application/auth/Impersonation.js';
 import { RequestPasswordReset } from './application/auth/RequestPasswordReset.js';
 import { ResetPassword } from './application/auth/ResetPassword.js';
 import { DrizzlePasswordResetTokenRepository } from './infrastructure/repositories/DrizzlePasswordResetTokenRepository.js';
@@ -78,7 +97,7 @@ import { GetCurrentUser } from './application/auth/GetCurrentUser.js';
 import { UpdateProfile } from './application/user/UpdateProfile.js';
 import { UploadUserAvatar } from './application/user/UploadUserAvatar.js';
 import { ListProjects } from './application/project/ListProjects.js';
-import { configureAdminBypass } from './application/project/projectAccess.js';
+import { configureAdminBypass, isSystemAdmin } from './application/project/projectAccess.js';
 import { GetProject } from './application/project/GetProject.js';
 import { CreateProject } from './application/project/CreateProject.js';
 import { UpdateProject } from './application/project/UpdateProject.js';
@@ -139,8 +158,12 @@ import { BulkManageWorkspaceKanbanColumns } from './application/kanban/BulkManag
 import { ToggleProjectFavorite } from './application/project/ToggleProjectFavorite.js';
 import { ReorderFavoriteProjects } from './application/project/ReorderFavoriteProjects.js';
 import { DispatchTaskChangeNotifications } from './application/notifications/DispatchTaskChangeNotifications.js';
+import { SpawnNextRecurringTask } from './application/task/SpawnNextRecurringTask.js';
+import { ManageWorkspaceTaskTemplates } from './application/task/ManageWorkspaceTaskTemplates.js';
+import { DrizzleWorkspaceTaskTemplateRepository } from './infrastructure/repositories/DrizzleWorkspaceTaskTemplateRepository.js';
 import { ProjectNotificationService } from './application/notifications/ProjectNotificationService.js';
 import { DispatchCommentNotifications } from './application/notifications/DispatchCommentNotifications.js';
+import { ListCommentNotifyCandidates } from './application/task/ListCommentNotifyCandidates.js';
 import { GetCommentNotifications } from './application/task/GetCommentNotifications.js';
 import { DrizzleCommentNotificationLogRepository } from './infrastructure/repositories/DrizzleCommentNotificationLogRepository.js';
 import { CreateProjectWithGit } from './application/project/CreateProjectWithGit.js';
@@ -179,6 +202,7 @@ import { GetMyAccount } from './application/agent/GetMyAccount.js';
 import { DeleteProject } from './application/project/DeleteProject.js';
 import { SetProjectDispatcher } from './application/project/SetProjectDispatcher.js';
 import { SetProjectMultiTaskWorker } from './application/project/SetProjectMultiTaskWorker.js';
+import { SetProjectGroupHints } from './application/project/SetProjectGroupHints.js';
 import { ListDispatcherCandidates } from './application/project/ListDispatcherCandidates.js';
 import { GetProjectWorkerOverview } from './application/agent/GetProjectWorkerOverview.js';
 import { ListMyDispatchedProjects } from './application/agent/ListMyDispatchedProjects.js';
@@ -306,6 +330,9 @@ import { SendLeadDigest } from './application/lead/SendLeadDigest.js';
 import { DrizzleLeadDigestStateRepository } from './infrastructure/repositories/DrizzleLeadDigestStateRepository.js';
 import { CommitSyncScheduler } from './infrastructure/scheduler/CommitSyncScheduler.js';
 import { scheduledBroadcastsPaused } from './infrastructure/scheduler/broadcastPause.js';
+import { UrgentTaskReminderScheduler } from './infrastructure/scheduler/UrgentTaskReminderScheduler.js';
+import { SendUrgentTaskReminders } from './application/urgent-reminder/SendUrgentTaskReminders.js';
+import { DrizzleUrgentTaskReminderRepository } from './infrastructure/repositories/DrizzleUrgentTaskReminderRepository.js';
 import { SendWorkspaceEodReminder } from './application/eod/SendWorkspaceEodReminder.js';
 import { SearchTasks } from './application/task/SearchTasks.js';
 import { DrizzleTaskSearchRepository } from './infrastructure/repositories/DrizzleTaskSearchRepository.js';
@@ -357,6 +384,18 @@ import { DrizzleTelegramChatWorkspaceRepository } from './infrastructure/reposit
 import { DrizzleTelegramTaskMessageRepository } from './infrastructure/repositories/DrizzleTelegramTaskMessageRepository.js';
 import { DrizzleTelegramMessageTaskRepository } from './infrastructure/repositories/DrizzleTelegramMessageTaskRepository.js';
 import { DrizzleTelegramGroupOwnerRepository } from './infrastructure/repositories/DrizzleTelegramGroupOwnerRepository.js';
+import { DrizzleTelegramWorkGroupRepository } from './infrastructure/repositories/DrizzleTelegramWorkGroupRepository.js';
+import { DrizzleTelegramGroupMemberRepository } from './infrastructure/repositories/DrizzleTelegramGroupMemberRepository.js';
+import { SyncTelegramGroupMembers } from './application/telegram/SyncTelegramGroupMembers.js';
+import { ManageTelegramWorkGroups } from './application/telegram/ManageTelegramWorkGroups.js';
+import { DrizzleProjectSharingRepository } from './infrastructure/repositories/DrizzleProjectSharingRepository.js';
+import type { Task } from './domain/task/Task.js';
+import { TaskVisibility } from './application/project/TaskVisibility.js';
+import { ManageProjectSharing } from './application/project/ManageProjectSharing.js';
+import { TelegramGroupOnboarding } from './application/telegram/TelegramGroupOnboarding.js';
+import { InviteNeighbors, ListWorkspaceInviteCandidates } from './application/workspace/InviteNeighbors.js';
+import { DrizzleWorkspaceNeighborsRepository } from './infrastructure/repositories/DrizzleWorkspaceNeighborsRepository.js';
+import { DrizzleTelegramGroupOnboardingRepository } from './infrastructure/repositories/DrizzleTelegramGroupOnboardingRepository.js';
 import { TelegramComposerService } from './application/telegram/composer/TelegramComposerService.js';
 import { ConnectTelegramAccount } from './application/telegram/ConnectTelegramAccount.js';
 import { GetTelegramStatus } from './application/telegram/GetTelegramStatus.js';
@@ -391,7 +430,14 @@ import { ListUserProjectsWithDispatcher } from './application/admin/ListUserProj
 import { ListUserProjectsWithFavorites } from './application/admin/ListUserProjectsWithFavorites.js';
 import { SetUserProjectFavorite } from './application/admin/SetUserProjectFavorite.js';
 import { UpdateUserAsAdmin } from './application/admin/UpdateUserAsAdmin.js';
-import { DeleteUserAsAdmin } from './application/admin/DeleteUserAsAdmin.js';
+import { DeleteUserAsAdmin, GetUserDeletionPreview } from './application/admin/DeleteUserAsAdmin.js';
+import { BulkSetPlanAsAdmin } from './application/admin/BulkSetPlanAsAdmin.js';
+import { SignOutUserEverywhere } from './application/admin/SignOutUserEverywhere.js';
+import { SendPasswordResetAsAdmin } from './application/admin/SendPasswordResetAsAdmin.js';
+import { GetAdminUserOverview } from './application/admin/GetAdminUserOverview.js';
+import { DrizzleAdminAuditLog } from './infrastructure/repositories/DrizzleAdminAuditLog.js';
+import { DrizzleUserActivityRepository } from './infrastructure/repositories/DrizzleUserActivityRepository.js';
+import { LastSeenTracker } from './application/auth/LastSeenTracker.js';
 import { DrizzleEmployeeRepository } from './infrastructure/repositories/DrizzleEmployeeRepository.js';
 import { DrizzleProjectFinanceRepository } from './infrastructure/repositories/DrizzleProjectFinanceRepository.js';
 import { ManageEmployees } from './application/finance/ManageEmployees.js';
@@ -452,7 +498,15 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const passwordResetTokenRepo = new DrizzlePasswordResetTokenRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const productTelemetryRepo = new DrizzleProductTelemetryRepository(db);
-const projectMemberRepo = new DrizzleProjectMemberRepository(db);
+// Один проект в нескольких пространствах (db/182): правила видимости задач. Пространство
+// запроса берём из контекста X-Workspace-Id (объявлен ниже, читается только во время запроса).
+const projectSharingRepo = new DrizzleProjectSharingRepository(db);
+const taskVisibility = new TaskVisibility({
+  sharing: projectSharingRepo,
+  currentWorkspaceId: (userId) => requestWorkspaceContext.get(userId)?.workspace?.id ?? null,
+  isSystemAdmin,
+});
+const projectMemberRepo = new DrizzleProjectMemberRepository(db, taskVisibility);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
 const workspaceInviteRepo = new DrizzleWorkspaceInviteRepository(db);
 const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db, projectMemberRepo);
@@ -532,10 +586,42 @@ const setActiveWorkspaceForProject = async (userId: string, projectId: string): 
 // Real-time-доставка: хаб + декоратор поверх Drizzle-репозитория. Любое создание
 // уведомления автоматически push'ится подписчикам SSE.
 const notificationHub = new NotificationHub();
+// Web Push (db/184): every bell notification also goes to the recipient's devices. Without
+// configuration the VAPID keys are generated on first use and stored in the DB; the private key
+// is encrypted with the same secret as the LLM subscription tokens (plain without a secret).
+const pushSubscriptionRepo = new DrizzlePushSubscriptionRepository(db);
+const vapidKeys = new VapidKeyProvider({
+  store: new DrizzleVapidKeyStore(
+    db,
+    new TokenCipher(process.env['LLM_TOKEN_KEY'] || process.env['SECRETS_MASTER_KEY'] || process.env['REPO_ACCESS_HMAC_SECRET']),
+  ),
+  generator: new WebPushVapidKeyGenerator(),
+  env: { publicKey: process.env['VAPID_PUBLIC_KEY'], privateKey: process.env['VAPID_PRIVATE_KEY'] },
+  onRotated: async () => {
+    await pushSubscriptionRepo.removeAll();
+  },
+  log: (message) => console.warn(message),
+});
+// Push services (Apple included) require an https: or mailto: sender contact.
+const vapidSubject = ((): string => {
+  const explicit = process.env['VAPID_SUBJECT']?.trim();
+  if (explicit) return explicit;
+  const app = process.env['APP_URL'] ?? process.env['PUBLIC_APP_URL'] ?? '';
+  return /^https:\/\/(?!localhost[:/]|localhost$)/u.test(app) ? app.replace(/\/$/u, '') : 'https://projectsflow.ru';
+})();
+const pushNotificationDispatcher = new PushNotificationDispatcher({
+  subscriptions: pushSubscriptionRepo,
+  sender: new WebPushSender({ proxy: process.env['WEB_PUSH_HTTP_PROXY'] || undefined }),
+  vapid: vapidKeys,
+  subject: vapidSubject,
+  // The same recipient check as for toasts (notificationAlerts below).
+  canReceive: (userId, notification): Promise<boolean> => notificationAlerts.canReceive(userId, notification),
+});
 const notificationRepo = new PublishingNotificationRepository(
   new DrizzleNotificationRepository(db),
-  notificationHub,
+  new CompositeNotificationPublisher([notificationHub, pushNotificationDispatcher]),
 );
+const notificationAlerts = new NotificationAlerts({ repo: notificationRepo, workspaces: workspaceRepo });
 
 // === Лента действий (activity feed) ===
 const activityRepo = new DrizzleActivityRepository(db, projectMemberRepo);
@@ -611,6 +697,8 @@ const getActivityFeed = new GetActivityFeed({
   activity: activityRepo,
   notifications: notificationRepo,
   actionStates: notificationActionStates,
+  // Объявлен ниже — зовём через замыкание (к моменту запросов уже инициализирован).
+  hiddenTaskIds: (userId, refs) => hiddenTaskIds(userId, refs),
 });
 // GC: чистим события старше 30 дней (на старте + раз в сутки).
 const ACTIVITY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -622,9 +710,16 @@ setInterval(sweepActivity, 24 * 60 * 60 * 1000).unref();
 // Real-time-события (task/project changed) для live-обновления UI без перезагрузки.
 // Транслируются всем участникам проекта по тому же SSE-коннекту, что и уведомления.
 const realtimeHub = new RealtimeHub();
-const projectEventBroadcaster = new ProjectEventBroadcaster({
+const projectEventBroadcaster: ProjectEventBroadcaster = new ProjectEventBroadcaster({
   members: projectMemberRepo,
   publisher: realtimeHub,
+  // Общий проект (db/182): события задачи — только тем, кому она видна. taskRepo объявлен
+  // ниже — берём через замыкание (к моменту событий уже инициализирован).
+  taskAudience: async (projectId: string, taskId: string, userIds: readonly string[]): Promise<string[]> => {
+    if ((await projectSharingRepo.loadMany([projectId])).size === 0) return [...userIds];
+    const task: Task | null = await taskRepo.getByIdIncludingDeleted(taskId);
+    return task ? taskVisibility.filterAudience(task, userIds) : [...userIds];
+  },
 });
 // Best-effort: ошибка резолва участников не должна влиять на основной запрос.
 const notifyTaskChanged = (projectId: string, extraUserIds: readonly string[] = []): void => {
@@ -681,7 +776,30 @@ const appBaseUrl =
 // закрытия задач (close-proposal, commit-sync, Telegram-композер).
 const taskApprovalService = new TaskApprovalService({
   workspaces: workspaceRepo,
+  projectWorkspaceIds: (projectId) => projectSharingRepo.workspaceIdsOf(projectId),
 });
+// Пространство создания задачи общего проекта (db/182): явно переданное или пространство
+// запроса (X-Workspace-Id), если человек в нём участник; иначе основное, если он участник
+// основного; иначе его единственное подключённое пространство. null — основное.
+const resolveTaskOrigin = async (input: {
+  readonly projectId: string;
+  readonly homeWorkspaceId: string;
+  readonly userId: string;
+  readonly requested: string | null | undefined;
+}): Promise<string | null> => {
+  const workspaceIds = await projectSharingRepo.workspaceIdsOf(input.projectId);
+  if (workspaceIds.length <= 1) return null;
+  const memberships = await projectSharingRepo.memberships(
+    [input.userId],
+    [{ projectId: input.projectId, workspaceIds }],
+  );
+  const mine = memberships.filter((m) => !m.excluded || m.role === 'owner' || m.role === 'lead').map((m) => m.workspaceId);
+  const preferred = input.requested ?? requestWorkspaceContext.get(input.userId)?.workspace?.id ?? null;
+  if (preferred && mine.includes(preferred)) return preferred === input.homeWorkspaceId ? null : preferred;
+  if (mine.includes(input.homeWorkspaceId)) return null;
+  const linked = mine.filter((id) => id !== input.homeWorkspaceId);
+  return linked.length === 1 ? linked[0]! : null;
+};
 
 const githubApi = new FetchGithubApiClient(config.github.clientId);
 
@@ -699,13 +817,61 @@ const kbDocumentRepo = new DrizzleKbDocumentRepository(db);
 const secretsRepo = new DrizzleSecretsRepository(db);
 const taskVersionRepo = new DrizzleTaskVersionRepository(db);
 let taskChangeNotifications: DispatchTaskChangeNotifications | undefined;
+// Повторяющиеся задачи (db/185): следующий повтор ставится из того же центрального потока
+// изменений, что и уведомления, — так его ставит любой путь перевода задачи в 'done'.
+let recurringTasks: SpawnNextRecurringTask | undefined;
 const taskVersionRecorder = new TaskVersionRecorder({
-  onChanged: (change) => taskChangeNotifications?.execute(change) ?? Promise.resolve(),
+  onChanged: async (change) => {
+    // Независимые подписчики: сбой рассылки не должен отменять повтор и наоборот.
+    const results = await Promise.allSettled([
+      taskChangeNotifications?.execute(change),
+      recurringTasks?.onTaskChanged(change),
+    ]);
+    for (const result of results) {
+      if (result.status === 'rejected') console.warn('[task-changes] subscriber failed', result.reason);
+    }
+  },
   versions: taskVersionRepo,
   idGen: idGenerator,
   onRecorded: (event) => projectEventBroadcaster.broadcastTaskVersionCreated(event),
 });
 const taskRepo = new DrizzleTaskRepository(db, taskVersionRecorder);
+// Видимые человеку задачи общих проектов (db/182) — для пост-фильтра поиска.
+const visibleTaskIds = async (userId: string, taskIds: readonly string[]): Promise<ReadonlySet<string>> => {
+  const list = await taskRepo.listByIds(taskIds);
+  return new Set((await taskVisibility.filterTasks(userId, list)).map((task) => task.id));
+};
+// Общие проекты (db/182): задачи из ссылок, скрытые от человека правилами. Ссылка
+// оценивается в своём проекте: задача, уехавшая в другой проект, — как задача основного
+// пространства (автор и ответственный — прежние); удалённая насовсем — задача основного
+// пространства без автора и ответственного. Задачи обычных проектов не скрыты.
+const hiddenTaskIds = async (
+  userId: string,
+  refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+): Promise<ReadonlySet<string>> => {
+  if (refs.length === 0) return new Set();
+  const shared = await projectSharingRepo.loadMany(refs.map((ref) => ref.projectId));
+  const sharedRefs = refs.filter((ref) => shared.has(ref.projectId));
+  const ids = [...new Set(sharedRefs.map((ref) => ref.taskId))];
+  if (ids.length === 0) return new Set();
+  const found = new Map((await taskRepo.listByIds(ids)).map((task) => [task.id, task] as const));
+  const deleted = await Promise.all(ids.filter((id) => !found.has(id)).map((id) => taskRepo.getByIdIncludingDeleted(id)));
+  for (const task of deleted) if (task) found.set(task.id, task);
+  const candidates = sharedRefs.map((ref) => {
+    const task = found.get(ref.taskId);
+    const sameProject = task?.projectId === ref.projectId;
+    return {
+      id: ref.taskId,
+      projectId: ref.projectId,
+      createdBy: task?.createdBy ?? null,
+      assignee: { userId: task?.assignee.userId ?? '' },
+      originWorkspaceId: sameProject ? (task?.originWorkspaceId ?? null) : null,
+    };
+  });
+  const visible = await taskVisibility.filterTasks(userId, candidates);
+  const shown = new Set(visible.map((c) => `${c.projectId}|${c.id}`));
+  return new Set(candidates.filter((c) => !shown.has(`${c.projectId}|${c.id}`)).map((c) => c.id));
+};
 const taskCommitRepo = new DrizzleTaskCommitRepository(db);
 const taskAttachmentRepo = new DrizzleTaskAttachmentRepository(db);
 // Бинарные вложения живут вне каталога релиза и переиспользуются HTTP-роутами и Telegram.
@@ -756,6 +922,9 @@ const checkBudget = new CheckBudget({ getUserUsage });
 const automationRepo = new DrizzleAutomationRepository(db);
 const taskSearchRepo = new DrizzleTaskSearchRepository(db, projectMemberRepo);
 const adminRepo = new DrizzleAdminRepository(db);
+const adminAuditLog = new DrizzleAdminAuditLog(db, idGenerator);
+const userActivityRepo = new DrizzleUserActivityRepository(db);
+const platformStatsRepo = new DrizzlePlatformStatsRepository(db);
 const employeeRepo = new DrizzleEmployeeRepository(db);
 const projectFinanceRepo = new DrizzleProjectFinanceRepository(db);
 
@@ -1049,6 +1218,38 @@ setInterval(() => {
 }, 6 * 3600 * 1000).unref();
 // Привязка групповых чатов к владельцу (db/099) — для гибрид-маршрутизации задач из групп.
 const telegramGroupOwnerRepo = new DrizzleTelegramGroupOwnerRepository(db);
+// Рабочие Telegram-группы пространства (db/181): подключение по deep link, ручное добавление,
+// «чья это группа» для бота.
+const telegramWorkGroupRepo = new DrizzleTelegramWorkGroupRepository(db);
+// Участники рабочих групп (db/191): снимок админов, chat_member, авторы сообщений; связанные с
+// PF молча добавляются в пространство редактором.
+const telegramGroupMembers = new SyncTelegramGroupMembers({
+  repo: new DrizzleTelegramGroupMemberRepository(db),
+  groups: telegramWorkGroupRepo,
+  workspaces: workspaceRepo,
+  users: userRepo,
+  notifications: notificationRepo,
+  telegram: telegramClient,
+  botUsername: telegramBotUsername,
+  idGen: idGenerator,
+  now,
+});
+const telegramWorkGroups: ManageTelegramWorkGroups = new ManageTelegramWorkGroups({
+  repo: telegramWorkGroupRepo,
+  workspaces: workspaceRepo,
+  users: userRepo,
+  projects: projectRepo,
+  telegram: telegramClient,
+  botUsername: telegramBotUsername,
+  randomToken: () => randomBytes(32).toString('base64url'),
+  now,
+  // Группу отключили — закрыть ждущие подключения людей и отозвать их приглашения.
+  onRemoved: (workspaceId: string, chatId: number): Promise<void> =>
+    telegramGroupOnboarding.cancelForGroup(workspaceId, chatId),
+  onActivated: async (chatId: number): Promise<void> => {
+    await telegramGroupMembers.snapshotAdmins(chatId);
+  },
+});
 const sendAgentTelegramNotification = new SendAgentTelegramNotification({
   users: userRepo,
   client: telegramClient,
@@ -1064,6 +1265,21 @@ taskChangeNotifications = new DispatchTaskChangeNotifications({
   notifications: notificationRepo, email: emailSender, telegram: sendAgentTelegramNotification,
   appUrl: appBaseUrl, idGen: idGenerator,
 });
+recurringTasks = new SpawnNextRecurringTask({
+  ledger: taskRepo,
+  createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
+    approval: taskApprovalService,
+    workerPolicy,
+    projects: projectRepo,
+    members: projectMemberRepo,
+    tasks: taskRepo,
+    idGen: idGenerator,
+    activityRecorder,
+  }),
+  idGen: idGenerator,
+  onCreated: (task) => notifyTaskChanged(task.projectId, [task.assignee.userId]),
+});
 
 
 const deliverWorkspaceInvites = new DeliverWorkspaceInvites({
@@ -1072,6 +1288,30 @@ const deliverWorkspaceInvites = new DeliverWorkspaceInvites({
   telegram: sendAgentTelegramNotification, appUrl: appBaseUrl, now,
 });
 setInterval(deliverWorkspaceInvites.wake, 15_000).unref();
+// Приглашение в пространство: по почте и пакетом «из соседних» — один и тот же use-case.
+const createWorkspaceInvite = new CreateWorkspaceInvite({
+  workspaces: workspaceRepo, projectAccess: workspaceProjectAccessRepo,
+  invites: workspaceInviteRepo, users: userRepo, onQueued: deliverWorkspaceInvites.wake,
+  idGen: idGenerator, randomToken: () => randomBytes(32).toString('hex'), now,
+  ttlMs: 7 * 24 * 60 * 60 * 1000,
+});
+const workspaceNeighborsRepo = new DrizzleWorkspaceNeighborsRepository(db);
+
+// --- Рассылки админки (db/176) ---
+// mailing_recipients — durable-очередь: воркер тикает каждые 5 с и шлёт не больше
+// MAILING_PER_MINUTE писем в скользящую минуту (лимит SMTP-провайдера). Запуск будит очередь сразу.
+const mailingRepo = new MysqlMailingRepository(pool);
+const mailingTokenSecret = process.env['MAILING_TOKEN_SECRET'] || envRepoAccessSecret || 'dev-mailing-secret';
+let mailingQueue: RunMailingQueue | null = null;
+const mailingService = new MailingService({
+  repo: mailingRepo, email: emailSender, appUrl: appBaseUrl, tokenSecret: mailingTokenSecret,
+  idGen: idGenerator, now, wakeQueue: () => mailingQueue?.wake(),
+});
+mailingQueue = new RunMailingQueue({
+  repo: mailingRepo, email: emailSender, perMinute: parsePerMinute(process.env['MAILING_PER_MINUTE']),
+  unsubscribeUrl: (userId) => mailingService.unsubscribeUrl(userId), assetBaseUrl: appBaseUrl, now,
+});
+setInterval(mailingQueue.wake, 5_000).unref();
 
 // --- Чат-виджет: поддержка ---
 // Обращения сохраняются в support_tickets и доставляются админам/руту in-app уведомлением
@@ -1171,11 +1411,29 @@ const reportTelegramWorkerResult = new ReportTelegramWorkerResult({
   members: projectMemberRepo,
   client: telegramClient,
   users: userRepo,
+  incidentChats: {
+    isIncident: async (chatId) => (await telegramWorkGroups.resolveChat(chatId))?.mode === 'incident',
+    isMixed: async (chatId) => (await telegramWorkGroups.resolveChat(chatId))?.mode === 'mixed',
+  },
   now,
   idGen: idGenerator,
 });
 // Durable retries and reconciliation also recover completions missed during a deploy.
 reportTelegramWorkerResult.wake();
+const notifyIncidentGroup = new NotifyIncidentGroup({
+  tasks: taskRepo,
+  projects: projectRepo,
+  members: projectMemberRepo,
+  client: telegramClient,
+  // Смешанная группа (db/193) — тоже: в группу пишем только по подписанному источнику задачи воркеру.
+  incidentChats: {
+    isIncident: async (chatId) => {
+      const mode = (await telegramWorkGroups.resolveChat(chatId))?.mode;
+      return mode === 'incident' || mode === 'mixed';
+    },
+  },
+  ralphQuestionMessages: telegramRalphQuestionRepo,
+});
 setInterval(reportTelegramWorkerResult.wake, 15_000).unref();
 // Пространства пользователя для выбора, куда бот кладёт задачи без проекта (db/164).
 const listWorkspaceOptionsForUser = async (userId: string) =>
@@ -1239,6 +1497,8 @@ const waitForAiPromptJob = new WaitForAiPromptJob({
 });
 const telegramComposer = new TelegramComposerService({
   workerPolicy,
+  groupProjects: telegramWorkGroups,
+  groupOrigins: taskRepo,
   taskOrigins: telegramTaskOriginRepo,
   drafts: telegramTaskDraftRepo,
   taskMessages: telegramTaskMessageRepo,
@@ -1248,6 +1508,7 @@ const telegramComposer = new TelegramComposerService({
   createTaskComment: createTaskCommentUseCase,
   tasks: taskRepo,
   createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
     approval: taskApprovalService,
     workerPolicy,
     projects: projectRepo,
@@ -1281,6 +1542,7 @@ const telegramComposer = new TelegramComposerService({
   idGen: idGenerator,
   shortIdGen: shortIdGenerator,
   appUrl: appBaseUrl,
+  llm: aiPromptLlm,
   enqueueAiPromptJob,
   waitForAiPromptJob,
   uploadAttachment: new UploadTaskAttachment({
@@ -1300,6 +1562,10 @@ const telegramComposer = new TelegramComposerService({
     members: projectMemberRepo,
     tasks: taskRepo,
     activity: activityRecorder,
+  }),
+  moveTask: new MoveTask({
+    projects: projectRepo, members: projectMemberRepo, tasks: taskRepo,
+    approval: taskApprovalService, workerPolicy, activityRecorder,
   }),
 });
 let telegramDraftAutoCreateRunning = false;
@@ -1346,6 +1612,7 @@ workflowEffects.triggerWebhook = async (projectId, event) => {
 // --- Предложения закрыть задачу (db/101, EOD Фаза 1) ---
 const closeProposalRepo = new DrizzleCloseProposalRepository(db);
 const createCloseProposals = new CreateCloseProposals({
+  visibility: taskVisibility,
   closeProposals: closeProposalRepo,
   createComment: createTaskCommentUseCase,
   notifications: notificationRepo,
@@ -1379,6 +1646,44 @@ const confirmCloseProposal = new ConfirmCloseProposal({
 const dismissCloseProposal = new DismissCloseProposal({
   closeProposals: closeProposalRepo,
   members: projectMemberRepo,
+  tasks: taskRepo,
+});
+
+// Подключение людей из рабочих Telegram-групп (db/181): инструкция в группе, персональное
+// приглашение в личке бота, после вступления — задача из запомненного текста.
+const telegramGroupOnboarding: TelegramGroupOnboarding = new TelegramGroupOnboarding({
+  repo: new DrizzleTelegramGroupOnboardingRepository(db),
+  users: userRepo,
+  workspaces: workspaceRepo,
+  invites: workspaceInviteRepo,
+  workGroups: telegramWorkGroups,
+  // Telegram привязывает сам владелец аккаунта обычной ссылкой подключения — не при
+  // принятии приглашения (ссылку-приглашение мог открыть кто угодно).
+  pairing: pairTelegramAccount,
+  client: telegramClient,
+  appUrl: appBaseUrl,
+  botUsername: telegramBotUsername,
+  shortIdGen: shortIdGenerator,
+  idGen: idGenerator,
+  randomToken: () => randomBytes(32).toString('hex'),
+  now,
+  // Не ждём перефраз: принятие приглашения (HTTP) и кнопки бота отвечают сразу.
+  startTask: async (input) => {
+    void telegramComposer
+      .startFromMessage(
+        input.tgUserId,
+        input.chatId,
+        input.text,
+        {
+          ownerUserId: await telegramGroupOwnerRepo.getOwnerUserId(input.chatId).catch(() => null),
+          senderName: input.senderName,
+          groupTitle: input.groupTitle,
+        },
+        [],
+        { sourceKey: input.sourceKey, background: true },
+      )
+      .catch((err) => console.warn('[tg-onboarding] pending task failed:', err));
+  },
 });
 
 const handleTelegramWebhook = new HandleTelegramWebhook({
@@ -1397,6 +1702,10 @@ const handleTelegramWebhook = new HandleTelegramWebhook({
   taskMessages: telegramTaskMessageRepo,
   messageTasks: telegramMessageTaskRepo,
   groupOwners: telegramGroupOwnerRepo,
+  workGroups: telegramWorkGroups,
+  groupMembers: telegramGroupMembers,
+  onboarding: telegramGroupOnboarding,
+  isWorkspaceMember: (workspaceId, userId) => isWorkspaceMember(userId, workspaceId),
   createComment: createTaskCommentUseCase,
   deleteTask: new DeleteTask({
     projects: projectRepo, members: projectMemberRepo, tasks: taskRepo,
@@ -1553,6 +1862,7 @@ const SYNC_IGNORE_SET = [
 const fileSyncService = new FileSyncService({
   projects: projectRepo,
   members: projectMemberRepo,
+  tasks: taskRepo,
   repo: new DrizzleFileSyncRepository(db),
   storage: blobStorage,
   idGen: idGenerator,
@@ -2046,7 +2356,17 @@ const authDeps = {
   sessionTtlMs: sessionTtlMs(),
   now,
   createDefaultWorkspace,
+  activity: userActivityRepo,
 };
+const requestPasswordReset = new RequestPasswordReset({
+  users: userRepo,
+  tokens: passwordResetTokenRepo,
+  email: emailSender,
+  idGen: idGenerator,
+  now,
+  ttlMs: 60 * 60 * 1000, // 1 час
+  appUrl: appBaseUrl,
+});
 
 // Ежедневная сводка (db/064): один общий SendDailyDigest для планировщика и кнопки
 // «Отправить сейчас». Полностью серверная рассылка (почта / личный TG / группа / in-app).
@@ -2073,6 +2393,7 @@ const telegramDigestActionService = new TelegramDigestActionService({
 });
 
 const sendDailyDigest = new SendDailyDigest({
+  visibility: taskVisibility,
   tasks: taskRepo,
   comments: taskCommentRepo,
   projects: projectRepo,
@@ -2101,6 +2422,7 @@ const sendWorkspaceAssigneeDigest = new SendWorkspaceAssigneeDigest({
   createEmailActionToken,
   telegramDigestActions: telegramDigestActionDeliveryRepo,
   messageTasks: telegramMessageTaskRepo,
+  visibility: taskVisibility,
 });
 // Личная сводка в бота (db/161): каждому участнику его задачи карточками с кнопками.
 const sendWorkspacePersonalDigest = new SendWorkspacePersonalDigest({
@@ -2112,6 +2434,7 @@ const sendWorkspacePersonalDigest = new SendWorkspacePersonalDigest({
   telegram: sendAgentTelegramNotification,
   messageTasks: telegramMessageTaskRepo,
   appUrl: appBaseUrl,
+  visibility: taskVisibility,
 });
 const manageWorkspaceAssigneeDigest = new ManageWorkspaceAssigneeDigest({
   repo: workspaceAssigneeDigestRepo,
@@ -2224,21 +2547,15 @@ const { app, devProxyUpgrade } = createApp({
   voiceTranscriber: groqVoiceTranscriber,
   workspaceScope: workspaceScope({ workspaces: workspaceRepo, run: (userId, workspace, next) => requestWorkspaceContext.run(userId, workspace, next) }),
   emailActions: { service: emailActionService, appUrl: appBaseUrl },
+  mailing: { service: mailingService },
   telegramDigestActions: { service: telegramDigestActionService },
   auth: {
     register: new Register(authDeps),
     login: new Login(authDeps),
     logout: new Logout(sessionRepo),
-    getCurrentUser: new GetCurrentUser({ users: userRepo, sessions: sessionRepo, now }),
-    requestPasswordReset: new RequestPasswordReset({
-      users: userRepo,
-      tokens: passwordResetTokenRepo,
-      email: emailSender,
-      idGen: idGenerator,
-      now,
-      ttlMs: 60 * 60 * 1000, // 1 час
-      appUrl: appBaseUrl,
-    }),
+    impersonation: new Impersonation({ users: userRepo, sessions: sessionRepo, idGen: idGenerator, now, audit: adminAuditLog }),
+    getCurrentUser: new GetCurrentUser({ users: userRepo, sessions: sessionRepo, now, lastSeen: new LastSeenTracker(userActivityRepo) }),
+    requestPasswordReset,
     resetPassword: new ResetPassword({
       users: userRepo,
       tokens: passwordResetTokenRepo,
@@ -2258,7 +2575,12 @@ const { app, devProxyUpgrade } = createApp({
     maxBlobBytes: SYNC_MAX_BLOB_BYTES,
   },
   live: {
-    activity: new GetProjectWorkerActivity({ projects: projectRepo, members: projectMemberRepo, activity: new MysqlTaskWorkerActivityRepository(pool) }),
+    activity: new GetProjectWorkerActivity({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      activity: new MysqlTaskWorkerActivityRepository(pool),
+      visibleTaskIds,
+    }),
     service: liveService,
     liveEventHub,
   },
@@ -2332,6 +2654,7 @@ const { app, devProxyUpgrade } = createApp({
       sites: siteArtifactRepo,
       tasks: taskRepo,
       createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
         approval: taskApprovalService,
         workerPolicy,
         projects: projectRepo,
@@ -2348,6 +2671,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       tasks: taskRepo,
       createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
         approval: taskApprovalService,
         workerPolicy,
         projects: projectRepo,
@@ -2376,6 +2700,7 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       members: projectMemberRepo,
     }),
+    setGroupHints: new SetProjectGroupHints({ projects: projectRepo, members: projectMemberRepo }),
     listDispatcherCandidates: new ListDispatcherCandidates({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -2387,6 +2712,7 @@ const { app, devProxyUpgrade } = createApp({
       members: projectMemberRepo,
       agentTokens: agentTokenRepo,
       live: liveRepo,
+      hiddenTaskIds,
     }),
     setGitTokenDelegation: new SetGitTokenDelegation({
       projects: projectRepo,
@@ -2459,7 +2785,82 @@ const { app, devProxyUpgrade } = createApp({
     members: projectMemberRepo,
     coverStorage: attachmentStorage,
     maxCoverBytes: MAX_COVER_BYTES,
+    hiddenTaskIds,
   },
+  approvalSummary: {
+    get: new GetApprovalSummary({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      live: liveRepo,
+      taskCommits: taskCommitRepo,
+      comments: taskCommentRepo,
+      summaries: new DrizzleApprovalSummaryRepository(db),
+      // Только подписка платформы, без запасной модели: недоступна — карточка без сводки.
+      llm: llmTextGenerator,
+      log: (message) => console.warn(message),
+    }),
+  },
+  workspaceTaskTemplates: {
+    manage: new ManageWorkspaceTaskTemplates({
+      templates: new DrizzleWorkspaceTaskTemplateRepository(db),
+      workspaces: workspaceRepo,
+      idGen: idGenerator,
+    }),
+  },
+  push: {
+    manage: new ManagePushSubscriptions({ repo: pushSubscriptionRepo, vapid: vapidKeys }),
+    tester: pushNotificationDispatcher,
+  },
+  desktopNotes: new DesktopNotesService({
+    repo: new DrizzleDesktopNoteRepository(db),
+    tasks: taskRepo,
+    getTask: new GetTask({ projects: projectRepo, members: projectMemberRepo, tasks: taskRepo }),
+    projects: projectRepo,
+    moveTask: new MoveTask({
+      projects: projectRepo,
+      approval: taskApprovalService,
+      workerPolicy,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      activityRecorder,
+    }),
+    workerPolicy,
+    notify: { taskChanged: notifyTaskChanged, statusChanged: notifyStatusChanged },
+    listComments: new ListTaskComments({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      comments: taskCommentRepo,
+      attachments: taskAttachmentRepo,
+      acknowledgements: commentAcknowledgementRepo,
+    }),
+    listAttachments: new ListTaskAttachments({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      attachments: taskAttachmentRepo,
+    }),
+    users: userRepo,
+  }),
+  projectSharing: new ManageProjectSharing({
+    projects: projectRepo,
+    sharing: projectSharingRepo,
+    workspaces: workspaceRepo,
+    members: projectMemberRepo,
+    // Проект появился/исчез в пространствах — сайдбары их участников перечитывают проекты.
+    onChanged: (projectId, workspaceIds) => {
+      void (async () => {
+        // Событие с пространством: поток каждого пространства пропускает своё, даже если
+        // проект от него только что отключили (сайдбар должен убрать проект).
+        for (const workspaceId of workspaceIds) {
+          for (const member of await workspaceRepo.listMembers(workspaceId)) {
+            realtimeHub.publish(member.userId, { kind: 'project_changed', projectId, workspaceId });
+          }
+        }
+      })().catch((err) => console.warn('[project-sharing] notify failed:', err));
+    },
+  }),
   workspaces: {
     service: workspaceService,
     projectAccess: new ManageWorkspaceProjectAccess({
@@ -2480,13 +2881,19 @@ const { app, devProxyUpgrade } = createApp({
       projects: projectRepo,
       tasks: taskRepo,
     }),
-    invites: {
-      create: new CreateWorkspaceInvite({
-        workspaces: workspaceRepo, projectAccess: workspaceProjectAccessRepo,
-        invites: workspaceInviteRepo, users: userRepo, onQueued: deliverWorkspaceInvites.wake,
-        idGen: idGenerator, randomToken: () => randomBytes(32).toString('hex'), now,
-        ttlMs: 7 * 24 * 60 * 60 * 1000,
+    telegramGroups: telegramWorkGroups,
+    telegramGroupMembers,
+    neighborInvites: {
+      list: new ListWorkspaceInviteCandidates({ neighbors: workspaceNeighborsRepo, workspaces: workspaceRepo, now }),
+      invite: new InviteNeighbors({
+        neighbors: workspaceNeighborsRepo,
+        workspaces: workspaceRepo,
+        createInvite: createWorkspaceInvite,
+        now,
       }),
+    },
+    invites: {
+      create: createWorkspaceInvite,
       manage: new ManageWorkspaceInvite({
         workspaces: workspaceRepo, invites: workspaceInviteRepo, now,
         ttlMs: 7 * 24 * 60 * 60 * 1000, appUrl: appBaseUrl, onQueued: deliverWorkspaceInvites.wake,
@@ -2512,10 +2919,10 @@ const { app, devProxyUpgrade } = createApp({
   },
   notifications: {
     resolveActiveWorkspace,
-    getProjectWorkspaceId: (projectId) => projectRepo.getWorkspaceId(projectId),
+    getProjectWorkspaceIds: (projectId) => projectSharingRepo.workspaceIdsOf(projectId),
     tasks: taskRepo,
     list: new ListNotifications({ repo: notificationRepo, resolveActiveWorkspace, actionStates: notificationActionStates }),
-    alerts: new NotificationAlerts({ repo: notificationRepo, workspaces: workspaceRepo }),
+    alerts: notificationAlerts,
     countUnread: new CountUnreadNotifications({
       repo: notificationRepo,
       resolveActiveWorkspace,
@@ -2528,7 +2935,7 @@ const { app, devProxyUpgrade } = createApp({
     projectNotifier,
   },
   recentTaskViews: {
-    list: new ListRecentTaskViews({ repo: recentTaskViewRepo, resolveActiveWorkspace }),
+    list: new ListRecentTaskViews({ repo: recentTaskViewRepo, resolveActiveWorkspace, hiddenTaskIds }),
     record: new RecordTaskView({ repo: recentTaskViewRepo }),
   },
   projectAnalytics: {
@@ -2549,6 +2956,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       taskVersions: taskVersionRepo,
       tasks: taskRepo,
+      hiddenTaskIds,
     }),
   },
   help: {
@@ -2569,6 +2977,10 @@ const { app, devProxyUpgrade } = createApp({
       invites: workspaceInviteRepo,
       workspaces: workspaceRepo,
       now,
+      // Приглашение бота из рабочей Telegram-группы: до вступления — группа ещё рабочая и
+      // человека не удаляли; после — подсказать подключение Telegram (задача создастся после него).
+      beforeAccept: ({ inviteId, userId }) => telegramGroupOnboarding.guardInviteAcceptance({ inviteId, userId }),
+      onAccepted: ({ inviteId, userId }) => telegramGroupOnboarding.completeFromInvite({ inviteId, userId }),
     }),
     acceptProject: new AcceptProjectInvite({
       users: userRepo,
@@ -2612,6 +3024,7 @@ const { app, devProxyUpgrade } = createApp({
         ensureAutomationRow: (id) => automationRepo.ensureDefaultRow(id),
       }),
       createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
         approval: taskApprovalService,
         workerPolicy,
         projects: projectRepo,
@@ -2669,7 +3082,7 @@ const { app, devProxyUpgrade } = createApp({
   search: {
     // UI-поиск изолирован по активному пространству (agent-инстанс ниже — без резолвера,
     // глобален by-design).
-    searchTasks: new SearchTasks({ search: taskSearchRepo, resolveActiveWorkspace }),
+    searchTasks: new SearchTasks({ search: taskSearchRepo, resolveActiveWorkspace, visibleTaskIds }),
   },
   telegram: {
     pairing: pairTelegramAccount,
@@ -2686,10 +3099,16 @@ const { app, devProxyUpgrade } = createApp({
     text: llmTextGenerator,
   },
   admin: {
+    getPlatformStats: new GetPlatformStats({ repo: platformStatsRepo, now }),
     listAllProjects: new ListAllProjects(adminRepo),
-    listAllUsers: new ListAllUsers(adminRepo),
-    updateUser: new UpdateUserAsAdmin(adminRepo),
-    deleteUser: new DeleteUserAsAdmin(adminRepo),
+    listAllUsers: new ListAllUsers(adminRepo, now),
+    updateUser: new UpdateUserAsAdmin(adminRepo, adminAuditLog),
+    deleteUser: new DeleteUserAsAdmin({ repo: adminRepo, storage: attachmentStorage, audit: adminAuditLog }),
+    bulkSetPlan: new BulkSetPlanAsAdmin({ users: userRepo, audit: adminAuditLog, idGen: idGenerator, now }),
+    signOutEverywhere: new SignOutUserEverywhere({ repo: adminRepo, sessions: sessionRepo, audit: adminAuditLog }),
+    sendPasswordReset: new SendPasswordResetAsAdmin({ repo: adminRepo, requestPasswordReset, audit: adminAuditLog }),
+    getUserOverview: new GetAdminUserOverview({ repo: adminRepo, audit: adminAuditLog, now }),
+    getUserDeletionPreview: new GetUserDeletionPreview(adminRepo),
     listUserProjectsWithDispatcher: new ListUserProjectsWithDispatcher({
       members: projectMemberRepo,
       delegations: gitTokenDelegationRepo,
@@ -2704,7 +3123,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     listAllSupportTickets: new ListAllSupportTickets(supportTicketRepo),
     setSupportTicketStatus: new SetSupportTicketStatus(supportTicketRepo),
-    setUserPlanAsAdmin: new SetUserPlanAsAdmin({ users: userRepo, now }),
+    setUserPlanAsAdmin: new SetUserPlanAsAdmin({ users: userRepo, audit: adminAuditLog, now }),
     emailSender,
   },
   finance: {
@@ -2800,6 +3219,7 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
     }),
     createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
       approval: taskApprovalService,
       workerPolicy,
       projects: projectRepo,
@@ -2861,6 +3281,7 @@ const { app, devProxyUpgrade } = createApp({
       versions: taskVersionRepo,
       users: userRepo,
       now: () => new Date(),
+      hiddenTaskIds,
     }),
     restoreTaskVersion: new RestoreTaskVersion({
       approval: taskApprovalService,
@@ -2991,6 +3412,12 @@ const { app, devProxyUpgrade } = createApp({
     maybeReopenForClarification,
     broadcastTelegram: broadcastTelegramByTask,
     dispatchCommentNotifications,
+    listCommentNotifyCandidates: new ListCommentNotifyCandidates({
+      projects: projectRepo,
+      members: projectMemberRepo,
+      tasks: taskRepo,
+      users: userRepo,
+    }),
     getCommentNotifications: new GetCommentNotifications({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -3090,6 +3517,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
     }),
     listApprovalQueue: new ListApprovalQueue({
+      approval: taskApprovalService,
       projects: projectRepo,
       members: projectMemberRepo,
       workspaces: workspaceRepo,
@@ -3114,6 +3542,7 @@ const { app, devProxyUpgrade } = createApp({
       tasks: taskRepo,
       projects: projectRepo,
       members: projectMemberRepo,
+      resolveOrigin: resolveTaskOrigin,
     }),
     changeAssignee: new ChangeTaskAssignee({
       approval: taskApprovalService,
@@ -3208,6 +3637,7 @@ const { app, devProxyUpgrade } = createApp({
       comments: taskCommentRepo,
     }),
     createTask: new CreateTask({
+    resolveOrigin: resolveTaskOrigin,
       approval: taskApprovalService,
       workerPolicy,
       projects: projectRepo,
@@ -3359,7 +3789,7 @@ const { app, devProxyUpgrade } = createApp({
       users: userRepo,
       versions: taskVersionRecorder,
     }),
-    searchTasks: new SearchTasks({ search: taskSearchRepo }),
+    searchTasks: new SearchTasks({ search: taskSearchRepo, visibleTaskIds }),
     getProject: new GetProject({ projects: projectRepo, members: projectMemberRepo }),
     listProjectMembers: new ListProjectMembers({ projects: projectRepo, members: projectMemberRepo }),
     getKbDocument: new GetKbDocument({ projects: projectRepo, members: projectMemberRepo, kb: kbStore }),
@@ -3451,6 +3881,7 @@ const { app, devProxyUpgrade } = createApp({
     dispatchCommentNotifications,
     sendTelegramNotification: sendAgentTelegramNotification,
     broadcastTelegramByTask,
+    notifyIncidentGroup,
     projects: projectRepo,
   },
   github: {
@@ -3504,6 +3935,21 @@ const workspaceAssigneeDigestScheduler = new WorkspaceAssigneeDigestScheduler({
   isPaused: scheduledBroadcastsPaused,
 });
 workspaceAssigneeDigestScheduler.start();
+
+// Срочные задачи (приоритет 1–2 или «срочно» в тексте): по будням в 8:00 и 16:00 МСК
+// исполнителю в личку бота и по задаче в рабочий чат пространства (db/179).
+const urgentTaskReminderScheduler = new UrgentTaskReminderScheduler({
+  send: new SendUrgentTaskReminders({
+    reminders: new DrizzleUrgentTaskReminderRepository(db),
+    settings: workspaceAssigneeDigestRepo,
+    users: userRepo,
+    telegram: telegramClient,
+    appUrl: appBaseUrl,
+    messageTasks: telegramMessageTaskRepo,
+  }),
+  isPaused: scheduledBroadcastsPaused,
+});
+urgentTaskReminderScheduler.start();
 
 // Ежедневная личная сводка руководителям (role='lead'): в личный чат бота и на почту.
 // Групповые чаты не задействованы — командная картина не должна утекать всей команде
@@ -3559,6 +4005,7 @@ const server = app.listen(config.port, () => {
         { command: 'pending', description: 'Задачи на уточнении' },
         { command: 'pause', description: 'Выключить уведомления' },
         { command: 'help', description: 'Что умеет бот' },
+        { command: 'id', description: 'ID этой группы для настроек пространства' },
         { command: 'start', description: 'Подключить бота' },
       ])
       .catch((err) => console.warn('[projectsflow] telegram setMyCommands failed:', err));

@@ -41,7 +41,7 @@ export class GetProjectSite {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, callerUserId: string): Promise<ProjectSiteInfo> {
-    const { project } = await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project');
+    const { project } = await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project_data');
     const artifact = await this.deps.sites.getByProject(projectId);
     const routes = artifact
       ? await this.deps.storage.listRoutes(artifact.slug).catch(() => ['/'])

@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import type { TaskComment } from '@/domain/task/TaskComment';
@@ -34,8 +35,8 @@ async function component(name: 'LiveTab' | 'WorkerActivityBadge' | 'AiPage' | 'A
         '@/infrastructure/di/container': 'export const useContainer=()=>globalThis.__workerChatTest.container;',
         '@/presentation/hooks/useCurrentUser': 'export const useCurrentUser=()=>({user:{id:"me",displayName:"benzin"}});',
         './useCurrentUser': 'export const useCurrentUser=()=>({user:{id:"me",displayName:"benzin"}});',
-        '@/components/ui/sonner': 'export const toast={error:()=>{},success:()=>{},info:()=>{}};',
-        './TaskDrawerComposer': `import React from 'react';export const TaskDrawerComposer=p=>React.createElement('button',{onClick:()=>{p.onCommentCreated(globalThis.__workerChatTest.nextComment);p.onWorkerQueued();}},'Отправить воркеру');`,
+        '@/components/ui/sonner': 'export const toast={error:(m)=>{(globalThis.__workerChatTest.toasts||=[]).push(m);},success:()=>{},info:()=>{}};',
+        './TaskDrawerComposer': `import React from 'react';export const TaskDrawerComposer=p=>React.createElement('button',{onClick:()=>{p.onCommentCreated(globalThis.__workerChatTest.nextComment);p.onWorkerQueued({...p.task,status:'todo'});}},'Отправить воркеру');`,
         './CancelWorkButton': `import React from 'react';export const CancelWorkButton=()=>React.createElement('button',null,'Отменить работу');`,
         '@/presentation/hooks/useWorkerEnabled': 'export const useWorkerEnabled=()=>true;',
         './CommentBody': `import React from 'react';export const CommentBody=({body})=>React.createElement('div',null,body);`,
@@ -244,12 +245,12 @@ test('drafts show an explicit worker handoff with or without past sessions and q
   const View = await component('LiveTab');
   for (const history of [false, true]) {
     const moves: unknown[] = [];
+    const props = { task: { id: 'task', projectId: 'project', status: 'backlog', canEdit: true } as Task, backlogTail: null, todoTail: null };
     state.container = {
       liveRepository: { async listSessions() { return history ? [run('past', 1, 'completed')] : []; }, async listEvents() { return [event(1, 'Предыдущий результат', 1)]; }, async listFileDiffs() { return []; }, async listRunningTaskIds() { return []; } },
-      taskRepository: { async listComments() { return []; }, async move(...args: unknown[]) { moves.push(args); } },
+      taskRepository: { async listComments() { return []; }, async move(...args: unknown[]) { moves.push(args); return { ...props.task, status: 'todo' }; }, async get() { return { ...props.task, status: 'todo' }; } },
       projectRepository: { async listMembers() { return []; } },
     };
-    const props = { task: { id: 'task', projectId: 'project', status: 'backlog', canEdit: true } as Task, backlogTail: null, todoTail: null };
     const view = await mount(View, props);
     try {
       const button = [...view.host.querySelectorAll('button')].find(b => b.textContent === 'Сделать с помощью воркера');
@@ -393,5 +394,426 @@ test('new chat offers photo generation and Enter creates only an image job, reta
     assert.deepEqual(state.navigation, { state: { imageMode: true } });
     state.params = { conversationId: 'new-photo' }; state.location = state.navigation;
     await view.render(); assert.match(view.host.textContent ?? '', /Режим фото/);
+  } finally { await view.close(); }
+});
+
+const liveContainer = (liveRepository: Partial<LiveRepository>) => ({
+  liveRepository: { async listFileDiffs() { return []; }, async listRunningTaskIds() { return []; }, ...liveRepository },
+  taskRepository: { async listComments() { return []; } }, projectRepository: { async listMembers() { return []; } },
+});
+const liveProps = (status: Task['status'] = 'in_progress') => ({ task: { id: 'task', projectId: 'project', status } as Task, backlogTail: null, todoTail: null });
+// The run timer: «(45 с)», «(13 мин 3 с)», «(1 ч 5 мин)».
+const SPINNER = /\((?:\d+ ч \d+ мин|(?:\d+ мин )?\d+ с)\)/;
+
+test('a finished run stays finished when a slower refresh still reports it running', async () => {
+  const View = await component('LiveTab');
+  const held: Array<(sessions: LiveSession[]) => void> = [];
+  let hold = false;
+  state.container = liveContainer({
+    async listSessions() { return hold ? new Promise<LiveSession[]>(resolve => { held.push(resolve); }) : [run('race', 1, 'running')]; },
+    async listEvents() { return [event(1, 'Работаю', 1)]; },
+  });
+  const view = await mount(View, liveProps());
+  try {
+    assert.match(view.host.textContent!, SPINNER);
+    const stream = Source.instances.at(-1)!;
+    const opened = Source.instances.length;
+    hold = true;
+    // A periodic/focus refresh is in flight and read the session before it ended.
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await act(async () => { stream.emit('live_end', { status: 'completed' }); });
+    assert.doesNotMatch(view.host.textContent!, SPINNER, 'live_end stops the spinner');
+    await act(async () => { held.shift()!([run('race', 1, 'running')]); });
+    assert.doesNotMatch(view.host.textContent!, SPINNER, 'a stale response must not resurrect the spinner');
+    assert.equal(Source.instances.length, opened, 'no stream is reopened for an ended run');
+    await act(async () => { held.shift()?.([{ ...run('race', 1, 'completed'), lastSeq: 1 }]); });
+    assert.doesNotMatch(view.host.textContent!, SPINNER);
+    assert.match(view.host.textContent!, /Воркер завершено|завершено/);
+  } finally { await view.close(); }
+});
+
+test('the run timer shows the real elapsed time from the first frame', async () => {
+  const View = await component('LiveTab');
+  const startedAt = new Date(Date.now() - 300_000);
+  state.container = liveContainer({
+    async listSessions() { return [{ ...run('long', 1, 'running'), startedAt }]; },
+    async listEvents() { return [event(1, 'Работаю', 1)]; },
+  });
+  const view = await mount(View, liveProps());
+  try {
+    assert.doesNotMatch(view.host.textContent!, /\(0 с\)/);
+    assert.match(view.host.textContent!, /\(5 мин [0-2] с\)/);
+    // Russian neutral words, not English jokes.
+    assert.match(view.host.querySelector('[data-pf-live-spinner]')!.textContent!, /^.(Работаю|Думаю|Разбираюсь)…/);
+  } finally { await view.close(); }
+});
+
+test('reading history keeps the rendered window while new actions stream in', async () => {
+  const View = await component('LiveTab');
+  const many = Array.from({ length: 305 }, (_, index) => ({ ...event(index + 1, `строка ${index + 1}`, 1) }));
+  state.container = liveContainer({ async listSessions() { return [{ ...run('long-feed', 1, 'running'), lastSeq: 305 }]; }, async listEvents() { return many; } });
+  const view = await mount(View, liveProps());
+  try {
+    const feed = view.host.querySelector<HTMLElement>('[data-pf-worker-chat]')!;
+    Object.defineProperties(feed, { clientHeight: { value: 300 }, scrollHeight: { get: () => 20_000 } });
+    const earlier = () => [...view.host.querySelectorAll('button')].find(button => button.textContent?.startsWith('Показать ранее'))?.textContent;
+    assert.equal(earlier(), 'Показать ранее (6)');
+    assert.match(view.host.textContent!, /строка 6(?!\d)/);
+    await act(async () => { feed.scrollTop = 4_000; feed.dispatchEvent(new Event('scroll')); });
+    await act(async () => { Source.instances.at(-1)!.emit('live', { ...event(306, 'строка 306', 2), createdAt: at(2).toISOString() }); });
+    assert.match(view.host.textContent!, /строка 306/);
+    assert.match(view.host.textContent!, /строка 6(?!\d)/, 'the oldest rendered row stays while the reader is above the tail');
+    assert.equal(earlier(), 'Показать ранее (6)');
+    await act(async () => { view.host.querySelector<HTMLButtonElement>('[aria-label="К последнему сообщению"]')!.click(); });
+    assert.equal(earlier(), 'Показать ранее (7)', 'following the tail again restores the DOM cap');
+  } finally { await view.close(); }
+});
+
+test('the first load shows one loader, not one per data source', async () => {
+  const View = await component('LiveTab');
+  state.container = {
+    ...liveContainer({ async listSessions() { return new Promise<LiveSession[]>(() => {}); } }),
+    taskRepository: { async listComments() { return new Promise<TaskComment[]>(() => {}); } },
+  };
+  const view = await mount(View, liveProps('pending_approval'));
+  try {
+    assert.equal(view.host.textContent!.match(/Загрузка/g)?.length, 1);
+  } finally { await view.close(); }
+});
+
+// The §6 pipeline contract, shared with the smoke fixtures.
+const orchestratorRun = JSON.parse(readFileSync(fileURLToPath(new URL('../../../../../e2e/smoke/live-orchestrator-run.json', import.meta.url)), 'utf8')) as {
+  agentName: string; events: Array<{ at: number; kind: string; text?: string; payload?: unknown }>;
+};
+const pipelineEvents = (extra: LiveEvent[] = []): LiveEvent[] => [...orchestratorRun.events.map((item, index) => ({
+  seq: index + 1, kind: item.kind, text: item.text ?? null, payload: item.payload ?? null, createdAt: new Date(at(1).getTime() + item.at * 1000),
+})), ...extra];
+
+test('a pipeline run shows the stepper, role turns, folded executor tools, checks, verdicts and handoffs', async () => {
+  const View = await component('LiveTab');
+  const extra: LiveEvent[] = [
+    { seq: 900, kind: 'telemetry', text: null, payload: { actor: 'planner' }, createdAt: at(40) },
+    { seq: 901, kind: 'assistant_text', text: 'Неизвестная роль пишет', payload: { actor: 'planner' }, createdAt: at(40) },
+    { seq: 902, kind: 'review_verdict', text: null, payload: { actor: 'reviewer', approved: 'да' }, createdAt: at(40) },
+  ];
+  state.container = liveContainer({
+    async listSessions() { return [{ ...run('pipeline', 1, 'running'), agentName: orchestratorRun.agentName, lastSeq: 902 }]; },
+    async listEvents() { return pipelineEvents(extra); },
+  });
+  const view = await mount(View, liveProps());
+  try {
+    const text = () => view.host.textContent ?? '';
+    const stepper = view.host.querySelector('[data-pf-pipeline-stepper]')!;
+    assert.ok(stepper, 'stepper above the feed');
+    assert.deepEqual([...stepper.querySelectorAll('[data-stage]')].map(step => `${step.getAttribute('data-stage')}:${step.getAttribute('data-state')}`),
+      ['prepare:passed', 'execute:passed', 'checks:passed', 'review:passed', 'publish:passed', 'deliver:passed', 'health:active']);
+    assert.match(stepper.textContent!, /Проверка версии · идёт/);
+    assert.match(stepper.textContent!, /раунд 4/);
+    assert.match(stepper.textContent!, /усиленный исполнитель/);
+
+    const headers = [...view.host.querySelectorAll('[data-live-role-header]')].map(header => header.textContent);
+    for (const label of ['Оркестратор', 'Исполнительраунд 1', 'Ревьюерраунд 2', 'Исполнитель · усиленныйраунд 4']) assert.ok(headers.includes(label), `${label} in ${headers.join(' | ')}`);
+
+    // Executor text is visible at once, its tool noise is folded per round.
+    assert.match(text(), /Разбираюсь, почему скидка/);
+    assert.doesNotMatch(text(), /ApplyPromoCode\|DeliveryPrice/);
+    const journals = [...view.host.querySelectorAll<HTMLElement>('[data-live-journal]')];
+    assert.deepEqual(journals.map(journal => journal.querySelector('button')!.textContent!.replace(/журнал$/, '')), [
+      'Раунд 1 · правки: 2 файла, команд: 2',
+      'Раунд 2 · правки: 1 файл, команд: 1',
+      'Раунд 3 · правки: 2 файла, команд: 11 ошибка',
+      'Раунд 4 · правки: 3 файла, команд: 1',
+    ]);
+    await act(async () => { journals[0].querySelector('button')!.click(); });
+    assert.match(journals[0].textContent!, /ApplyPromoCode\|DeliveryPrice/);
+    assert.match(journals[0].textContent!, /var baseAmount = cart\.Total - cart\.DeliveryPrice;/);
+
+    // Checks: compact rows, the output tail by click.
+    const failed = view.host.querySelector<HTMLElement>('[data-live-check="tests"][data-live-check-passed="false"]')!;
+    assert.match(failed.textContent!, /tests.*код 1.*23 с/);
+    assert.doesNotMatch(failed.textContent!, /PromoCode_IgnoresDeliveryPrice/);
+    await act(async () => { failed.querySelector('button')!.click(); });
+    assert.match(failed.textContent!, /\$ dotnet test tests\/Shop\.Tests\/Shop\.Tests\.csproj/);
+    assert.match(failed.textContent!, /PromoCode_IgnoresDeliveryPrice/);
+    assert.match(view.host.querySelector('[data-live-check="deploy"]')!.textContent!, /deployпройденодоставка1 мин 3 с/);
+
+    // Reviewer verdict cards.
+    const verdicts = [...view.host.querySelectorAll('[data-live-verdict]')];
+    assert.deepEqual(verdicts.map(card => card.getAttribute('data-live-verdict')), ['changes', 'changes', 'approved']);
+    assert.match(verdicts[0].textContent!, /Нужны правки2 замечания/);
+    assert.match(verdicts[0].textContent!, /важноеsrc\/Shop\.Web\/Features\/Checkout\/CheckoutService\.cs:87/);
+    assert.match(verdicts[0].textContent!, /мелочь/);
+    assert.match(verdicts[1].textContent!, /блокерsrc\/Shop\.Web\/Features\/Cart\/Pricing\/PricingService\.cs:52/);
+    assert.match(verdicts[2].textContent!, /Одобрено.*Замечаний нет/);
+
+    // Handoffs are thin dividers.
+    const handoffs = [...view.host.querySelectorAll('[data-live-handoff]')].map(divider => divider.getAttribute('aria-label'));
+    assert.deepEqual(handoffs, ['Замечания переданы исполнителю · раунд 2', 'Замечания переданы исполнителю · раунд 3', 'Эскалация: усиленный исполнитель · раунд 4']);
+
+    // Unknown kinds/actors and malformed payloads do not break the feed.
+    assert.match(text(), /Неизвестная роль пишет/);
+    assert.match(text(), SPINNER);
+
+    // One line per stage entry: a start and its result share it, only the current one spins.
+    const stageLines = [...view.host.querySelectorAll('[data-live-stage]')];
+    const publish = stageLines.filter(line => line.getAttribute('data-live-stage') === 'publish');
+    assert.equal(publish.length, 1);
+    assert.equal(publish[0].getAttribute('data-live-stage-status'), 'passed');
+    assert.match(publish[0].textContent!, /^Публикация — Коммит 3c9e1d2/);
+    assert.deepEqual(stageLines.filter(line => line.getAttribute('data-live-stage-status') === 'started').map(line => line.textContent),
+      ['Жду, пока сайт отдаст новую версию…: идёт']);
+    assert.equal(view.host.querySelectorAll('[data-live-stage-live]').length, 1);
+    // The spinner names the current stage of the stepper; the run caption is short.
+    assert.match(view.host.querySelector('[data-pf-live-spinner]')!.textContent!, /Проверка версии…/);
+    assert.match(view.host.querySelector('[data-worker-run]')!.textContent!, /· Конвейер · попытка 1 · идёт · Обычное изменение$/);
+  } finally { await view.close(); }
+});
+
+test('old ralph-worker sessions keep the plain feed even when events carry role fields', async () => {
+  const View = await component('LiveTab');
+  state.container = liveContainer({
+    async listSessions() { return [run('legacy', 1, 'completed')]; },
+    async listEvents() { return [
+      { seq: 1, kind: 'assistant_text', text: 'Старый воркер', payload: { actor: 'reviewer', round: 2 }, createdAt: at(1) },
+      { seq: 2, kind: 'bash', text: null, payload: { command: 'npm test', actor: 'executor', round: 1 }, createdAt: at(1) },
+      { seq: 3, kind: 'stage', text: null, payload: { stage: 'checks', status: 'started' }, createdAt: at(1) },
+    ]; },
+  });
+  const view = await mount(View, liveProps('pending_approval'));
+  try {
+    assert.match(view.host.textContent!, /Старый воркер/);
+    assert.match(view.host.querySelector('[data-worker-run]')!.textContent!, /· Воркер завершено · Обычное изменение$/);
+    assert.match(view.host.textContent!, /терминал\$ npm test/);
+    assert.equal(view.host.querySelector('[data-pf-pipeline-stepper], [data-live-role-header], [data-live-journal]'), null);
+  } finally { await view.close(); }
+});
+
+test('a queued task is alive: waiting time, dispatcher pulse and an editable run mode', async () => {
+  const View = await component('LiveTab');
+  const seen = new Date(Date.now() - 42_000);
+  let heartbeat = { dispatcherAssigned: true, lastSeenAt: seen as Date | null, trackedSince: new Date(Date.now() - 3_600_000) };
+  state.container = {
+    ...liveContainer({ async listSessions() { return []; } }),
+    taskRepository: { async listComments() { return []; }, async getDispatcherHeartbeat() { return heartbeat; } },
+  };
+  const task = { id: 'task', projectId: 'project', status: 'todo', runMode: 'full', canEdit: true, updatedAt: new Date(Date.now() - 75_000) } as Task;
+  const view = await mount(View, { task, backlogTail: null, todoTail: null });
+  try {
+    const queue = view.host.querySelector('[data-pf-live-queue]')!;
+    assert.ok(queue, 'the queued state is a living block, not a static line');
+    assert.match(queue.textContent!, /ожидает запуска диспетчера/);
+    assert.match(queue.querySelector('[data-pf-live-queue-elapsed]')!.textContent!, /^1 мин 1[56] с$/);
+    assert.match(queue.querySelector('[data-pf-dispatcher-pulse="seen"]')!.textContent!, /^Диспетчер на связи \(4[23] с назад\)$/);
+    assert.equal(queue.querySelector('[data-pf-live-run-mode]')!.getAttribute('data-pf-live-run-mode'), 'full');
+    assert.ok(queue.querySelector('button[aria-label="Режим запуска: Полный прогон"]'), 'the mode can still be changed before the worker starts');
+    // Silent dispatcher for longer than 3 minutes → a warning.
+    heartbeat = { ...heartbeat, lastSeenAt: new Date(Date.now() - 5 * 60_000) };
+    await view.render({ task: { ...task, id: 'task-2' }, backlogTail: null, todoTail: null });
+    assert.match(view.host.querySelector('[data-pf-dispatcher-pulse="offline"]')!.textContent!, /похоже, он офлайн/);
+  } finally { await view.close(); }
+});
+
+test('ralph-worker prepare stages render with a retry countdown; a running run shows the mode read-only', async () => {
+  const View = await component('LiveTab');
+  const now = Date.now();
+  state.container = liveContainer({
+    async listSessions() { return [{ ...run('prep', 1, 'running'), startedAt: new Date(now - 60_000) }]; },
+    async listEvents() { return [
+      { seq: 1, kind: 'stage', text: null, payload: { stage: 'prepare', status: 'started', title: 'Готовим рабочую копию', attempt: 1, maxAttempts: 3 }, createdAt: new Date(now - 50_000) },
+      { seq: 2, kind: 'stage', text: null, payload: { stage: 'prepare', status: 'failed', detail: 'git fetch: timeout', attempt: 1, retryAt: new Date(now + 102_400).toISOString(), future: { x: 1 } }, createdAt: new Date(now - 40_000) },
+      { seq: 3, kind: 'mystery_kind', text: null, payload: { whatever: true }, createdAt: new Date(now - 30_000) },
+    ]; },
+  });
+  const view = await mount(View, { task: { id: 'task', projectId: 'project', status: 'todo', runMode: 'full', canEdit: true } as Task, backlogTail: null, todoTail: null });
+  try {
+    const line = view.host.querySelector('[data-live-stage="prepare"]')!;
+    assert.ok(line, 'prepare is drawn as a stage line in a ralph-worker session');
+    assert.equal(line.getAttribute('data-live-stage-status'), 'failed');
+    assert.match(line.textContent!, /git fetch: timeout/);
+    assert.match(line.querySelector('[data-live-stage-retry]')!.textContent!, /повтор через 1:4[23], попытка 2 из 3/);
+    assert.equal(view.host.querySelector('[data-pf-live-queue]'), null, 'the worker already picked the task');
+    const note = view.host.querySelector('[data-pf-live-run-mode-locked]')!;
+    assert.match(note.textContent!, /Полный прогон.*применится к следующему запуску/);
+  } finally { await view.close(); }
+});
+
+// Прод-инцидент: полный прогон отменён через 2 с, Ralph вернул задачу в backlog и закрыл
+// сессию canceled. Повторный запуск должен реально уйти на сервер, а «в очереди» —
+// показываться только по серверному статусу todo.
+test('cancel → relaunch: the relaunch reaches the server and the queue follows the server status', async () => {
+  const View = await component('LiveTab');
+  const canceled = { ...run('canceled-run', 1, 'canceled'), agentName: 'ralph-orchestrator' };
+  let sessions: LiveSession[] = [];
+  let serverStatus: Task['status'] = 'backlog';
+  const moves: unknown[] = [];
+  state.toasts = [];
+  const base = { id: 'task', projectId: 'project', canEdit: true, runMode: 'full', ralphCancelRequestedAt: null, updatedAt: new Date(Date.now() - 112_000) } as unknown as Task;
+  state.container = {
+    ...liveContainer({
+      async listSessions() { return sessions; },
+      async listEvents() { return [{ seq: 1, kind: 'stage', text: null, payload: { stage: 'execute', status: 'started' }, createdAt: at(1) }]; },
+    }),
+    taskRepository: {
+      async listComments() { return []; },
+      async getDispatcherHeartbeat() { return { dispatcherAssigned: true, lastSeenAt: new Date(Date.now() - 2_000), trackedSince: new Date(Date.now() - 3_600_000) }; },
+      async move(...args: unknown[]) { moves.push(args); serverStatus = 'todo'; return { ...base, status: 'todo' }; },
+      async get() { return { ...base, status: serverStatus }; },
+    },
+  };
+  const props = (status: Task['status']) => ({ task: { ...base, status }, backlogTail: null, todoTail: null });
+  const startButton = (host: HTMLElement) => [...host.querySelectorAll('button')].find(b => b.textContent === 'Сделать с помощью воркера' || b.textContent === 'Запустить снова');
+  const view = await mount(View, props('backlog'));
+  try {
+    // 1. First launch (local optimistic state used to stick from here on).
+    await act(async () => { startButton(view.host)!.click(); });
+    assert.equal(moves.length, 1);
+    assert.ok(view.host.querySelector('[data-pf-live-queue]'));
+    // 2. Worker starts and is cancelled within 2 s; Ralph returns the task to backlog
+    //    and the session finishes canceled — the client never saw it running.
+    sessions = [canceled];
+    serverStatus = 'backlog';
+    await view.render(props('in_progress'));
+    await view.render(props('backlog'));
+    const button = startButton(view.host);
+    assert.ok(button, 'after a cancel the task is NOT shown as queued');
+    assert.equal(button.disabled, false);
+    assert.equal(view.host.querySelector('[data-pf-live-queue]'), null, 'no queue block while the server task is backlog');
+  } finally { await view.close(); }
+
+  // Reopened LIVE with the canceled run in history.
+  const again = await mount(View, props('backlog'));
+  try {
+    assert.match(again.host.querySelector('[data-pf-pipeline-stepper]')?.textContent ?? '', /Конвейер прерван/);
+    const button = startButton(again.host)!;
+    assert.equal(button.textContent, 'Запустить снова', 'an interrupted run offers a relaunch');
+    // 3. Relaunch really goes to the server.
+    await act(async () => { button.click(); });
+    assert.equal(moves.length, 2, 'the relaunch is sent to the server');
+    const queue = again.host.querySelector('[data-pf-live-queue]');
+    assert.ok(queue, 'confirmed todo → queue block');
+    assert.match(queue.querySelector('[data-pf-live-queue-elapsed]')!.textContent!, /^\d+ с$/, 'waiting time counts from the relaunch, not the first launch');
+    assert.match(queue.querySelector('[data-pf-dispatcher-pulse="seen"]')!.textContent!, /^Диспетчер на связи \(\d+ с назад\)$/);
+    // 4. The old canceled run is collapsed history, not the header.
+    const previous = again.host.querySelector('details[data-pf-previous-run]');
+    assert.ok(previous, 'the previous run is collapsed');
+    assert.equal(previous.hasAttribute('open'), false);
+    assert.match(previous.querySelector('summary')!.textContent!, /Предыдущий запуск · Конвейер прерван/);
+    // 5. A server refetch saying backlog removes the stale queue state.
+    await again.render(props('backlog'));
+    assert.equal(again.host.querySelector('[data-pf-live-queue]'), null);
+    assert.equal(again.host.querySelector('details[data-pf-previous-run]'), null);
+    assert.deepEqual(state.toasts, []);
+  } finally { await again.close(); }
+});
+
+test('a relaunch the server does not keep in the queue is rolled back with a visible error', async () => {
+  const View = await component('LiveTab');
+  state.toasts = [];
+  const base = { id: 'task', projectId: 'project', canEdit: true, runMode: 'quick', status: 'backlog', ralphCancelRequestedAt: null } as unknown as Task;
+  for (const failure of ['move-rejected', 'move-throws', 'refetch-backlog'] as const) {
+    state.container = {
+      ...liveContainer({ async listSessions() { return []; } }),
+      taskRepository: {
+        async listComments() { return []; },
+        async move() { if (failure === 'move-throws') throw new Error('409 Conflict'); return { ...base, status: failure === 'move-rejected' ? 'backlog' : 'todo' }; },
+        async get() { return { ...base, status: 'backlog' }; },
+      },
+    };
+    const view = await mount(View, { task: base, backlogTail: null, todoTail: null });
+    try {
+      const button = [...view.host.querySelectorAll('button')].find(b => b.textContent === 'Сделать с помощью воркера')!;
+      await act(async () => { button.click(); });
+      assert.match(view.host.querySelector('[role="alert"]')!.textContent!, /Не удалось отправить задачу воркеру/, failure);
+      assert.equal(view.host.querySelector('[data-pf-live-queue]'), null, failure);
+      const after = [...view.host.querySelectorAll('button')].find(b => b.textContent === 'Сделать с помощью воркера');
+      assert.equal(after?.disabled, false, `${failure}: the user can retry`);
+    } finally { await view.close(); }
+  }
+  assert.equal((state.toasts as string[]).length, 3, 'every failure is toasted');
+});
+
+const readinessQuestion = (): TaskComment => ({
+  ...message(), id: 'readiness', ownerUserId: 'ralph', actorKind: 'agent', agentName: 'ralph-readiness',
+  body: '**🤔 Уточнение перед стартом**\n\nПереоткрыть задачу?\n\n<!-- ralph-question {"v":1,"id":"readiness-7bd423a1","type":"open","allowOpen":true} -->',
+});
+const prepareRun = (status: LiveSession['status']) => ({ ...run('prep-run', 1, status), agentName: 'ralph-orchestrator' });
+
+test('a readiness question without options offers Да/Нет; answering switches LIVE to the server-driven queue', async () => {
+  const View = await component('LiveTab');
+  state.toasts = [];
+  let comments: TaskComment[] = [readinessQuestion()];
+  const created: string[] = [];
+  const base = { id: 'task', projectId: 'project', canEdit: true, runMode: 'quick', status: 'awaiting_clarification', ralphCancelRequestedAt: null } as unknown as Task;
+  let resolveGet: (task: Task) => void = () => {};
+  state.container = {
+    ...liveContainer({
+      async listSessions() { return [prepareRun('completed')]; },
+      async listEvents() { return [{ seq: 1, kind: 'stage', text: null, payload: { actor: 'orchestrator', stage: 'prepare', status: 'failed', title: 'Нужно уточнение', detail: 'Перед стартом задан вопрос в комментариях; задача ждёт ответа в «На уточнении».' }, createdAt: at(1) }]; },
+    }),
+    taskRepository: {
+      async listComments() { return comments; },
+      async createComment(_p: string, _t: string, body: string) {
+        created.push(body);
+        const answer = { ...message(), id: 'answer', body };
+        comments = [...comments, answer];
+        return answer;
+      },
+      get() { return new Promise<Task>(resolve => { resolveGet = resolve; }); },
+      async getDispatcherHeartbeat() { return null; },
+    },
+  };
+  const view = await mount(View, { task: base, backlogTail: null, todoTail: null });
+  try {
+    // 3. The parked readiness run is «Ждёт ответа», not a red finished/failed pipeline.
+    const stepper = view.host.querySelector('[data-pf-pipeline-stepper]')!;
+    assert.match(stepper.textContent!, /Ждёт ответа/);
+    assert.doesNotMatch(stepper.textContent!, /Конвейер завершён/);
+    assert.equal(stepper.querySelector('[data-stage="prepare"]')!.getAttribute('data-state'), 'waiting');
+    assert.equal(stepper.querySelector('[data-state="failed"]'), null, 'no red ✕ on «Подготовка»');
+    // Parked task without a running worker: no «Отменить работу», a relaunch instead.
+    assert.equal([...view.host.querySelectorAll('button')].some(b => /Отменить работу/.test(b.textContent!)), false);
+    assert.ok([...view.host.querySelectorAll('button')].find(b => b.textContent === 'Запустить снова'));
+    // 1. Quick replies on an option-less question, free text kept.
+    const quick = view.host.querySelector('[data-pf-ralph-quick-replies]')!;
+    assert.deepEqual([...quick.querySelectorAll('button')].map(b => b.textContent), ['Да', 'Нет']);
+    assert.ok(view.host.querySelector('input[placeholder="Ответь словами…"]'));
+    // 2. Answer → immediately «Ответ принят — задача снова в очереди».
+    await act(async () => { [...quick.querySelectorAll('button')].find(b => b.textContent === 'Да')!.click(); });
+    assert.match(created[0], /<!-- ralph-answer \{"v":1,"q":"readiness-7bd423a1","value":"Да"/);
+    assert.match(view.host.querySelector('[data-pf-live-answer-accepted]')!.textContent!, /Ответ принят — задача снова в очереди/);
+    assert.equal(view.host.querySelector('[data-pf-ralph-quick-replies]'), null, 'the old question card does not stay interactive');
+    // The server reopened the task → the living queue state, driven by the server status.
+    await act(async () => { resolveGet({ ...base, status: 'todo' }); });
+    assert.ok(view.host.querySelector('[data-pf-live-queue]'));
+    assert.ok(view.host.querySelector('[data-pf-live-answer-accepted]'));
+    assert.ok(view.host.querySelector('details[data-pf-previous-run]'), 'the parked run collapses into history');
+    assert.deepEqual(state.toasts, []);
+  } finally { await view.close(); }
+});
+
+test('an exhausted pipeline offers «Запустить снова» with the reason it stopped and no cancel button', async () => {
+  const View = await component('LiveTab', true);
+  state.container = {
+    ...liveContainer({
+      async listSessions() { return [prepareRun('completed')]; },
+      async listEvents() { return [
+        { seq: 1, kind: 'stage', text: null, payload: { stage: 'checks', status: 'started' }, createdAt: at(1) },
+        { seq: 2, kind: 'check_result', text: null, payload: { phase: 'checks', name: 'npm test', command: ['npm', 'test'], exitCode: 1, passed: false, outputTail: '\n  FAIL src/config.test.ts\n  expected 2 got 3' }, createdAt: at(1) },
+        { seq: 3, kind: 'stage', text: null, payload: { stage: 'blocked', status: 'failed', title: 'Остановлено — попытки исчерпаны' }, createdAt: at(2) },
+      ]; },
+    }),
+    taskRepository: { async listComments() { return []; } },
+  };
+  const view = await mount(View, { task: { id: 'task', projectId: 'project', canEdit: true, runMode: 'full', status: 'awaiting_clarification', ralphCancelRequestedAt: null } as unknown as Task, backlogTail: null, todoTail: null });
+  try {
+    assert.match(view.host.querySelector('[data-pf-pipeline-stepper]')!.textContent!, /Конвейер остановлен/);
+    const reason = view.host.querySelector('[data-pf-live-stop-reason]')!;
+    assert.match(reason.textContent!, /Почему остановлено: npm test/);
+    assert.match(reason.textContent!, /FAIL src\/config\.test\.ts/);
+    assert.doesNotMatch(reason.textContent!, /expected 2 got 3/, 'only the first line');
+    assert.equal([...view.host.querySelectorAll('button')].some(b => /Отменить работу/.test(b.textContent!)), false, 'nothing is running — no cancel');
+    const start = view.host.querySelector('[data-pf-worker-start]')!;
+    assert.ok([...start.querySelectorAll('button')].find(b => b.textContent === 'Запустить снова'));
+    assert.ok(start.querySelector('button[aria-label^="Режим запуска"]'), 'relaunch comes with the run-mode menu');
   } finally { await view.close(); }
 });

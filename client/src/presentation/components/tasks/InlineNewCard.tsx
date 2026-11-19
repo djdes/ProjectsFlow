@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { FileText, PanelRight, X } from 'lucide-react';
-import type { Task, TaskPriority } from '@/domain/task/Task';
+import type { RunMode, Task, TaskPriority } from '@/domain/task/Task';
 import { getDefaultTaskDeadline } from '@/domain/task/defaultTaskDeadline';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
@@ -11,11 +11,14 @@ import { ProjectIconView } from '@/presentation/components/project/projectIconVi
 import { AssigneeSelect } from './AssigneeSelect';
 import { DeadlinePicker } from './DeadlinePicker';
 import { PrioritySelect } from './PrioritySelect';
+import { RunModeSelect } from './RunMode';
 
 export type InlineTaskSettings = {
   assigneeUserId: string;
   deadline: string | null;
   priority: TaskPriority | null;
+  // Только в колонке «Воркер»: задача уходит воркеру сразу, режим выбирают до создания.
+  runMode?: RunMode;
 };
 
 export function InlineNewCard({
@@ -26,6 +29,7 @@ export function InlineNewCard({
   onClose,
   onOpenFull,
   refocusSignal = 0,
+  showRunMode = false,
 }: {
   projectId?: string;
   defaults?: Partial<InlineTaskSettings>;
@@ -37,12 +41,15 @@ export function InlineNewCard({
   onOpenFull: (task: Task) => void;
   // Растёт по «+» — вернуть фокус в поле после переезда карточки наверх.
   refocusSignal?: number;
+  // Колонка «Воркер» (todo): показать выбор режима запуска — иначе задача ушла бы «обычной».
+  showRunMode?: boolean;
 }): React.ReactElement {
   const { user } = useCurrentUser();
   const { defaultAssigneeUserId } = useFocusedInbox();
   const [assigneeUserId, setAssigneeUserId] = useState(defaults?.assigneeUserId ?? defaultAssigneeUserId ?? user?.id ?? null);
   const [deadline, setDeadline] = useState<string | null>(() => defaults?.deadline === undefined ? getDefaultTaskDeadline() : defaults.deadline);
   const [priority, setPriority] = useState<TaskPriority | null>(defaults?.priority ?? null);
+  const [runMode, setRunMode] = useState<RunMode>(defaults?.runMode ?? 'quick');
   const cardRef = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState('');
   const [icon, setIcon] = useState<string | null>(null);
@@ -104,7 +111,7 @@ export function InlineNewCard({
     savingRef.current = true;
     setBusy(true);
     try {
-      return await onCreate(name, icon, { assigneeUserId, deadline, priority });
+      return await onCreate(name, icon, { assigneeUserId, deadline, priority, ...(showRunMode ? { runMode } : {}) });
     } catch (error) {
       toast.error(`Не удалось создать задачу: ${(error as Error).message}`);
       return null;
@@ -267,6 +274,12 @@ export function InlineNewCard({
           <DeadlinePicker value={deadline} onChange={setDeadline} disabled={busy} onOpenChange={onPickerOpenChange} emptyLabel="Без срока" className="h-auto min-h-11 w-full justify-start gap-1 px-1 text-xs sm:min-h-8" />
         </div>
       </div>
+      {showRunMode && (
+        <div className="min-w-0" data-pf-inline-run-mode="">
+          <div className="px-1 text-2xs text-muted-foreground">Режим запуска</div>
+          <RunModeSelect value={runMode} onChange={setRunMode} disabled={busy} onOpenChange={onPickerOpenChange} variant="ghost" className="h-auto min-h-11 w-full justify-start gap-1 px-1 text-xs sm:min-h-8" />
+        </div>
+      )}
       <div className="flex min-w-0 items-center gap-1 border-bs pbs-2">
         <PrioritySelect value={priority} onChange={setPriority} disabled={busy} onOpenChange={onPickerOpenChange} compact className="h-auto min-h-11 min-w-0 flex-1 justify-between px-1 text-xs sm:min-h-8" />
         <Button type="button" variant="ghost" size="icon" aria-label="Отменить создание" disabled={busy} className="size-11 shrink-0 sm:size-8" onClick={() => { closingRef.current = true; onClose(); }}><X className="size-4" /></Button>

@@ -42,6 +42,11 @@ type Deps = ProjectAccessDeps & {
   readonly users: UserRepository;
   readonly taskVersions: TaskVersionRepository;
   readonly tasks: TaskRepository;
+  // Общий проект (db/182): задачи, скрытые от человека правилами, — их события не показываем.
+  readonly hiddenTaskIds?: (
+    userId: string,
+    refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+  ) => Promise<ReadonlySet<string>>;
 };
 
 // Активность конкретного проекта (окно активности): список событий с резолвом имён +
@@ -63,7 +68,11 @@ export class GetProjectActivity {
       this.deps.taskVersions.getLatestForProject(projectId),
     ]);
     const hasMore = page.length > opts.limit;
-    const events = hasMore ? page.slice(0, opts.limit) : page;
+    const pageEvents = hasMore ? page.slice(0, opts.limit) : page;
+    // Курсор идёт по всей странице, а показываем только события видимых задач.
+    const refs = pageEvents.flatMap((e) => (e.payload?.taskId ? [{ projectId: e.projectId, taskId: e.payload.taskId }] : []));
+    const hidden = this.deps.hiddenTaskIds ? await this.deps.hiddenTaskIds(userId, refs) : new Set<string>();
+    const events = hidden.size > 0 ? pageEvents.filter((e) => !e.payload?.taskId || !hidden.has(e.payload.taskId)) : pageEvents;
 
     // Резолвим имена акторов/таргетов + владельца проекта (для «создан»).
     const ids = new Set<string>([project.ownerId]);
@@ -122,7 +131,7 @@ export class GetProjectActivity {
       lastEditedByName: lastEditorId ? (byId.get(lastEditorId)?.displayName ?? null) : null,
     };
 
-    const last = events.at(-1) ?? null;
+    const last = pageEvents.at(-1) ?? null;
     return {
       summary,
       items,

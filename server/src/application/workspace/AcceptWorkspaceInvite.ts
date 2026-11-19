@@ -14,17 +14,36 @@ type WorkspacesPort = {
   absorbDefaultHubInto(userId: string, targetWorkspaceId: string): Promise<boolean>;
 };
 
+// Следующий шаг с Telegram после вступления по приглашению из рабочей Telegram-группы
+// (db/181): pair — ссылка подключения Telegram для владельца аккаунта; linked — у аккаунта
+// уже тот же Telegram, задача создаётся; conflict — у аккаунта другой Telegram.
+export type InviteAcceptedTelegram =
+  | { readonly status: 'pair'; readonly url: string }
+  | { readonly status: 'linked' }
+  | { readonly status: 'conflict' }
+  | null;
+
 type Deps = {
   readonly users: { getById(id: string): Promise<{ email: string } | null> };
   readonly invites: WorkspaceInviteRepository;
   readonly workspaces: WorkspacesPort;
   readonly now: () => Date;
+  // Проверка до вступления (приглашение бота: группа ещё рабочая, человека не удаляли).
+  readonly beforeAccept?: (input: { readonly inviteId: string; readonly userId: string }) => Promise<void>;
+  readonly onAccepted?: (input: {
+    readonly inviteId: string;
+    readonly workspaceId: string;
+    readonly userId: string;
+  }) => Promise<{ telegram: InviteAcceptedTelegram }>;
 };
 
 export class AcceptWorkspaceInvite {
   constructor(private readonly deps: Deps) {}
 
-  async execute(token: string, userId: string): Promise<{ workspaceId: string }> {
+  async execute(
+    token: string,
+    userId: string,
+  ): Promise<{ workspaceId: string; telegram: InviteAcceptedTelegram }> {
     const invite = await this.deps.invites.findByToken(token);
     if (!invite) throw new WorkspaceInviteNotFoundError();
     if (invite.acceptedAt !== null) throw new WorkspaceInviteAlreadyUsedError();
@@ -35,11 +54,27 @@ export class AcceptWorkspaceInvite {
       assertInviteRecipientEmail(invite.email, user?.email ?? null);
     }
 
+    await this.deps.beforeAccept?.({ inviteId: invite.id, userId });
+
     await this.deps.invites.acceptWithMembership({
       inviteId: invite.id, acceptedAt: now, acceptedByUserId: userId,
     });
 
+    // Хук — дополнение: его сбой не отменяет уже состоявшееся вступление.
+    let telegram: InviteAcceptedTelegram = null;
+    if (this.deps.onAccepted) {
+      try {
+        ({ telegram } = await this.deps.onAccepted({
+          inviteId: invite.id,
+          workspaceId: invite.workspaceId,
+          userId,
+        }));
+      } catch (err) {
+        console.warn('[workspace-invite] accept hook failed:', err);
+      }
+    }
+
     // Joining a workspace never moves personal projects or tasks.
-    return { workspaceId: invite.workspaceId };
+    return { workspaceId: invite.workspaceId, telegram };
   }
 }

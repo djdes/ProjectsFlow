@@ -138,7 +138,7 @@ export class ManageKanbanColumns {
     const membership = await this.deps.members.findForProject(projectId, userId);
     if (!membership) throw new ProjectNotFoundError();
     // Доска — общее состояние проекта: viewer её не меняет (то же правило, что у
-    // PUT /kanban-settings).
-    if (membership.role === 'viewer') throw new KanbanColumnForbiddenError();
+    // PUT /kanban-settings). Гость общего проекта (db/182) тоже: колонки — часть проекта.
+    if (membership.role === 'viewer' || membership.guest) throw new KanbanColumnForbiddenError();
   }
 }

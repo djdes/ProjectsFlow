@@ -320,23 +320,28 @@ export function ProjectGithubOnboardingBanner({
 
   return (
     <>
-      <div className="relative border-be border-primary/10 bg-primary/[0.04] px-4 py-3 pe-12 sm:px-8 sm:pe-24">
+      {/* Phone: symmetric 16px sides — only the text clears the dismiss «×», so the three
+          tiles below span the full width instead of leaving a 48px gap on the right. */}
+      <div className="relative border-be border-primary/10 bg-primary/[0.04] px-4 py-3 sm:px-8 sm:pe-24">
         <ProjectBannerDismissButton className="end-1 inset-bs-1 size-11 rounded-lg sm:end-16 sm:inset-bs-2 sm:size-7" />
         <div
           className="mx-auto flex max-w-[1180px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between"
           style={shiftForOverlay ? { marginRight: 'var(--pf-drawer-open-w, 0px)' } : undefined}
         >
-          <div className="min-w-0">
+          <div className="min-w-0 pe-8 sm:pe-0">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-raised shadow-card">
                 <Sparkles className="size-3.5 text-primary" />
               </span>
               Подключите код проекта
             </div>
-            <p className="mbs-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
+            {/* Телефон: пояснение и три галочки прячем — плашка вместе с ними отодвигала доску
+                за край экрана (первая колонка начиналась на 745px из 852). Что даст каждый
+                способ, объясняет окно, которое открывает плитка. */}
+            <p className="mbs-1 max-w-xl text-xs leading-relaxed text-muted-foreground max-sm:hidden">
               Выберите способ подключения — делегация доступа воркеру и локальная база знаний настроятся автоматически.
             </p>
-            <div className="mbs-1.5 flex flex-wrap gap-x-3 gap-y-1 text-2xs font-medium text-muted-foreground">
+            <div className="mbs-1.5 flex flex-wrap gap-x-3 gap-y-1 text-2xs font-medium text-muted-foreground max-sm:hidden">
               {['Репозиторий', 'Делегация', 'База знаний'].map((label) => (
                 <span key={label} className="inline-flex items-center gap-1">
                   <CheckCircle2 className="size-3 text-done" />

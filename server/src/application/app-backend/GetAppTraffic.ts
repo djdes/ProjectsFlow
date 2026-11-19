@@ -23,7 +23,7 @@ export class GetAppTraffic {
   constructor(private readonly deps: Deps) {}
 
   async get(projectId: string, userId: string, days?: number): Promise<AppTraffic> {
-    await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, userId, 'read_project_data');
     const windowDays = clampDays(days);
     const sinceDay = new Date(Date.now() - (windowDays - 1) * 24 * 60 * 60 * 1000)
       .toISOString()

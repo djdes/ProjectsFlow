@@ -39,6 +39,9 @@ const PEOPLE = [ME, ...COLLEAGUES];
 const person = (id) => PEOPLE.find((p) => p.id === id);
 
 export const WORKSPACE_ID = 'ws-team';
+// 1×1 PNG for uploaded comment images.
+export const SMOKE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const SMOKE_PNG_DATA_URL = `data:image/png;base64,${SMOKE_PNG_BASE64}`;
 export const INBOX_ID = 'p-inbox-anna';
 const VERA_INBOX_ID = 'p-inbox-vera';
 
@@ -103,6 +106,8 @@ function taskDto({
   deadline = null,
   priority = null,
   taskType = null,
+  recurrence = null,
+  groupOrigin = null,
   createdHoursAgo = 48,
 }) {
   positionSeq += 1;
@@ -132,6 +137,8 @@ function taskDto({
     parentTaskId: null,
     priority,
     taskType,
+    groupOrigin,
+    recurrence,
   };
 }
 
@@ -158,8 +165,8 @@ export function createState() {
     taskDto({ id: 't-ios', projectId: 'p-mobile', title: 'Собрать тестовую сборку для iOS', status: 'backlog', taskType: 'feature', createdHoursAgo: 60 }),
     taskDto({ id: 't-release-doc', projectId: 'p-docs', title: 'Описать процесс релиза', status: 'backlog', priority: 4, createdHoursAgo: 30 }),
     taskDto({ id: 't-delivery', projectId: 'p-shop', title: 'Подключить службу доставки', status: 'done', createdHoursAgo: 200 }),
-    // Assigned to me, status manual — the «Вручную» shelf of «Сейчас».
-    taskDto({ id: 't-form', projectId: 'p-site', title: 'Поправить форму записи к врачу', status: 'manual', deadline: today, priority: 2, createdHoursAgo: 50 }),
+    // Assigned to me, status manual — the «В работе» shelf of «Сейчас».
+    taskDto({ id: 't-form', projectId: 'p-site', title: 'Поправить форму записи к врачу', status: 'manual', deadline: today, priority: 2, recurrence: { kind: 'weekdays' }, createdHoursAgo: 50 }),
     // My personal inbox.
     taskDto({ id: 't-domain', projectId: INBOX_ID, title: 'Продлить домен для лендинга', status: 'backlog', deadline: nextWeek, createdHoursAgo: 20 }),
     // Assigned to colleagues — «На утверждении» from other people and the «Все» tab.
@@ -167,7 +174,7 @@ export function createState() {
     taskDto({ id: 't-brands', projectId: 'p-shop', title: 'Добавить фильтр по брендам', status: 'pending_approval', assignee: 'u-vera', createdHoursAgo: 70 }),
     taskDto({ id: 't-webhooks', projectId: 'p-crm', title: 'Настроить вебхуки CRM', status: 'todo', assignee: 'u-gleb', deadline: nextWeek, createdHoursAgo: 40 }),
     taskDto({ id: 't-profile-screen', projectId: 'p-mobile', title: 'Экран профиля пользователя', status: 'in_progress', assignee: 'u-boris', createdHoursAgo: 35 }),
-    taskDto({ id: 't-prices', projectId: 'p-site', title: 'Обновить прайс-лист', status: 'backlog', assignee: 'u-vera', deadline: yesterday, createdHoursAgo: 90 }),
+    taskDto({ id: 't-prices', projectId: 'p-site', title: 'Обновить прайс-лист', status: 'backlog', assignee: 'u-vera', deadline: yesterday, createdHoursAgo: 90, groupOrigin: { chatId: -100200, title: 'Скрипты', authorUserId: 'u-vera', authorName: 'Вера' } }),
     // A colleague's personal inbox task (visible on «Все», read-only).
     taskDto({ id: 't-vera-report', projectId: VERA_INBOX_ID, title: 'Подготовить отчёт за неделю', status: 'backlog', assignee: 'u-vera', creator: 'u-vera', createdHoursAgo: 10 }),
   ];
@@ -197,6 +204,20 @@ export function createState() {
     tasks,
     views,
     uiPrefs: { inboxAssignedGrouping: 'project' },
+    // Шаблоны задач пространства (db/187).
+    taskTemplates: [
+      {
+        id: 'tpl-standup',
+        workspaceId: WORKSPACE_ID,
+        name: 'Планёрка по понедельникам',
+        description: 'Планёрка по понедельникам\n- [ ] Собрать статусы\n- [ ] Разослать итоги',
+        priority: 3,
+        taskType: null,
+        recurrence: { kind: 'weekly', days: [1] },
+        createdBy: ME.id,
+        createdAt: hoursAgo(300),
+      },
+    ],
     today,
   };
 }
@@ -316,6 +337,8 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
           },
         ],
       })],
+    [/^\/workspaces\/([^/]+)\/task-templates$/, (m) =>
+      json({ templates: (state.taskTemplates ?? []).filter((t) => t.workspaceId === m[1]) })],
     [/^\/workspaces\/([^/]+)\/members$/, () =>
       json({
         members: PEOPLE.map((p, i) => ({
@@ -327,6 +350,58 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
         })),
       })],
     [/^\/workspaces\/([^/]+)\/invites$/, () => json({ invites: [] })],
+    // Рабочие Telegram-группы (db/181) и кандидаты «Из соседних пространств».
+    // Участники рабочей группы (db/191): бот не админ — карточка показывает подсказку.
+    [/^\/workspaces\/([^/]+)\/telegram-groups\/-?\d+\/members$/, () =>
+      json({
+        telegramCount: 5,
+        linked: [{ userId: 'smoke-member-vera', displayName: 'Вера Лебедева', avatarUrl: null, status: 'admin' }],
+        botIsAdmin: false,
+      })],
+    [/^\/workspaces\/([^/]+)\/telegram-groups$/, () =>
+      json({
+        groups: [
+          {
+            chatId: -1001234567890,
+            title: 'Команда · задачи',
+            createdAt: '2026-11-01T09:00:00.000Z',
+            status: 'active',
+            mode: 'incident',
+            projectIds: [PROJECT_SEEDS[0].id],
+          },
+          // Черновик (db/189): бот сам добавлен в группу, ждёт подтверждения.
+          {
+            chatId: -1009876543210,
+            title: 'Поддержка клиентов',
+            createdAt: '2026-11-17T09:00:00.000Z',
+            status: 'draft',
+            projectIds: [],
+          },
+          // Отключённая группа, которую просит забрать другое пространство (решает владелец).
+          {
+            chatId: -1005555555555,
+            title: 'Старый чат продаж',
+            createdAt: '2026-10-01T09:00:00.000Z',
+            status: 'disconnected',
+            projectIds: [],
+            transferRequest: { workspaceName: 'Офис', requestedAt: '2026-11-17T10:00:00.000Z' },
+          },
+        ],
+        mainGroup: null,
+        botUsername: 'ProjectsFlow_Bot',
+      })],
+    [/^\/workspaces\/([^/]+)\/invite-candidates$/, () =>
+      json({
+        candidates: PEOPLE.slice(0, 2).map((p) => ({
+          userId: `${p.id}-neighbor`,
+          displayName: p.displayName,
+          email: `neighbor.${p.email}`,
+          avatarUrl: null,
+          hasTelegram: true,
+          workspaces: [{ id: 'ws-office', name: 'Офис', icon: null }],
+          invited: false,
+        })),
+      })],
     [/^\/workspaces\/([^/]+)\/projects$/, () =>
       json({ projects: PROJECT_SEEDS.map((s) => ({ id: s.id, name: s.name, icon: s.icon })) })],
     [/^\/workspaces\/([^/]+)\/kanban-columns$/, () => json({ columns: [] })],
@@ -359,6 +434,7 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
           eodReminderHour: 19,
           eodReminderMinute: 0,
           eodReminderLastSentOn: null,
+          urgentRemindersEnabled: true,
           lastSentOn: null,
         },
         members: PEOPLE.map((p) => ({
@@ -393,9 +469,25 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     }],
     [/^\/projects\/([^/]+)\/tasks$/, ([, id]) =>
       json({ tasks: state.tasks.filter((t) => t.projectId === id) })],
-    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/comments$/, () => json({ comments: [] })],
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/comments$/, ([, , taskId]) => json({ comments: state.comments?.[taskId] ?? [] })],
+    // Who the comment author may notify; the server marks the manager as the default.
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/comment-notify-candidates$/, () => json({
+      candidates: state.notifyCandidates ?? COLLEAGUES.map((p) => ({
+        userId: p.id, displayName: p.displayName, avatarUrl: p.avatarUrl,
+        isDefault: p.id === 'u-boris', isManager: p.id === 'u-boris',
+      })),
+    })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/attachments$/, () => json({ attachments: [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/commits$/, () => json({ commits: [] })],
+    // ИИ-сводка «что сделано» на карточках полки «На утверждении»; не на утверждении — null.
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/approval-summary$/, ([, projectId, taskId]) => {
+      const task = state.tasks.find((t) => t.id === taskId && t.projectId === projectId);
+      if (!task || task.status !== 'pending_approval') return json({ summary: null, generatedAt: null });
+      return json({
+        summary: state.approvalSummaries?.[taskId] ?? `Сделано по задаче «${firstLine(task)}».\nСборка и проверки прошли.`,
+        generatedAt: hoursAgo(1),
+      });
+    }],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/versions$/, ([, , taskId]) =>
       json({ plan: 'vip', cutoffAt: null, versions: [], taskId })],
     [/^\/projects\/([^/]+)\/live\/activity$/, ([, projectId]) => {
@@ -408,6 +500,7 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
         .map(s => ({ taskId:s.taskId,state:s.status==='running'?'running':'error',sessionId:s.id,questionCommentId:null })) });
     }],
     [/^\/projects\/([^/]+)\/live\/running$/, ([, projectId]) => json({ taskIds: Object.values(state.liveSessions ?? {}).flat().filter(s => s.projectId === projectId && s.status === 'running').map(s => s.taskId) })],
+    [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/dispatcher-heartbeat$/, () => json({ dispatcherAssigned: true, lastSeenAt: new Date(Date.now() - 20_000).toISOString(), trackedSince: new Date(Date.now() - 3_600_000).toISOString(), serverNow: new Date().toISOString() })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions$/, ([, , taskId]) => json({ sessions: state.liveSessions?.[taskId] ?? [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions\/([^/]+)\/events$/, ([, , , sessionId]) => json({ events: state.liveEvents?.[sessionId] ?? [] })],
     [/^\/projects\/([^/]+)\/tasks\/([^/]+)\/live\/sessions\/([^/]+)\/file-diffs$/, () => json({ files: [] })],
@@ -471,6 +564,8 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/me\/ui-prefs$/, () => json({ prefs: state.uiPrefs })],
     [/^\/me\/kanban-colors$/, () => json({ colors: {} })],
     [/^\/me\/notification-prefs$/, () => json({ prefs: NOTIFICATION_PREFS })],
+    // "Notifications on this device" (Web Push): the server's public VAPID key.
+    [/^\/push\/public-key$/, () => json({ publicKey: 'BSmokeVapidPublicKeyForProfileCardOnly0000000000000000000000000000000000000000000' })],
     [/^\/me\/unread-tasks$/, () => json({ taskIds: [] })],
     [/^\/me\/stats\/completed-today$/, () => json({ count: state.completedByWorkspace?.[workspaceId] ?? 2 })],
     [/^\/me\/stats\/completed-by-workspace$/, () => json({ workspaces: [] })],
@@ -568,7 +663,206 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/employees$/, () => json({ employees: [] })],
     [/^\/agent\/tokens$/, () => json({ tokens: [] })],
     [/^\/ai\/conversations$/, () => json({ items: [], nextCursor: null })],
+    // Admin «Рассылки»: template library, audience options and campaign history.
+    [/^\/admin\/mailings\/templates$/, () => json({ templates: mailingState(state).templates, starters: MAILING_STARTERS })],
+    [/^\/admin\/mailings\/audience\/workspaces$/, () => json({ workspaces: [{ id: WORKSPACE_ID, name: workspaceDto().name, memberCount: PEOPLE.length }] })],
+    [/^\/admin\/mailings\/campaigns$/, () => json({ campaigns: mailingState(state).campaigns })],
+    // Admin «Пользователи»: the list and the deletion summary of the confirm dialog.
+    [/^\/admin\/users$/, (_m, query) => json(adminUsersPage(state, query))],
+    [/^\/admin\/users\/([^/]+)\/deletion-preview$/, (m) => json(adminDeletionPreview(state, m[1]))],
+    [/^\/admin\/users\/([^/]+)\/overview$/, (m) => adminUserOverview(state, m[1])],
   ];
+}
+
+// --- Admin users ------------------------------------------------------------------
+
+const inDays = (days) => new Date(Date.now() + days * 86400000).toISOString();
+
+function adminUsersState(state) {
+  state.adminUsers ??= { users: PEOPLE.map((p, i) => ({
+    id: p.id, email: p.email, displayName: p.displayName, avatarUrl: null,
+    // Глеб is another admin: his deletion stays blocked until the rights are removed.
+    isAdmin: p.id === ME.id || p.id === 'u-gleb', projectCount: 3 - Math.min(i, 2), ownedProjectCount: i === 0 ? 2 : 0,
+    delegationEnabledCount: 0, githubConnected: false,
+    plan: p.id === 'u-boris' ? 'prime' : 'free', subscriptionExpiresAt: p.id === 'u-boris' ? inDays(5) : null,
+    telegramLinked: p.id === 'u-vera', telegramUsername: p.id === 'u-vera' ? 'vera_l' : null,
+    workspaceCount: 1 + (i === 0 ? 1 : 0), lastLoginAt: inDays(-i - 1),
+    // Глеб has not been seen for two months: he is the «Неактивные» example.
+    lastActivityAt: p.id === 'u-gleb' ? inDays(-60) : inDays(-i * 0.01),
+    createdAt: `2025-0${i + 1}-01T09:00:00.000Z`, deletedAt: null,
+  })), history: {} };
+  return state.adminUsers;
+}
+
+// Mirror of the server rules (domain/user/adminUserDirectory.ts) for the smoke data.
+const ADMIN_FILTERS = ['all', 'free', 'prime', 'vip', 'expired', 'admins', 'telegram', 'inactive', 'deleted'];
+function adminPlanState(u) {
+  if (u.plan === 'free') return 'free';
+  return u.subscriptionExpiresAt && Date.parse(u.subscriptionExpiresAt) <= Date.now() ? 'expired' : u.plan;
+}
+function adminMatches(u, filter, idleDays) {
+  if (filter === 'deleted') return Boolean(u.deletedAt);
+  if (u.deletedAt) return false;
+  if (filter === 'all') return true;
+  if (['free', 'prime', 'vip', 'expired'].includes(filter)) return adminPlanState(u) === filter;
+  if (filter === 'admins') return u.isAdmin;
+  if (filter === 'telegram') return u.telegramLinked;
+  return !u.lastActivityAt || Date.parse(u.lastActivityAt) < Date.now() - idleDays * 86400000;
+}
+function adminUsersPage(state, query) {
+  const q = (query.get('q') ?? '').trim().toLowerCase().replace(/^@/, '');
+  const filter = ADMIN_FILTERS.includes(query.get('filter')) ? query.get('filter') : 'all';
+  const idle = Number(query.get('inactiveDays')) || 30;
+  const pageSize = Number(query.get('pageSize')) || 50;
+  const page = Number(query.get('page')) || 1;
+  const searched = adminUsersState(state).users.filter((u) => !q
+    || [u.displayName, u.email, u.telegramUsername ?? ''].some((v) => v.toLowerCase().includes(q)));
+  const counts = Object.fromEntries(ADMIN_FILTERS.map((f) => [f, searched.filter((u) => adminMatches(u, f, idle)).length]));
+  const sort = query.get('sort') ?? 'created';
+  const sign = query.get('dir') === 'asc' ? 1 : -1;
+  const key = (u) => sort === 'name' ? u.displayName : sort === 'activity' ? u.lastActivityAt ?? '' : sort === 'expiry' ? u.subscriptionExpiresAt ?? '~' : u.createdAt;
+  const list = searched.filter((u) => adminMatches(u, filter, idle)).sort((a, b) => key(a).localeCompare(key(b), 'ru') * sign);
+  return { users: list.slice((page - 1) * pageSize, page * pageSize), total: list.length, page, pageSize, counts };
+}
+function adminUserOverview(state, id) {
+  const a = adminUsersState(state);
+  const user = a.users.find((u) => u.id === id);
+  if (!user) return json({ error: 'user_not_found', message: 'Пользователь не найден' }, 404);
+  return json({
+    user,
+    workspaces: [{ id: WORKSPACE_ID, name: workspaceDto().name, kind: 'team', role: user.isAdmin ? 'owner' : 'editor', isOwner: user.id === ME.id, memberCount: PEOPLE.length }],
+    projects: [{ id: 'p-site', name: 'Сайт клиники', status: 'active', role: 'editor', workspaceName: workspaceDto().name, taskCount: 12 }],
+    usage: { costUsd30d: 3.42, costUsdTotal: 18.9, runs30d: 14 },
+    activity: { tasksCreated30d: 9, comments30d: 21, activeSessions: 2, lastLoginAt: user.lastLoginAt, lastSeenAt: user.lastActivityAt },
+    history: a.history[id] ?? [],
+  });
+}
+function adminJournal(state, id, action, before, after) {
+  const a = adminUsersState(state);
+  (a.history[id] ??= []).unshift({ id: `h-${Date.now()}-${Math.random()}`, actorUserId: ME.id, actorDisplayName: ME.displayName,
+    action, batchId: null, before, after, createdAt: new Date().toISOString() });
+}
+
+function adminDeletionPreview(state, id) {
+  const user = adminUsersState(state).users.find((u) => u.id === id);
+  const blockers = [...(id === ME.id ? [{ kind: 'self' }] : []), ...(user?.isAdmin ? [{ kind: 'admin' }] : [])];
+  return { blockers, removedWorkspaces: [{ name: 'Личное пространство', kind: 'default' }], removedProjects: 2, removedTasks: 7,
+    reassignedTasks: 3, leftWorkspaces: [{ name: workspaceDto().name, successorName: ME.displayName }] };
+}
+
+function mutateAdminUsers(state, method, path, body) {
+  if (method === 'POST' && path === '/admin/users/bulk/plan') {
+    const a = adminUsersState(state);
+    let updated = 0;
+    for (const id of body.userIds) {
+      const user = a.users.find((u) => u.id === id);
+      if (!user) continue;
+      const before = { plan: user.plan, expiresAt: user.subscriptionExpiresAt };
+      const running = user.plan === body.plan && adminPlanState(user) === body.plan;
+      const base = running && user.subscriptionExpiresAt ? Date.parse(user.subscriptionExpiresAt) : Date.now();
+      user.plan = body.plan;
+      user.subscriptionExpiresAt = body.term.kind === 'unlimited' ? null : body.term.kind === 'until' ? body.term.date
+        : running && !user.subscriptionExpiresAt ? null : new Date(base + body.term.days * 86400000).toISOString();
+      adminJournal(state, id, 'bulk_plan', before, { plan: user.plan, expiresAt: user.subscriptionExpiresAt, batchSize: body.userIds.length });
+      updated++;
+    }
+    return json({ updated, missing: [] });
+  }
+  const action = path.match(/^\/admin\/users\/([^/]+)\/(sign-out-all|password-reset)$/);
+  if (action && method === 'POST') {
+    const user = adminUsersState(state).users.find((u) => u.id === action[1]);
+    if (!user) return json({ error: 'user_not_found', message: 'Пользователь не найден' }, 404);
+    adminJournal(state, user.id, action[2] === 'sign-out-all' ? 'sign_out_all' : 'password_reset_sent', null, action[2] === 'password-reset' ? { email: user.email } : null);
+    return action[2] === 'sign-out-all' ? { status: 204 } : json({ email: user.email });
+  }
+  const m = path.match(/^\/admin\/users\/([^/]+)(\/plan)?$/);
+  if (!m) return undefined;
+  const a = adminUsersState(state);
+  const user = a.users.find((u) => u.id === m[1]);
+  if (!user) return json({ error: 'user_not_found', message: 'Пользователь не найден' }, 404);
+  if (method === 'PATCH' && m[2]) {
+    Object.assign(user, { plan: body.plan,
+      subscriptionExpiresAt: body.plan === 'free' ? null : body.subscriptionExpiresAt === undefined ? inDays(30) : body.subscriptionExpiresAt });
+    return { status: 204 };
+  }
+  if (method === 'PATCH') { Object.assign(user, body); return { status: 204 }; }
+  if (method === 'DELETE') {
+    const preview = adminDeletionPreview(state, user.id);
+    if (preview.blockers.length) return json({ error: 'deletion_blocked', message: 'Удалить нельзя' }, 409);
+    a.users = a.users.filter((u) => u.id !== user.id);
+    return json(preview);
+  }
+  return undefined;
+}
+
+// --- Admin mailings ----------------------------------------------------------------
+
+const MAILING_STARTERS = [
+  { key: 'product_news', name: 'Новость продукта', description: 'Анонс новой возможности с кнопкой «Попробовать»',
+    subject: '{{name}}, в ProjectsFlow появилось новое', preheader: 'Коротко о том, что изменилось',
+    bodyMarkdown: ['Здравствуйте, {{name}}!', '', '## Что нового', '', 'Мы добавили **новую возможность**.'].join('\n'),
+    ctaLabel: 'Попробовать', ctaUrl: 'https://projectsflow.ru/', layout: 'standard', offer: null },
+  { key: 'update', name: 'Обновление', description: 'Сводка изменений за период',
+    subject: 'Обновления ProjectsFlow', preheader: 'Что изменилось', bodyMarkdown: ['Здравствуйте, {{name}}!', '', '- Пункт'].join('\n'),
+    ctaLabel: null, ctaUrl: null, layout: 'standard', offer: null },
+  { key: 'come_back', name: 'Приглашение вернуться', description: 'Для тех, кто давно не заходил',
+    subject: '{{name}}, мы скучаем', preheader: 'Ваши проекты ждут', bodyMarkdown: 'Здравствуйте, {{name}}!', ctaLabel: null, ctaUrl: null, layout: 'standard', offer: null },
+  { key: 'promo_trial', name: 'Прайм на 7 дней', description: 'Промо: пробный Прайм', subject: '{{name}}, Прайм на {{offer}}',
+    preheader: 'Воркер сам берёт задачи', bodyMarkdown: ['# Отдайте рутину воркеру', '', 'Прайм на {{offer}}.'].join('\n'),
+    ctaLabel: 'Посмотреть Прайм', ctaUrl: 'https://projectsflow.ru/profile', layout: 'trial', offer: { badge: '7 дней', deadline: 'до 30 ноября' } },
+];
+
+function mailingState(state) {
+  state.mailing ??= { templates: [], campaigns: [], reach: { eligible: PEOPLE.length, unsubscribed: 1, invalid: 0 } };
+  return state.mailing;
+}
+
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// Stand-in for the server renderer: the same fluid 600px card and phone media query.
+function mailingPreviewDto(body) {
+  const layout = body.layout && body.layout !== 'standard' ? String(body.layout) : null;
+  const offer = layout ? body.offer : null;
+  const fill = (s) => String(s ?? '').replace(/\{\{\s*name\s*\}\}/g, ME.displayName).replace(/\{\{\s*workspace\s*\}\}/g, workspaceDto().name)
+    .replace(/\{\{\s*offer\s*\}\}/g, offer?.badge || 'подарок').replace(/\{\{\s*deadline\s*\}\}/g, offer?.deadline || 'в ближайшие дни');
+  // Promo layouts: hero and offer strip, like the server renderer.
+  const promo = layout
+    ? `<tr><td data-pf-layout="${escapeHtml(layout)}" style="padding:0;"><img src="/mail/${escapeHtml(layout)}/thumb-2.jpg" alt="" style="display:block;width:100%;"></td></tr>`
+      + (offer?.badge ? `<tr><td class="pf-offer" style="padding:20px 32px 0;font-size:56px;">${escapeHtml(offer.badge)}</td></tr>` : '')
+    : '';
+  const paragraphs = fill(body.bodyMarkdown).split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#334155;">${escapeHtml(p)}</p>`).join('');
+  const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>@media (max-width:480px){.pf-shell{padding:0!important}.pf-card{border-radius:0!important}}</style></head>
+<body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;"><table role="presentation" width="100%" class="pf-shell" style="padding:32px 12px;"><tr><td align="center">
+<table role="presentation" width="100%" class="pf-card" style="width:100%;max-width:600px;background:#fff;border-radius:12px;border:1px solid #e2e8f0;">
+<tr><td style="padding:28px 32px 12px;font-size:13px;font-weight:700;color:#2563eb;">PROJECTSFLOW</td></tr>
+${promo}<tr><td style="padding:8px 32px;">${paragraphs}</td></tr>
+<tr><td style="padding:16px 32px;background:#f8fafc;font-size:12px;color:#94a3b8;">Отписаться от рассылок</td></tr>
+</table></td></tr></table></body></html>`;
+  return { subject: fill(body.subject), preheader: fill(body.preheader), html, text: fill(body.bodyMarkdown) };
+}
+
+function mutateMailing(state, method, path, body) {
+  if (!path.startsWith('/admin/mailings/')) return undefined;
+  const m = mailingState(state);
+  if (method === 'POST' && path === '/admin/mailings/templates') {
+    const now = new Date().toISOString();
+    const template = { ...body, id: `tpl-${m.templates.length + 1}`, createdBy: ME.id, createdAt: now, updatedAt: now };
+    m.templates.unshift(template);
+    return json({ template }, 201);
+  }
+  const put = method === 'PUT' && path.match(/^\/admin\/mailings\/templates\/([^/]+)$/);
+  if (put) {
+    const i = m.templates.findIndex((t) => t.id === put[1]);
+    if (i < 0) return json({ error: 'template_not_found' }, 404);
+    m.templates[i] = { ...m.templates[i], ...body, updatedAt: new Date().toISOString() };
+    return json({ template: m.templates[i] });
+  }
+  if (method === 'POST' && path === '/admin/mailings/preview') return json(mailingPreviewDto(body));
+  // Test sends go to the signed-in admin only; nothing leaves the browser in smoke runs.
+  if (method === 'POST' && path === '/admin/mailings/test') return json({ to: ME.email });
+  if (method === 'POST' && path === '/admin/mailings/reach') return json({ reach: m.reach });
+  return undefined;
 }
 
 function parseBody(request) {
@@ -581,6 +875,10 @@ function parseBody(request) {
 
 // Mutations: journaled, then answered like the server would (where a scenario relies on it).
 function mutate(state, method, path, body) {
+  const mailing = mutateMailing(state, method, path, body);
+  if (mailing) return mailing;
+  const adminUsers = mutateAdminUsers(state, method, path, body);
+  if (adminUsers) return adminUsers;
   const taskMatch = path.match(/^\/projects\/([^/]+)\/tasks\/([^/]+)(\/.*)?$/);
   if (taskMatch) {
     const [, , taskId, rest = ''] = taskMatch;
@@ -611,6 +909,29 @@ function mutate(state, method, path, body) {
       return json({ task: res.body.task, commentId: `c-${Date.now()}` });
     }
     if (method === 'POST' && rest === '/approval/withdraw') return touch({ status: 'manual' });
+    if (method === 'POST' && rest === '/comments') {
+      const now = new Date().toISOString();
+      const comment = {
+        id: `c-smoke-${Object.values(state.comments ?? {}).flat().length + 1}`,
+        taskId, ownerUserId: ME.id, body: body?.body ?? '', actorKind: 'user', agentName: null,
+        notifyMode: body?.notify?.mode ?? 'all', replyToCommentId: null, quotedText: null,
+        createdAt: now, updatedAt: now, attachments: [], acknowledgements: [],
+      };
+      state.comments ??= {};
+      state.comments[taskId] = [...(state.comments[taskId] ?? []), comment];
+      return json({ comment }, 201);
+    }
+    const commentUpload = rest.match(/^\/comments\/([^/]+)\/attachments$/);
+    if (method === 'POST' && commentUpload) {
+      const comment = state.comments?.[taskId]?.find((c) => c.id === commentUpload[1]);
+      if (!comment) return json({ error: 'not_found' }, 404);
+      const attachment = {
+        id: `a-smoke-${comment.attachments.length + 1}`, taskId, filename: 'screenshot.png', mimeType: 'image/png',
+        sizeBytes: 68, url: SMOKE_PNG_DATA_URL, uploadedAt: new Date().toISOString(),
+      };
+      comment.attachments.push(attachment);
+      return json({ attachment }, 201);
+    }
     if (method === 'POST' && rest === '/assign-to-project') {
       return touch({ projectId: body?.targetProjectId ?? task.projectId, context: undefined });
     }
@@ -626,6 +947,8 @@ function mutate(state, method, path, body) {
       assignee: body?.assigneeUserId ?? ME.id,
       deadline: body?.deadline ?? null,
       priority: body?.priority ?? null,
+      taskType: body?.taskType ?? null,
+      recurrence: body?.recurrence ?? null,
       createdHoursAgo: 0,
     });
     state.tasks.push(created);
@@ -665,6 +988,22 @@ function mutate(state, method, path, body) {
   if (method === 'POST' && path === '/notifications/read-all') return json({ updated: 0 });
   if (method === 'POST' && path === '/recent-task-views') return noContent();
   if (method === 'PUT' && path === '/workspaces/current') { state.activeWorkspaceId = body.workspaceId; return noContent(); }
+  const templates = path.match(/^\/workspaces\/([^/]+)\/task-templates(?:\/([^/]+))?$/);
+  if (templates && method === 'POST' && !templates[2]) {
+    const description = String(body?.description ?? '').replace(/\[[xX]\]/g, '[ ]');
+    const template = {
+      id: `tpl-new-${(state.taskTemplates ?? []).length + 1}`, workspaceId: templates[1],
+      name: body?.name || description.split('\n')[0], description,
+      priority: body?.priority ?? null, taskType: body?.taskType ?? null, recurrence: body?.recurrence ?? null,
+      createdBy: ME.id, createdAt: new Date().toISOString(),
+    };
+    state.taskTemplates = [template, ...(state.taskTemplates ?? [])];
+    return json({ template }, 201);
+  }
+  if (templates && method === 'DELETE' && templates[2]) {
+    state.taskTemplates = (state.taskTemplates ?? []).filter((t) => t.id !== templates[2]);
+    return noContent();
+  }
   if (method === 'POST' && path === '/auth/logout') return noContent();
   if (method === 'POST' && path === '/telemetry/actions') return noContent();
   return undefined;

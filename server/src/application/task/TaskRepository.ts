@@ -1,4 +1,5 @@
-import type { RalphMode, Task, TaskPriority, TaskStatus, TaskType } from '../../domain/task/Task.js';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskGroupOrigin, TaskStatus, TaskType } from '../../domain/task/Task.js';
+import type { TaskRecurrence } from '../../domain/task/TaskRecurrence.js';
 
 export type CreateTaskInput = {
   readonly id: string;
@@ -20,6 +21,7 @@ export type CreateTaskInput = {
   readonly position: number;
   // Режим работы Ralph (default 'normal'). См. domain RalphMode.
   readonly ralphMode?: RalphMode;
+  readonly runMode?: RunMode;
   // Срок выполнения (ISO 'YYYY-MM-DD'). null = без deadline.
   readonly deadline?: string | null;
   // Дата начала (диапазон startDate → deadline). null = событие одного дня.
@@ -30,6 +32,10 @@ export type CreateTaskInput = {
   readonly priority?: TaskPriority | null;
   // Тип задачи. null/undefined = не определён.
   readonly taskType?: TaskType | null;
+  // Пространство создания в общем проекте (db/182). null/undefined = основное.
+  readonly originWorkspaceId?: string | null;
+  // Правило повтора (db/185). null/undefined = не повторяется.
+  readonly recurrence?: TaskRecurrence | null;
 };
 
 export type UpdateTaskPatch = {
@@ -46,6 +52,7 @@ export type UpdateTaskPatch = {
   readonly statusBeforeDone?: TaskStatus | null;
   readonly position?: number;
   readonly ralphMode?: RalphMode;
+  readonly runMode?: RunMode;
   // null = очистить deadline. undefined = не менять.
   readonly deadline?: string | null;
   // null = очистить дату начала. undefined = не менять.
@@ -56,7 +63,27 @@ export type UpdateTaskPatch = {
   readonly priority?: TaskPriority | null;
   // null = сбросить тип в «не определён». undefined = не менять.
   readonly taskType?: TaskType | null;
+  // null = больше не повторять. undefined = не менять. См. db/185.
+  readonly recurrence?: TaskRecurrence | null;
 };
+
+/**
+ * Пометка «следующий повтор уже поставлен» у выполненной задачи (db/185). Отдельный порт,
+ * а не методы TaskRepository: он нужен одному use-case'у (SpawnNextRecurringTask), и так
+ * не приходится дописывать заглушки во все fake-репозитории задач.
+ */
+export interface TaskRecurrenceLedger {
+  /**
+   * Атомарно занять слот следующего повтора: записать `nextTaskId`, только если слот пуст.
+   * true — слот наш (ставим копию), false — копию уже ставили (повторное выполнение).
+   */
+  claimNextOccurrence(taskId: string, nextTaskId: string): Promise<boolean>;
+  /**
+   * Заменить значение слота, если там всё ещё `expected` (резерв → id созданной задачи;
+   * резерв → null, если создать копию не удалось и слот надо освободить).
+   */
+  replaceNextOccurrence(taskId: string, expected: string, next: string | null): Promise<void>;
+}
 
 // Лёгкая ссылка на задачу в корзине (для авто-purge).
 export type TrashedTaskRef = {
@@ -67,6 +94,9 @@ export type TrashedTaskRef = {
 
 export interface TaskRepository {
   listByProject(projectId: string): Promise<Task[]>;
+  // Пометить задачу как поставленную из рабочей Telegram-группы (db/190). Optional — старые
+  // fake-репозитории без него.
+  setGroupOrigin?(taskId: string, origin: TaskGroupOrigin): Promise<void>;
   /**
    * Сколько задач пользователя закрыто — по пространствам. Считаем ТЕКУЩЕЕ состояние
    * доски (status='done', ответственный — он), а не события журнала: журнал чистится
@@ -186,5 +216,7 @@ export interface TaskRepository {
     targetProjectId: string,
     assigneeUserId: string,
     actorUserId?: string | null,
+    // Пространство создания в новом проекте (db/182); null — основное.
+    originWorkspaceId?: string | null,
   ): Promise<Task | null>;
 }

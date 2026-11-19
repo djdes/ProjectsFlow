@@ -1,3 +1,5 @@
+import { agentActivity, AgentActivityTracker } from '../../application/agent/AgentActivityTracker.js';
+import { onlyFromGroups } from './groupOriginFilter.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import type { ListTasks, TaskWithCounts } from '../../application/task/ListTasks.js';
@@ -40,6 +42,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import type { ProjectNotificationService } from '../../application/notifications/ProjectNotificationService.js';
 import type { DispatchCommentNotifications } from '../../application/notifications/DispatchCommentNotifications.js';
 import type { GetCommentNotifications } from '../../application/task/GetCommentNotifications.js';
+import type { ListCommentNotifyCandidates } from '../../application/task/ListCommentNotifyCandidates.js';
 import type { TaskRepository } from '../../application/task/TaskRepository.js';
 import type { MaybeReopenForClarification } from '../../application/task/MaybeReopenForClarification.js';
 import type { BroadcastTelegramNotificationByTask } from '../../application/telegram/BroadcastTelegramNotificationByTask.js';
@@ -125,13 +128,17 @@ type Deps = {
   readonly dispatchCommentNotifications: DispatchCommentNotifications;
   // Чтение журнала «кто уведомлён» для меню ⋮ у комментария.
   readonly getCommentNotifications: GetCommentNotifications;
+  // Кого автор комментария может уведомить + кто выбран по умолчанию (композер).
+  readonly listCommentNotifyCandidates: ListCommentNotifyCandidates;
   // Для получения имени проекта в TG-сообщениях.
   readonly projectRepo: ProjectRepository;
+  // Пульс агентов (диспетчера) — в памяти процесса; по умолчанию общий экземпляр.
+  readonly agentActivity?: AgentActivityTracker;
 };
 
 type TaskDto = Omit<
   Task,
-  'createdBy' | 'createdAt' | 'updatedAt' | 'ralphCancelRequestedAt'
+  'createdBy' | 'createdAt' | 'updatedAt' | 'ralphCancelRequestedAt' | 'recurrenceNextTaskId'
 > & {
   createdAt: string;
   updatedAt: string;
@@ -145,9 +152,18 @@ type TaskDto = Omit<
 export function toDto(t: Task | TaskWithCounts): TaskDto {
   // Сырой createdBy остаётся серверным audit-id. Клиент получает отдельный creator
   // только для отображения рядом с датой создания; назначение живёт исключительно в assignee.
-  const { createdBy: _serverOnlyCreatedBy, ...publicTask } = t;
+  // recurrenceNextTaskId — серверная пометка идемпотентности повтора (db/185), не для UI.
+  const {
+    createdBy: _serverOnlyCreatedBy,
+    recurrenceNextTaskId: _serverOnlyNextOccurrence,
+    ...publicTask
+  } = t;
   const base: TaskDto = {
     ...publicTask,
+    // Всегда в ответе (null = не повторяется), даже если fake-репозиторий поле не заполнил.
+    recurrence: t.recurrence ?? null,
+    // Из какой рабочей Telegram-группы пришла задача (db/190). null — не из группы.
+    groupOrigin: t.groupOrigin ?? null,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
     ralphCancelRequestedAt: t.ralphCancelRequestedAt
@@ -241,7 +257,8 @@ export function tasksRouter(deps: Deps): Router {
     try {
       const projectId = req.params['projectId'] as string;
       const list = await deps.listTasks.execute(projectId, req.user!.id);
-      res.json({ tasks: list.map(toDto) });
+      // «Только из групп» (db/190): ?fromGroups=1.
+      res.json({ tasks: onlyFromGroups(list, req.query, (t) => t).map(toDto) });
     } catch (e) {
       next(e);
     }
@@ -261,12 +278,14 @@ export function tasksRouter(deps: Deps): Router {
         status: body.status ?? 'todo',
         afterTaskId: body.afterTaskId ?? null,
         ralphMode: body.ralphMode,
+        runMode: body.runMode,
         assigneeUserId: body.assigneeUserId ?? null,
         deadline: body.deadline ?? null,
         startDate: body.startDate ?? null,
         parentTaskId: body.parentTaskId ?? null,
         priority: body.priority ?? null,
         taskType: body.taskType ?? null,
+        recurrence: body.recurrence ?? null,
       });
       deps.notifyTaskChanged(projectId);
       res.status(201).json({ task: toDto(task) });
@@ -326,10 +345,12 @@ export function tasksRouter(deps: Deps): Router {
         cover: body.cover,
         coverPosition: body.coverPosition,
         ralphMode: body.ralphMode,
+        runMode: body.runMode,
         deadline: body.deadline,
         startDate: body.startDate,
         priority: body.priority,
         taskType: body.taskType,
+        recurrence: body.recurrence,
       });
       deps.notifyTaskChanged(projectId, [task.assignee.userId]);
       res.json({ task: toDto(task) });
@@ -725,6 +746,21 @@ export function tasksRouter(deps: Deps): Router {
     }
   });
 
+  // Адресаты «Уведомить → Выбрать» в композере: все, кто может открыть задачу, кроме
+  // автора; isDefault — кого композер выбирает сам (руководитель, см. defaultNotifyRecipients).
+  router.get('/:taskId/comment-notify-candidates', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const candidates = await deps.listCommentNotifyCandidates.execute(
+        req.params['projectId'] as string,
+        req.user!.id,
+        req.params['taskId'] as string,
+      );
+      res.json({ candidates });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   // Журнал доставки уведомлений по комментарию — для меню ⋮ «Кто уведомлён».
   router.get(
     '/:taskId/comments/:commentId/notifications',
@@ -774,6 +810,7 @@ export function tasksRouter(deps: Deps): Router {
         notifyUserIds: audience.userIds,
         replyToCommentId: body.replyToCommentId ?? null,
         quotedText: body.quotedText ?? null,
+        attachmentCount: body.attachmentCount ?? 0,
       });
       deps.notifyTaskChanged(projectId);
       deps.notifyCommentAdded(
@@ -895,6 +932,25 @@ export function tasksRouter(deps: Deps): Router {
       }
     },
   );
+
+  // «Живость» очереди в LIVE: когда диспетчер проекта последний раз обращался к API.
+  // lastSeenAt=null при trackedSince недавно — данных ещё нет (рестарт сервера).
+  router.get('/:taskId/dispatcher-heartbeat', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const projectId = req.params['projectId'] as string;
+      await deps.getTask.execute(projectId, req.user!.id, req.params['taskId'] as string);
+      const project = await deps.projectRepo.getById(projectId);
+      const dispatcherUserId = project?.dispatcherUserId ?? null;
+      const activity = deps.agentActivity ?? agentActivity;
+      const lastSeenAt = dispatcherUserId ? activity.lastSeen(dispatcherUserId) : null;
+      res.json({
+        dispatcherAssigned: dispatcherUserId !== null,
+        lastSeenAt: lastSeenAt?.toISOString() ?? null,
+        trackedSince: activity.trackedSince.toISOString(),
+        serverNow: new Date().toISOString(),
+      });
+    } catch (error) { next(error); }
+  });
 
   router.get('/:taskId', async (req: Request, res: Response, next: NextFunction) => {
     try {

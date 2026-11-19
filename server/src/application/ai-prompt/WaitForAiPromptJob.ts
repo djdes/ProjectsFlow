@@ -20,12 +20,18 @@ type Deps = {
 export type WaitForAiPromptJobInput = {
   readonly userId: string;
   readonly jobId: string;
-  /** Default 25s, max 60s. */
+  /** Default 25s, max 60s. 0 — без ожидания (только текущее состояние). */
   readonly maxWaitMs?: number;
+  /**
+   * true — по таймауту вернуть последний (ещё не терминальный) снимок job'а вместо null.
+   * Нужен API, где клиент сам решает, ждать ли дальше (GET /api/ai/text-jobs/:id).
+   */
+  readonly returnLatestOnTimeout?: boolean;
 };
 
 /**
- * Возвращает job в терминальном состоянии. null = вышли по таймауту (handler → 504).
+ * Возвращает job в терминальном состоянии. null = вышли по таймауту (handler → 504),
+ * либо последний снимок, если запрошен returnLatestOnTimeout.
  */
 export class WaitForAiPromptJob {
   constructor(private readonly deps: Deps) {}
@@ -41,13 +47,15 @@ export class WaitForAiPromptJob {
     }
     if (TERMINAL_STATUSES.has(first.status)) return first;
 
+    let latest = first;
     while (Date.now() < deadline) {
       await sleep(POLL_INTERVAL_MS);
       const job = await this.deps.aiPromptJobs.findById(input.jobId);
       if (!job) throw new AiPromptJobNotFoundError(input.jobId);
       if (TERMINAL_STATUSES.has(job.status)) return job;
+      latest = job;
     }
-    return null;
+    return input.returnLatestOnTimeout ? latest : null;
   }
 }
 

@@ -9,7 +9,7 @@ export class GetProjectViewsAnalytics {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, userId: string, windowDays: number): Promise<ProjectAnalytics> {
-    await requireProjectAccess(this.deps, projectId, userId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, userId, 'read_project_data');
     const days = Math.min(365, Math.max(1, Math.round(windowDays) || 28));
     return this.deps.views.getAnalytics(projectId, days);
   }

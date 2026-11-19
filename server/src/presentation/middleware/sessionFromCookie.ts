@@ -12,6 +12,7 @@ export function sessionFromCookie(getCurrentUser: GetCurrentUser) {
       if (result) {
         req.user = result.user;
         req.sessionId = result.sessionId;
+        req.impersonatedBy = result.impersonatedBy;
       }
     } catch (e) {
       // Не валим запрос — просто без user. Логируем только message: dumping

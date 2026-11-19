@@ -197,7 +197,7 @@ export function FinancePage(): React.ReactElement {
         title="Прочие расходы"
         items={finance.expenses.map((e) => ({
           id: e.id,
-          left: e.category + (e.description ? ` · ${e.description}` : ''),
+          left: expenseCategoryLabel(e.category) + (e.description ? ` · ${e.description}` : ''),
           date: e.incurredOn,
           amount: e.amountKopecks,
         }))}
@@ -351,7 +351,13 @@ function AssignForm({
         <Label className="text-xs">Сотрудник</Label>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" size="sm" className="w-full justify-start font-normal sm:w-44">
+            <Button
+              type="button"
+              variant="outline"
+              // flex (не inline-flex), иначе кнопка встаёт в строку с подписью «Сотрудник»,
+              // а не под ней; h-9 — высота соседних полей «Доля %» и «С даты».
+              className="flex h-9 min-h-9 w-full justify-start px-3 font-normal sm:h-9 sm:w-44"
+            >
               <span className="truncate">{selected?.name ?? 'Выбрать…'}</span>
             </Button>
           </DropdownMenuTrigger>
@@ -376,7 +382,7 @@ function AssignForm({
           <Input id="astart" type="date" className="sm:w-40" value={start} onChange={(e) => setStart(e.target.value)} />
         </div>
       </div>
-      <Button size="sm" className="w-full sm:w-auto" onClick={() => void submit()} disabled={saving}>
+      <Button size="sm" className="w-full sm:h-9 sm:w-auto" onClick={() => void submit()} disabled={saving}>
         <Plus className="size-4" /> Назначить
       </Button>
     </div>
@@ -443,13 +449,27 @@ function LedgerCard({
   );
 }
 
+// Категории расхода — коды из серверного ExpenseCategory (db/020). Раньше поле было свободным
+// текстом с кодом «ads» по умолчанию, и в списке расходов строка начиналась с «ads · …».
+const EXPENSE_CATEGORIES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'ads', label: 'Реклама' },
+  { value: 'infra', label: 'Хостинг' },
+  { value: 'tools', label: 'Сервисы' },
+  { value: 'other', label: 'Прочее' },
+];
+
+// Старые записи могли сохранить произвольный текст — его показываем как есть.
+function expenseCategoryLabel(category: string): string {
+  return EXPENSE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+}
+
 function ExpenseForm({
   onAdd,
 }: {
   onAdd: (input: { amountKopecks: number; category: string; description: string | null; incurredOn: string }) => Promise<void>;
 }): React.ReactElement {
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('ads');
+  const [category, setCategory] = useState<string>('ads');
   const [desc, setDesc] = useState('');
   const [date, setDate] = useState(isoDay(new Date()));
   const [saving, setSaving] = useState(false);
@@ -480,7 +500,27 @@ function ExpenseForm({
       </div>
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="exp-cat">Категория</Label>
-        <Input id="exp-cat" className="sm:w-28" value={category} onChange={(e) => setCategory(e.target.value)} />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              id="exp-cat"
+              type="button"
+              variant="outline"
+              className="flex h-9 min-h-9 w-full justify-start px-3 font-normal sm:h-9 sm:w-28"
+            >
+              <span className="truncate">{expenseCategoryLabel(category)}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuRadioGroup value={category} onValueChange={setCategory}>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <DropdownMenuRadioItem key={c.value} value={c.value}>
+                  {c.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <div className="space-y-1">
         <Label className="text-xs" htmlFor="exp-desc">Описание</Label>
@@ -490,7 +530,7 @@ function ExpenseForm({
         <Label className="text-xs" htmlFor="exp-date">Дата</Label>
         <Input id="exp-date" type="date" className="sm:w-40" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
-      <Button size="sm" className="col-span-2 w-full sm:w-auto" onClick={() => void submit()} disabled={saving}>
+      <Button size="sm" className="col-span-2 w-full sm:h-9 sm:w-auto" onClick={() => void submit()} disabled={saving}>
         <Plus className="size-4" /> Добавить
       </Button>
     </div>
@@ -539,7 +579,7 @@ function IncomeForm({
         <Label className="text-xs" htmlFor="inc-date">Дата</Label>
         <Input id="inc-date" type="date" className="sm:w-40" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
-      <Button size="sm" className="col-span-2 w-full sm:w-auto" onClick={() => void submit()} disabled={saving}>
+      <Button size="sm" className="col-span-2 w-full sm:h-9 sm:w-auto" onClick={() => void submit()} disabled={saving}>
         <Plus className="size-4" /> Добавить
       </Button>
     </div>

@@ -97,7 +97,7 @@ export const httpClient = {
   post: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'POST', body }),
   patch: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PATCH', body }),
   put: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PUT', body }),
-  delete: <T>(path: string) => mutate<T>(path, { method: 'DELETE' }),
+  delete: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'DELETE', body }),
 };
 
 export type HttpClient = typeof httpClient;
@@ -110,6 +110,6 @@ export function workspaceHttpClient(workspaceId: string): HttpClient {
     post: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'POST', body, workspaceId }),
     patch: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PATCH', body, workspaceId }),
     put: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PUT', body, workspaceId }),
-    delete: <T>(path: string) => mutate<T>(path, { method: 'DELETE', workspaceId }),
+    delete: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'DELETE', body, workspaceId }),
   };
 }

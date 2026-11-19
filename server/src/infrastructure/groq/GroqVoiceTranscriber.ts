@@ -2,9 +2,9 @@ import { File } from 'node:buffer';
 import {
   fetch as undiciFetch,
   FormData,
-  ProxyAgent,
   type Dispatcher,
 } from 'undici';
+import { createProxyDispatcher } from '../http/createProxyDispatcher.js';
 import type {
   VoiceTranscriber,
   VoiceTranscriptionInput,
@@ -84,9 +84,7 @@ export class GroqVoiceTranscriber implements VoiceTranscriber {
       Number.isFinite(options.maxBytes) && (options.maxBytes ?? 0) > 0
         ? Math.floor(options.maxBytes!)
         : DEFAULT_MAX_BYTES;
-    this.dispatcher = options.proxyUrl?.trim()
-      ? new ProxyAgent(options.proxyUrl.trim())
-      : undefined;
+    this.dispatcher = createProxyDispatcher(options.proxyUrl);
   }
 
   get enabled(): boolean {

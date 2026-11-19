@@ -91,12 +91,14 @@ export class DrizzleUserRepository implements UserRepository {
     return updated;
   }
 
+  // Deleted accounts are included on purpose: this is a display lookup (activity authors,
+  // dispatchers, granters), and the anonymized row renders as «Удалённый пользователь».
   async getManyByIds(ids: readonly string[]): Promise<User[]> {
     if (ids.length === 0) return [];
     const rows = await this.db
       .select()
       .from(users)
-      .where(and(inArray(users.id, [...ids]), isNull(users.deletedAt)));
+      .where(inArray(users.id, [...ids]));
     return rows.map(toUser);
   }
 

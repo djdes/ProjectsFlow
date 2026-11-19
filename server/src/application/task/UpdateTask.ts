@@ -1,6 +1,11 @@
 import type { ApprovalGuard } from './TaskApprovalService.js';
 import { TaskDescriptionEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
-import type { RalphMode, Task, TaskPriority, TaskType } from '../../domain/task/Task.js';
+import type { RalphMode, RunMode, Task, TaskPriority, TaskType } from '../../domain/task/Task.js';
+import {
+  sameTaskRecurrence,
+  taskRecurrenceLabel,
+  type TaskRecurrence,
+} from '../../domain/task/TaskRecurrence.js';
 import { taskTitleExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ActivityFieldChange } from '../../domain/activity/ActivityEvent.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
@@ -38,6 +43,7 @@ export type UpdateTaskCommand = {
   readonly coverPosition?: number;
   // Сменить режим Ralph можно в любой момент — диспетчер на следующем тике увидит.
   readonly ralphMode?: RalphMode;
+  readonly runMode?: RunMode;
   // null = очистить deadline; undefined = не менять.
   readonly deadline?: string | null;
   // null = очистить дату начала; undefined = не менять.
@@ -46,6 +52,8 @@ export type UpdateTaskCommand = {
   readonly priority?: TaskPriority | null;
   // null = сбросить тип задачи; undefined = не менять.
   readonly taskType?: TaskType | null;
+  // null = больше не повторять; undefined = не менять. См. db/185.
+  readonly recurrence?: TaskRecurrence | null;
 };
 
 export class UpdateTask {
@@ -73,10 +81,12 @@ export class UpdateTask {
     if (input.cover !== undefined) patch.cover = input.cover;
     if (input.coverPosition !== undefined) patch.coverPosition = input.coverPosition;
     if (input.ralphMode !== undefined) patch.ralphMode = input.ralphMode;
+    if (input.runMode !== undefined) patch.runMode = input.runMode;
     if (input.deadline !== undefined) patch.deadline = input.deadline;
     if (input.startDate !== undefined) patch.startDate = input.startDate;
     if (input.priority !== undefined) patch.priority = input.priority;
     if (input.taskType !== undefined) patch.taskType = input.taskType;
+    if (input.recurrence !== undefined) patch.recurrence = input.recurrence;
 
     const updated = await this.deps.tasks.update(input.taskId, patch, input.ownerUserId);
     if (!updated) throw new TaskNotFoundError(input.taskId);
@@ -90,6 +100,9 @@ export class UpdateTask {
       if (patch.ralphMode !== undefined && existing.ralphMode !== updated.ralphMode) {
         changes.push({ field: 'ralphMode', old: existing.ralphMode ?? null, new: updated.ralphMode ?? null });
       }
+      if (patch.runMode !== undefined && existing.runMode !== updated.runMode) {
+        changes.push({ field: 'runMode', old: existing.runMode ?? null, new: updated.runMode ?? null });
+      }
       if (patch.deadline !== undefined && existing.deadline !== updated.deadline) {
         changes.push({ field: 'deadline', old: existing.deadline ?? null, new: updated.deadline ?? null });
       }
@@ -98,6 +111,13 @@ export class UpdateTask {
           field: 'priority',
           old: existing.priority != null ? String(existing.priority) : null,
           new: updated.priority != null ? String(updated.priority) : null,
+        });
+      }
+      if (patch.recurrence !== undefined && !sameTaskRecurrence(existing.recurrence, updated.recurrence)) {
+        changes.push({
+          field: 'recurrence',
+          old: existing.recurrence ? taskRecurrenceLabel(existing.recurrence) : null,
+          new: updated.recurrence ? taskRecurrenceLabel(updated.recurrence) : null,
         });
       }
       if (changes.length > 0) {

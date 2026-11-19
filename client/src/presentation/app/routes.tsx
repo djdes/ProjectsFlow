@@ -6,6 +6,7 @@ import { boardSlugFromHost } from '@/lib/publicBoardUrl';
 import { ProtectedRoute } from '@/presentation/auth/ProtectedRoute';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { AppShellSkeleton, RouteSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { sharedTaskSearch } from '@/presentation/components/forms/AddTaskDialogProvider';
 
 // Code-splitting (A4): каждая страница уезжает в свой chunk и грузится по требованию.
 // Раньше весь SPA (dnd-kit, motion, admin, monitoring, finance, tiptap) шёл одним
@@ -28,6 +29,11 @@ function RedirectKeepingSearch({ to }: { to: string }): ReactElement {
   return <Navigate to={{ pathname: to, search, hash }} replace />;
 }
 
+function ShareTargetRedirect(): ReactElement {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: '/', search: sharedTaskSearch(search) }} replace />;
+}
+
 const AppShell = page(() => import('@/presentation/layout/AppShell'), 'AppShell');
 const ProjectPage = page(() => import('@/presentation/pages/ProjectPage'), 'ProjectPage');
 const KbPage = page(() => import('@/presentation/pages/KbPage'), 'KbPage');
@@ -47,6 +53,7 @@ const InboxPage = page(() => import('@/presentation/pages/InboxPage'), 'InboxPag
 const AllWorkspaceTasksPage = page(() => import('@/presentation/pages/AllWorkspaceTasksPage'), 'AllWorkspaceTasksPage');
 const AiPage = page(() => import('@/presentation/pages/AiPage'), 'AiPage');
 const ProfilePage = page(() => import('@/presentation/pages/ProfilePage'), 'ProfilePage');
+const DesktopNotesPage = page(() => import('@/presentation/pages/DesktopNotesPage'), 'DesktopNotesPage');
 const WorkspaceSettingsPage = page(
   () => import('@/presentation/pages/WorkspaceSettingsPage'),
   'WorkspaceSettingsPage',
@@ -156,6 +163,9 @@ export const router = createBrowserRouter(
       // Отдельная страница задачи (кнопка «развернуть на весь экран» в дровере).
       { path: 'projects/:projectId/tasks/:taskId', element: el(<TaskDetailPage />) },
       { path: 'profile', element: el(<ProfilePage />) },
+      // «Поделиться → ProjectsFlow» (share_target в манифесте): текст задачи — в окно создания.
+      { path: 'share', element: <ShareTargetRedirect /> },
+      { path: 'desktop-notes', element: el(<DesktopNotesPage />) },
       { path: 'workspaces/:workspaceId/settings', element: el(<WorkspaceSettingsPage />) },
       {
         path: 'admin',

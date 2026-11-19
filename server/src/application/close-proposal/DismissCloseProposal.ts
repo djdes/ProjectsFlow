@@ -1,6 +1,7 @@
 import type { CloseProposal } from '../../domain/close-proposal/CloseProposal.js';
 import { CloseProposalNotFoundError } from '../../domain/close-proposal/errors.js';
 import type { CloseProposalRepository } from './CloseProposalRepository.js';
+import type { TaskRepository } from '../task/TaskRepository.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 
 export type DismissCloseProposalResult =
@@ -11,6 +12,8 @@ export type DismissCloseProposalResult =
 type Deps = {
   readonly closeProposals: CloseProposalRepository;
   readonly members: ProjectMemberRepository;
+  // Общий проект (db/182): скрытую правилами задачу человек не трогает.
+  readonly tasks?: Pick<TaskRepository, 'getById'>;
 };
 
 // Отклонение предложения закрыть задачу («✕ Не она»). Любой участник (viewer+). Атомарно
@@ -28,6 +31,10 @@ export class DismissCloseProposal {
 
     const membership = await this.deps.members.findForProject(proposal.projectId, input.userId);
     if (!membership) return { status: 'not_member' };
+    const task = this.deps.tasks ? await this.deps.tasks.getById(proposal.taskId) : null;
+    if (task && this.deps.members.canSeeTask && !(await this.deps.members.canSeeTask(input.userId, task))) {
+      return { status: 'not_member' };
+    }
 
     const resolved = await this.deps.closeProposals.resolve({
       id: input.proposalId,

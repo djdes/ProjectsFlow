@@ -57,7 +57,8 @@ export class SetProjectDispatcher {
       // Иначе требуем membership.
       if (!targetUser.isAdmin) {
         const targetMembership = await this.deps.members.findForProject(projectId, dispatcherUserId);
-        if (!targetMembership) {
+        // Гость общего проекта (db/182) диспетчером не бывает: диспетчер видит все задачи.
+        if (!targetMembership || targetMembership.guest) {
           throw new DispatcherCandidateInvalidError('not_member');
         }
       }

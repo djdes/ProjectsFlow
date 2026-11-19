@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, Loader2, MessageCircleQuestion } from 'lucide-react';
+import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { readableWorkerCommand } from '@/lib/readableWorkerCommand';
 import { isWorkerStartupNotice } from '@/lib/isWorkerStartupNotice';
@@ -9,6 +10,17 @@ import { WorkerResultMessage } from './WorkerResultMessage';
 import { useContainer } from '@/infrastructure/di/container';
 import { useTaskLiveTimeline } from '@/presentation/hooks/useTaskLiveTimeline';
 import { taskLiveTimeline } from '@/domain/live/TaskLiveTimeline';
+import { liveFeedRows, type LiveFeedRow } from '@/domain/live/LiveFeedRows';
+import {
+  isPipelineSession,
+  parseCheckResultPayload,
+  parseHandoffPayload,
+  parseReviewVerdictPayload,
+  parseStagePayload,
+  pipelineProgress,
+  pipelineStopReason,
+} from '@/domain/live/LivePipeline';
+import { CheckResultRow, formatElapsed, HandoffDivider, pipelineCaption, PipelineStepper, ReviewVerdictCard, RoleTurn, STAGE_LABEL, StageLine, ToolJournal } from './LivePipeline';
 import { WorkerChatMessage } from './WorkerChatMessage';
 import type { LiveSession } from '@/domain/live/LiveSession';
 import type {
@@ -17,7 +29,7 @@ import type {
   LiveToolUsePayload,
 } from '@/domain/live/LiveEvent';
 import type { LiveFileDiff } from '@/domain/live/LiveFileDiff';
-import { type Task } from '@/domain/task/Task';
+import { RUN_MODE_META, type RunMode, type Task } from '@/domain/task/Task';
 import type { TaskComment } from '@/domain/task/TaskComment';
 import type { ProjectMember } from '@/domain/project/ProjectMembership';
 import { CommentBody } from './CommentBody';
@@ -25,6 +37,7 @@ import { DiffView } from '@/presentation/components/diff/DiffView';
 import { CancelWorkButton } from './CancelWorkButton';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
 import { RunWithWorkerButton } from './RunWithWorkerButton';
+import { LiveQueueStatus, LiveRunModeNote } from './LiveQueueStatus';
 import { isLiveNearBottom, scrollLiveToBottom } from './liveScroll';
 import {
   isRalphQuestionComment,
@@ -56,6 +69,26 @@ const STATUS_LABEL_RU: Record<LiveSession['status'], string> = {
   canceled: 'отменено',
 };
 
+// Конвейер — мужской род и короче: «Конвейер · попытка 2 · идёт».
+const PIPELINE_STATUS_RU: Record<LiveSession['status'], string> = {
+  running: 'идёт',
+  completed: 'завершён',
+  failed: 'ошибка',
+  timeout: 'таймаут',
+  canceled: 'отменён',
+};
+
+// Подпись начала запуска. Сессия, которая уже не текущая, но всё ещё «running» в ответе
+// сервера, читается как завершённая (её сменил следующий запуск).
+// Режим запуска сессии берём из задачи (spec §5); старые данные без поля — 'quick'.
+const taskRunMode = (task: Task): RunMode => (task.runMode === 'full' ? 'full' : 'quick');
+
+function runCaption(session: LiveSession, current: boolean): string {
+  const status = session.status === 'running' && !current ? 'completed' : session.status;
+  if (isPipelineSession(session)) return `Конвейер · попытка ${session.attempt} · ${PIPELINE_STATUS_RU[status]}`;
+  return `Воркер ${status === 'running' ? 'работает' : STATUS_LABEL_RU[status]}`;
+}
+
 // Богатый markdown для текста ассистента: крупные заголовки (H1 как заголовок),
 // жирные акценты — в духе Notion/Cursor. Перебивает мелкий prose-sm у CommentBody
 // (селекторы `.class h1` сильнее, чем prose-sm-овский `:where(h1)`).
@@ -75,6 +108,8 @@ type Props = {
   onRunningChange?: (running: boolean) => void;
   onCommentCreated?: (c: TaskComment) => void;
   onTaskChanged?: () => void;
+  // Ответ PATCH из LIVE (смена режима запуска) — окно задачи обновляет свой снимок.
+  onTaskUpdated?: (updated: Task) => void;
 };
 
 // LIVE-вкладка: живая лента действий воркера в стиле IDE Cursor, но в теме сайта
@@ -95,13 +130,24 @@ function TaskLiveChat({
   onRunningChange,
   onCommentCreated,
   onTaskChanged,
+  onTaskUpdated,
 }: Props): React.ReactElement {
+  // Подтверждённый сервером ответ (отмена, постановка в очередь, смена режима) живёт,
+  // пока родитель не прислал свежую задачу; дальше правда — серверный статус из пропса.
   const [cancelResult, setCancelResult] = useState<{ source: Task; task: Task } | null>(null);
   const task = cancelResult?.source === sourceTask ? cancelResult.task : sourceTask;
   const handleCancelChanged = (updated: Task): void => {
     setCancelResult({ source: sourceTask, task: updated });
     onTaskChanged?.();
   };
+  const handleModeChanged = (updated: Task): void => {
+    setCancelResult({ source: sourceTask, task: { ...task, runMode: updated.runMode, updatedAt: updated.updatedAt } });
+    onTaskUpdated?.(updated);
+    onTaskChanged?.();
+  };
+  // Когда задачу поставили в очередь отсюда — точное время клика; иначе — последнее
+  // изменение задачи (перенос в «Воркер» его обновляет).
+  const [queuedAt, setQueuedAt] = useState<Date | null>(null);
   const projectId = task.projectId;
   const taskId = task.id;
   const { taskRepository, projectRepository } = useContainer();
@@ -112,9 +158,11 @@ function TaskLiveChat({
     return () => { disposed = true; };
   }, [projectId, projectRepository]);
   const { runs, loading: sessionsLoading, error: timelineError } = useTaskLiveTimeline(projectId, taskId);
-  const [queuedAfterSession, setQueuedAfterSession] = useState<string | null>(null);
-  const queued = queuedAfterSession !== null;
   const [visibleCount, setVisibleCount] = useState(DOM_CAP);
+  // While the reader is above the tail, the window keeps its first row: new actions
+  // must not push rows out of the DOM above the text being read.
+  const [pinnedKey, setPinnedKey] = useState<string | null>(null);
+  const firstShownKeyRef = useRef<string | null>(null);
   const [questionComments, setQuestionComments] = useState<TaskComment[]>([]);
   const [questionsLoading, setQuestionsLoading] = useState(true);
   const questionRequestRef = useRef(0);
@@ -187,26 +235,44 @@ function TaskLiveChat({
     return answers;
   }, [questionComments]);
 
-  const handleAnswerCreated = useCallback(
-    (created: TaskComment): void => {
-      setQuestionComments((current) =>
-        current.some((comment) => comment.id === created.id) ? current : [...current, created],
-      );
-      onCommentCreated?.(created);
-      onTaskChanged?.();
-    },
-    [onCommentCreated, onTaskChanged],
-  );
+  // Ответ на вопрос диспетчера: сервер сразу возвращает задачу из «На уточнении».
+  // Не ждём, пока родитель перерисует нас: перечитываем задачу и переходим в живое
+  // состояние очереди по серверному статусу. 'pending' — ответ отправлен, статус ещё читаем.
+  const [answerState, setAnswerState] = useState<'pending' | 'reopened' | null>(null);
+  const handleAnswerCreated = (created: TaskComment): void => {
+    setQuestionComments((current) =>
+      current.some((comment) => comment.id === created.id) ? current : [...current, created],
+    );
+    onCommentCreated?.(created);
+    setAnswerState('pending');
+    const source = sourceTask;
+    void taskRepository.get(projectId, taskId)
+      .then((fresh) => {
+        setCancelResult({ source, task: fresh });
+        if (fresh.status === 'todo') setQueuedAt(new Date());
+        setAnswerState(fresh.status === 'awaiting_clarification' ? null : 'reopened');
+      })
+      .catch((error: unknown) => {
+        setAnswerState(null);
+        toast.error(`Ответ сохранён, но не удалось обновить статус задачи: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    onTaskChanged?.();
+  };
 
-  const runningRun = runs.find(run => run.session.status === 'running');
+  const latestRun = runs.at(-1);
+  const runningRun = latestRun?.session.status === 'running' ? latestRun : undefined;
   const anyRunning = !!runningRun;
   useEffect(() => { onRunningChange?.(anyRunning); }, [anyRunning, onRunningChange]);
-  useEffect(() => {
-    if (anyRunning || (queuedAfterSession !== null && (runs.at(-1)?.session.id ?? '') !== queuedAfterSession)) setQueuedAfterSession(null);
-  }, [anyRunning, runs, queuedAfterSession]);
   const isWorking = anyRunning;
+  // «В очереди» — только серверный статус todo без идущей сессии. Никаких локальных
+  // флагов, которые переживают отмену и не сверяются с сервером.
+  const queued = task.status === 'todo' && !isWorking;
+  useEffect(() => { if (!queued) setQueuedAt(null); }, [queued]);
+  useEffect(() => { if (isWorking) setAnswerState(null); }, [isWorking]);
+  const answerAccepted = answerState === 'pending' || (answerState === 'reopened' && !isWorking && task.status !== 'awaiting_clarification');
   const handleChatComment = (created: TaskComment): void => {
     stickToBottomRef.current = true;
+    setPinnedKey(null);
     setQuestionComments(current => current.some(comment => comment.id === created.id) ? current.map(comment => comment.id === created.id ? created : comment) : [...current, created]);
     onCommentCreated?.(created);
   };
@@ -221,6 +287,7 @@ function TaskLiveChat({
     const nearBottom = isLiveNearBottom(scrollRef.current);
     stickToBottomRef.current = nearBottom;
     setShowScrollBottom(!nearBottom);
+    setPinnedKey(current => nearBottom ? null : current ?? firstShownKeyRef.current);
   }, []);
 
   const scrollToBottom = useCallback((): void => {
@@ -231,11 +298,25 @@ function TaskLiveChat({
 
   // Cancel follow mode before native scrolling starts, including small trackpad
   // deltas. No preventDefault: wheel/touch/keyboard retain browser scrolling.
-  const pauseFollow = useCallback((): void => { stickToBottomRef.current = false; }, []);
+  const pauseFollow = useCallback((): void => {
+    stickToBottomRef.current = false;
+    setPinnedKey(current => current ?? firstShownKeyRef.current);
+  }, []);
+  const followTail = useCallback((): void => {
+    stickToBottomRef.current = true;
+    setPinnedKey(null);
+  }, []);
+  // Постановку в очередь показываем по ответу сервера (статус todo), а не оптимистично.
+  const handleQueued = (updated: Task): void => {
+    followTail();
+    setCancelResult({ source: sourceTask, task: { ...task, ...updated } });
+    if (updated.status === 'todo') setQueuedAt(new Date());
+  };
 
   // Every opening (including a force-mounted tab) starts at the newest message.
   useLayoutEffect(() => {
     setVisibleCount(DOM_CAP);
+    setPinnedKey(null);
     stickToBottomRef.current = true;
     setShowScrollBottom(false);
     if (active) {
@@ -266,12 +347,36 @@ function TaskLiveChat({
   }, [active, scrollToBottom]);
 
   const entries = useMemo(() => taskLiveTimeline(runs, questionComments), [runs, questionComments]);
-  const shown = entries.slice(-visibleCount);
-  const hiddenCount = entries.length - shown.length;
+  const rows = useMemo(() => liveFeedRows(entries, runs), [entries, runs]);
+  const tailStart = Math.max(0, rows.length - visibleCount);
+  const pinnedIndex = pinnedKey ? rows.findIndex(row => row.key === pinnedKey) : -1;
+  const shown = rows.slice(pinnedIndex >= 0 ? Math.min(pinnedIndex, tailStart) : tailStart);
+  const hiddenCount = rows.length - shown.length;
+  useLayoutEffect(() => { firstShownKeyRef.current = shown[0]?.key ?? null; });
+
+  const pipelineRun = latestRun && isPipelineSession(latestRun.session) ? latestRun : undefined;
+  const progress = useMemo(() => pipelineRun ? pipelineProgress(pipelineRun.events, pipelineRun.session.status) : null, [pipelineRun]);
+  const finishedOutcome = progress && progress.outcome !== 'running' ? progress.outcome : null;
+  // Прошлый запуск не довёл задачу: предлагаем «Запустить снова», а не «Сделать с помощью воркера».
+  const relaunch = task.status === 'awaiting_clarification' || finishedOutcome === 'blocked' || finishedOutcome === 'stopped';
+  const stopReason = useMemo(() => pipelineRun && finishedOutcome === 'blocked' ? pipelineStopReason(pipelineRun.events) : null, [pipelineRun, finishedOutcome]);
+  const activeStage = progress?.outcome === 'running' ? progress.steps.find(step => step.state === 'active')?.stage : undefined;
+  const executing = activeStage === 'execute';
+  const spinnerStage = activeStage ? STAGE_LABEL[activeStage] : undefined;
+  const liveJournalKey = runningRun && pipelineRun === runningRun && executing
+    ? rows.findLast(row => row.kind === 'tools' && row.sessionId === runningRun.session.id)?.key ?? null : null;
 
   return (
     <div ref={panelRef} data-pf-live-panel="" className={cn('flex min-h-0 flex-col bg-panel text-foreground', fillHeight ? 'h-full flex-1' : 'h-[70dvh] shrink-0')}>
       {/* Шапка задачи убрана — задача видна в левой колонке окна (split/edit). */}
+      {/* Новый запуск ждёт диспетчера — прошлый (прерванный/завершённый) прогон не должен
+          выдавать себя за текущее состояние: сворачиваем его в историю. */}
+      {progress && (queued && progress.outcome !== 'running' ? (
+        <details data-pf-previous-run="" className="shrink-0 border-be border-border bg-card px-3 py-1.5 text-2xs text-muted-foreground">
+          <summary className="cursor-pointer select-none">Предыдущий запуск · {pipelineCaption(progress)}</summary>
+          <div className="mbs-1.5"><PipelineStepper progress={progress} /></div>
+        </details>
+      ) : <PipelineStepper progress={progress} />)}
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <div
@@ -288,19 +393,32 @@ function TaskLiveChat({
         className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pbs-3 pbe-14 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
       >
       <div ref={contentRef} className="space-y-2.5">
-        {sessionsLoading && entries.length === 0 && <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…</div>}
+        {sessionsLoading && rows.length === 0 && <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…</div>}
         {timelineError && <p role="status" className="text-sm text-muted-foreground">{timelineError}</p>}
         {hiddenCount > 0 && <button type="button" onClick={() => setVisibleCount(count => count + DOM_CAP)} className="mx-auto block rounded-md border px-3 py-1 text-xs text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80">Показать ранее ({hiddenCount})</button>}
-        {shown.map(entry => {
+        {shown.map((entry, index) => {
           if (entry.kind === 'message') return <WorkerChatMessage key={entry.key} projectId={projectId} comment={entry.comment} authorName={members.find(member => member.userId === entry.comment.ownerUserId)?.user.displayName ?? 'Участник'} />;
-          if (entry.kind === 'event') return <LiveEventRow key={entry.key} event={entry.event} finalFiles={runs.find(run => run.session.id === entry.sessionId)?.fileDiffs} />;
+          if (entry.kind === 'event' || entry.kind === 'tools') return <FeedRow key={entry.key} row={entry} firstShown={index === 0} live={entry.key === liveJournalKey} finalFiles={runs.find(run => run.session.id === entry.sessionId)?.fileDiffs} />;
           if (entry.kind === 'finish') return entry.run.fileDiffs.length > 0 ? <FinalDiffs key={entry.key} files={entry.run.fileDiffs} session={entry.run.session} /> : null;
-          return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · Воркер {entry.session.status === 'running' ? 'работает' : STATUS_LABEL_RU[entry.session.status]}</p>;
+          return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · {runCaption(entry.session, entry.session.id === runningRun?.session.id)}{entry.session.id === runs.at(-1)?.session.id && <span data-run-mode={taskRunMode(task)}> · {RUN_MODE_META[taskRunMode(task)].label}</span>}</p>;
         })}
-        {runningRun && <ClaudeSpinner startedAt={runningRun.session.startedAt} />}
-        {(queued || task.status === 'todo') && !isWorking && <div role="status" className="rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-sm text-primary-ink">Задача в очереди — ожидает запуска диспетчера. Следующие действия появятся здесь автоматически.</div>}
-        {!sessionsLoading && runs.length === 0 && entries.length === 0 && dispatcherQuestions.length === 0 && !questionsLoading && <EmptyState working={isWorking} queued={queued} task={task} />}
-        {questionsLoading && runs.length === 0 && dispatcherQuestions.length === 0 && (
+        {runningRun && <ClaudeSpinner key={runningRun.session.id} startedAt={runningRun.session.startedAt} label={pipelineRun === runningRun ? spinnerStage : undefined} />}
+        {runningRun && <LiveRunModeNote task={task} />}
+        {stopReason && !queued && !isWorking && (
+          <div role="status" data-pf-live-stop-reason="" className="rounded-lg border border-destructive/30 bg-card px-3 py-2 text-sm">
+            <p className="font-medium text-destructive">Почему остановлено: {stopReason.title}</p>
+            {stopReason.line && <p className="mbs-0.5 truncate font-mono text-xs text-muted-foreground" title={stopReason.line}>{stopReason.line}</p>}
+          </div>
+        )}
+        {answerAccepted && (
+          <p role="status" data-pf-live-answer-accepted="" className="flex items-center gap-1.5 rounded-lg bg-done-soft px-3 py-2 text-sm text-done-ink">
+            <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+            Ответ принят — задача снова в очереди
+          </p>
+        )}
+        {queued && <LiveQueueStatus task={task} queuedSince={queuedAt ?? task.updatedAt} canEdit={canEdit} onTaskChanged={handleModeChanged} />}
+        {!sessionsLoading && runs.length === 0 && rows.length === 0 && dispatcherQuestions.length === 0 && !questionsLoading && <EmptyState working={isWorking} queued={queued} task={task} />}
+        {questionsLoading && !sessionsLoading && runs.length === 0 && dispatcherQuestions.length === 0 && (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка вопросов…
           </div>
@@ -322,7 +440,7 @@ function TaskLiveChat({
       {active && (
         <button type="button" aria-label="К последнему сообщению" title="К последнему сообщению"
           className={cn('absolute inset-be-3 start-1/2 -translate-x-1/2 z-10 grid size-10 place-items-center rounded-full border bg-card shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80', showScrollBottom ? 'text-foreground' : 'text-muted-foreground')}
-          onClick={() => { stickToBottomRef.current = true; setShowScrollBottom(false); scrollToBottom(); }}>
+          onClick={() => { followTail(); scrollToBottom(); }}>
           <ChevronDown className="size-5" aria-hidden />
         </button>
       )}
@@ -330,19 +448,20 @@ function TaskLiveChat({
 
       {/* «Летающий» футер: идёт работа — большая кнопка отмены; иначе — композер промпта. */}
       <div className="shrink-0">
-        {!isWorking && canEdit && <RunWithWorkerButton key={task.id} task={task} onQueued={() => { stickToBottomRef.current = true; setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }} onChanged={onTaskChanged} />}
-        {isWorking || task.status === 'in_progress' ? (
+        {!isWorking && canEdit && <RunWithWorkerButton key={task.id} task={task} relaunch={relaunch} onQueued={handleQueued} onChanged={onTaskChanged} />}
+        {/* «Отменить работу» — только пока воркер реально работает (или ждём подтверждения
+            уже запрошенной отмены). Запаркованная/упавшая задача получает «Запустить снова». */}
+        {isWorking || task.ralphCancelRequestedAt ? (
           canEdit ? <CancelWorkButton task={task} workerRunning={isWorking} onChanged={handleCancelChanged} /> : null
         ) : task.status === 'awaiting_clarification' ? (
           <>
-            {canEdit && <CancelWorkButton task={task} onChanged={handleCancelChanged} />}
             <TaskDrawerComposer
               task={{ ...task, canEdit }}
               backlogTail={backlogTail}
               todoTail={todoTail}
               onCommentCreated={handleChatComment}
             defaultTarget="worker"
-            onWorkerQueued={() => { stickToBottomRef.current = true; setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }}
+            onWorkerQueued={handleQueued}
               onTaskChanged={() => onTaskChanged?.()}
             />
           </>
@@ -353,7 +472,7 @@ function TaskLiveChat({
             todoTail={todoTail}
             onCommentCreated={handleChatComment}
               defaultTarget="worker"
-              onWorkerQueued={() => { stickToBottomRef.current = true; setQueuedAfterSession(runs.at(-1)?.session.id ?? ''); }}
+              onWorkerQueued={handleQueued}
             onTaskChanged={() => onTaskChanged?.()}
           />
         )}
@@ -384,7 +503,10 @@ export function DispatcherQuestionCard({
   taskId: string;
   onAnswerCreated: (created: TaskComment) => void;
 }): React.ReactElement {
-  const [collapsed, setCollapsed] = useState(Boolean(answer));
+  const answered = Boolean(answer);
+  const [collapsed, setCollapsed] = useState(answered);
+  // Ответ пришёл, пока карточка открыта, — сворачиваем: вопрос больше не ждёт человека.
+  useEffect(() => { if (answered) setCollapsed(true); }, [answered]);
   const answerText = Array.isArray(answer?.value) ? answer.value.join(', ') : answer?.value;
   return (
     // Вопрос ждёт решения человека — смысл «на утверждении» (фиолетовый). Карточка
@@ -407,15 +529,7 @@ export function DispatcherQuestionCard({
       </div>
       <div hidden={collapsed}>
       <CommentBody body={comment.body} className={cn(RICH_MD, 'text-sm')} />
-      {answer ? (
-        <div className="mbs-2 flex items-start gap-1.5 rounded-md bg-done-soft px-2.5 py-2 text-xs text-done-ink">
-          <CheckCircle2 className="mbs-0.5 size-3.5 shrink-0" aria-hidden />
-          <span>
-            <span className="font-medium">Ответ принят</span>
-            {answerText ? `: ${answerText}` : ''}
-          </span>
-        </div>
-      ) : (
+      {!answer && (
         <RalphAnswerControls
           question={question}
           projectId={projectId}
@@ -424,6 +538,15 @@ export function DispatcherQuestionCard({
         />
       )}
       </div>
+      {answer && (
+        <div className="mbs-2 flex items-start gap-1.5 rounded-md bg-done-soft px-2.5 py-2 text-xs text-done-ink">
+          <CheckCircle2 className="mbs-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>
+            <span className="font-medium">Ответ принят</span>
+            {answerText ? `: ${answerText}` : ''}
+          </span>
+        </div>
+      )}
     </section>
   );
 }
@@ -440,7 +563,7 @@ function EmptyState({ working, task, queued: queuedByUser }: { working: boolean;
         {task.ralphCancelRequestedAt
           ? 'Запрос на отмену сохранён. Диспетчер ещё не подтвердил остановку.'
           : working ? 'Диспетчер подтвердил запуск. Здесь появится живая лента действий.'
-          : task.status === 'in_progress' ? 'Статус «В работе» сам по себе не означает запуск воркера. Активной LIVE-сессии пока нет.'
+          : task.status === 'in_progress' ? 'Статус «У воркера» сам по себе не означает запуск воркера. Активной LIVE-сессии пока нет.'
           : queued ? 'Задача сохранена в очереди. Лента действий появится автоматически после запуска.'
           : 'Нажми «Сделать с помощью воркера» — здесь появится лента действий.'}
       </span>
@@ -450,49 +573,36 @@ function EmptyState({ working, task, queued: queuedByUser }: { working: boolean;
 
 // === Claude Code-style спиннер (мерцающая «снежинка» + ротация слов) ===
 const SPINNER_FRAMES = ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'];
-const SPINNER_WORDS = [
-  'Booping',
-  'Noodling',
-  'Percolating',
-  'Simmering',
-  'Cogitating',
-  'Conjuring',
-  'Vibing',
-  'Tinkering',
-  'Marinating',
-  'Computing',
-  'Pondering',
-  'Brewing',
-  'Finagling',
-  'Manifesting',
-  'Schlepping',
-];
+// Нейтральные русские слова: лента не знает, что именно делает воркер в эту секунду.
+const SPINNER_WORDS = ['Работаю', 'Думаю', 'Разбираюсь'];
 
-function ClaudeSpinner({ startedAt }: { startedAt?: Date }): React.ReactElement {
+const elapsedSeconds = (startedAtMs: number): number => Math.max(0, Math.round((Date.now() - startedAtMs) / 1000));
+
+// label — текущий этап конвейера («Проверка версии»); без него слова сменяются по кругу.
+function ClaudeSpinner({ startedAt, label }: { startedAt: Date; label?: string }): React.ReactElement {
+  // Every refresh brings a new Date for the same start: timers are keyed by its value.
+  const startedAtMs = startedAt.getTime();
   const [frame, setFrame] = useState(0);
   const [word, setWord] = useState(0);
-  const [secs, setSecs] = useState(0);
+  // The first frame already shows the real run time, not «(0s)» for a long run.
+  const [secs, setSecs] = useState(() => elapsedSeconds(startedAtMs));
 
   useEffect(() => {
     const f = window.setInterval(() => setFrame((x) => (x + 1) % SPINNER_FRAMES.length), 110);
-    const w = window.setInterval(() => setWord((x) => (x + 1) % SPINNER_WORDS.length), 2800);
-    const s = window.setInterval(() => {
-      setSecs((prev) =>
-        startedAt ? Math.max(0, Math.round((Date.now() - startedAt.getTime()) / 1000)) : prev + 1,
-      );
-    }, 1000);
+    const w = window.setInterval(() => setWord((x) => (x + 1) % SPINNER_WORDS.length), 4000);
+    const s = window.setInterval(() => setSecs(elapsedSeconds(startedAtMs)), 1000);
     return () => {
       window.clearInterval(f);
       window.clearInterval(w);
       window.clearInterval(s);
     };
-  }, [startedAt]);
+  }, [startedAtMs]);
 
   return (
-    <div className="flex items-center gap-2 px-1 py-1.5 font-mono text-xs text-muted-foreground">
-      <span className="pf-tone-purple text-tone">{SPINNER_FRAMES[frame]}</span>
-      <span className="text-foreground">{SPINNER_WORDS[word]}…</span>
-      <span className="opacity-60">({secs}s)</span>
+    <div data-pf-live-spinner="" className="flex items-center gap-2 px-1 py-1.5 text-xs text-muted-foreground">
+      <span className="pf-tone-purple w-3 text-center font-mono text-tone">{SPINNER_FRAMES[frame]}</span>
+      <span className="text-foreground">{label ?? SPINNER_WORDS[word]}…</span>
+      <span className="tabular-nums opacity-60" data-pf-live-elapsed="">({formatElapsed(secs)})</span>
     </div>
   );
 }
@@ -504,8 +614,58 @@ function Dot({ tone }: { tone: string }): React.ReactElement {
   return <span className={cn('mbs-[7px] size-1.5 shrink-0 rounded-full', tone)} aria-hidden />;
 }
 
+// === Ряд конвейера: роль (аватар один раз на реплику), журнал инструментов, карточки ===
+function FeedRow({ row, firstShown, live, finalFiles = [] }: {
+  row: Extract<LiveFeedRow, { kind: 'event' | 'tools' }>;
+  firstShown: boolean;
+  live: boolean;
+  finalFiles?: readonly LiveFileDiff[];
+}): React.ReactElement | null {
+  if (!row.role) {
+    if (row.kind !== 'event') return null;
+    // ralph-worker: этапы подготовки диспетчера — той же строкой этапа, что в конвейере.
+    if (row.stage) return <StageLine stage={row.stage.payload} live={row.stage.live} />;
+    return <LiveEventRow event={row.event} finalFiles={finalFiles} />;
+  }
+  const role = row.role;
+  // A window that starts mid-turn still names the speaker of its first row.
+  const header = row.header || firstShown;
+  if (row.kind === 'tools') return (
+    <RoleTurn role={role} header={header}>
+      <ToolJournal round={role.round} events={row.events} live={live}>
+        {event => <LiveEventRow event={event} finalFiles={finalFiles} />}
+      </ToolJournal>
+    </RoleTurn>
+  );
+  const { event } = row;
+  if (event.kind === 'handoff') {
+    const handoff = parseHandoffPayload(event.payload);
+    return handoff ? <HandoffDivider handoff={handoff} /> : <LiveEventRow event={event} />;
+  }
+  const content = (row.stage ? <StageLine stage={row.stage.payload} live={row.stage.live} /> : pipelineContent(event))
+    ?? <LiveEventRow event={event} finalFiles={finalFiles} bare />;
+  return <RoleTurn role={role} header={header}>{content}</RoleTurn>;
+}
+
+// Orchestrator and reviewer kinds; a malformed payload falls back to the generic row.
+function pipelineContent(event: LiveEvent): React.ReactElement | null {
+  if (event.kind === 'stage') {
+    const stage = parseStagePayload(event.payload);
+    return stage ? <StageLine stage={stage} /> : null;
+  }
+  if (event.kind === 'check_result') {
+    const check = parseCheckResultPayload(event.payload);
+    return check ? <CheckResultRow check={check} /> : null;
+  }
+  if (event.kind === 'review_verdict') {
+    const verdict = parseReviewVerdictPayload(event.payload);
+    return verdict ? <ReviewVerdictCard verdict={verdict} /> : null;
+  }
+  return null;
+}
+
 // === Ряд ленты — рендер по kind ===
-function LiveEventRow({ event, finalFiles = [] }: { event: LiveEvent; finalFiles?: readonly LiveFileDiff[] }): React.ReactElement | null {
+function LiveEventRow({ event, finalFiles = [], bare = false }: { event: LiveEvent; finalFiles?: readonly LiveFileDiff[]; bare?: boolean }): React.ReactElement | null {
   switch (event.kind) {
     case 'worker_notice':
       return <p role="status" className="px-1 py-1.5 text-xs text-muted-foreground">{event.text}</p>;
@@ -514,6 +674,8 @@ function LiveEventRow({ event, finalFiles = [] }: { event: LiveEvent; finalFiles
       if (text.trim().length === 0) return null;
       const result = parseWorkerResult(text);
       if (result) return <WorkerResultMessage result={result} />;
+      // Inside a role turn the avatar already marks the speaker.
+      if (bare) return <div className="min-w-0 leading-relaxed"><CommentBody body={text} className={RICH_MD} /></div>;
       return (
         <div className="flex gap-2">
           <Dot tone="pf-tone-purple bg-tone" />

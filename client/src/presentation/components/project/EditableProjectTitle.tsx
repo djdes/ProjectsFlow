@@ -73,8 +73,10 @@ export function EditableProjectTitle({ projectId, name }: Props): React.ReactEle
       // (ProjectIconPicker, sm:size-[2.4rem]) — иначе высоту ряда задаёт иконка, а не название.
       //
       // The title stays above iOS's 16px zoom threshold; the generic input rule excludes it.
+      // text-ellipsis: длинное название на телефоне обрезалось посреди буквы («Зерно и п»);
+      // многоточие видно, пока поле не в фокусе, при вводе текст прокручивается как обычно.
       className={cn(
-        'w-full min-w-0 bg-transparent p-0 font-bold text-foreground outline-none',
+        'w-full min-w-0 text-ellipsis bg-transparent p-0 font-bold text-foreground outline-none',
         'text-title leading-[1.2] placeholder:text-muted-foreground/40',
       )}
     />

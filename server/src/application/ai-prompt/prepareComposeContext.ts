@@ -93,7 +93,8 @@ function isMentioned(normalizedText: string, projectName: string): boolean {
 // Откуда брать проекты-кандидаты: 'active' — активное пространство (веб: пользователь уже
 // внутри пространства), 'all' — все его пространства (Telegram: сообщение может быть про
 // любой его проект, а «активное» там — случайное состояние браузера).
-export type ComposeProjectScope = 'active' | 'all';
+// { projectIds } — проекты рабочей Telegram-группы (db/189): только они из всех проектов юзера.
+export type ComposeProjectScope = 'active' | 'all' | { readonly projectIds: readonly string[] };
 
 /**
  * Готовит контекст для compose-режима: перечень проектов, в которых пользователь
@@ -108,6 +109,21 @@ export type ComposeProjectScope = 'active' | 'all';
  * Best-effort: ошибки KB на отдельном проекте не валят сборку (проект попадает в
  * список без дайджеста). Если проектов-кандидатов нет — возвращает null.
  */
+// Привычные названия и короткое описание проекта (db/192): по ним модель выбирает проект,
+// когда в сообщении (например из рабочей группы) нет его точного названия.
+// Люди пишут латинские названия проектов русским транслитом — подсказка модели.
+const TRANSLIT_NOTE =
+  'Названия проектов часто пишут по-русски транслитом или на слух (например «есбит» — Yesbeat, «конфиг» — Config): сопоставляй их с проектами по звучанию.';
+
+export function projectHintLine(p: { readonly aliases?: readonly string[]; readonly shortDescription?: string | null }): string {
+  const aliases = (p.aliases ?? []).filter((a) => a.trim().length > 0);
+  const description = p.shortDescription?.trim() ?? '';
+  return (
+    (aliases.length > 0 ? `Также называют: ${aliases.join(', ')}\n` : '') +
+    (description ? `О проекте: ${description}\n` : '')
+  );
+}
+
 export async function prepareComposeContext(
   userId: string,
   deps: Deps,
@@ -122,13 +138,17 @@ export async function prepareComposeContext(
       projects = await deps.members.listProjectsForUserInWorkspace(userId, workspace.id);
     } else {
       projects = await deps.members.listProjectsForUser(userId);
+      if (typeof scope === 'object') {
+        const allowed = new Set(scope.projectIds);
+        projects = projects.filter((p) => allowed.has(p.id));
+      }
     }
   } catch {
     return null;
   }
   // Подписи пространств — только когда их несколько (иначе строка — лишний шум в промпте).
   let spaceNames = new Map<string, string>();
-  if (scope === 'all' && deps.listWorkspacesForUser) {
+  if (scope !== 'active' && deps.listWorkspacesForUser) {
     try {
       const spaces = await deps.listWorkspacesForUser(userId);
       if (spaces.length > 1) spaceNames = new Map(spaces.map((s) => [s.id, s.name]));
@@ -150,7 +170,9 @@ export async function prepareComposeContext(
   const openTasksByProject = new Map<string, string[]>();
   if (deps.tasks) {
     try {
-      const all = await deps.tasks.listByProjects(creatable.map((p) => p.id));
+      const listed = await deps.tasks.listByProjects(creatable.map((p) => p.id));
+      // Общий проект (db/182): скрытые правилами задачи в промпт не попадают.
+      const all = deps.members.filterVisibleTasks ? await deps.members.filterVisibleTasks(userId, listed) : listed;
       for (const t of all) {
         if (!OPEN_STATUSES.has(t.status)) continue;
         const bucket = openTasksByProject.get(t.projectId) ?? [];
@@ -195,6 +217,7 @@ export async function prepareComposeContext(
         spaceLine: space ? `Пространство: ${space}\n` : '',
         digest,
         memberLine,
+        hintLine: projectHintLine(p),
       };
     }),
   );
@@ -226,11 +249,11 @@ export async function prepareComposeContext(
         taskTotal += line.length;
       }
     }
-    const part = `[projectId=${d.projectId}] ${d.name}\n${d.spaceLine}${memberPart}${taskPart}${body}`;
+    const part = `[projectId=${d.projectId}] ${d.name}\n${d.spaceLine}${d.hintLine}${memberPart}${taskPart}${body}`;
     if (total + part.length > MAX_TOTAL_CHARS) {
       // Дальше не лезем, но сам проект (хотя бы имя + участники) всё равно полезен —
       // добавим усечённый заголовок без дайджеста, чтобы id/ответственные остались модели.
-      const header = `[projectId=${d.projectId}] ${d.name}\n${d.spaceLine}${memberPart}${taskPart}(дайджест опущен — лимит контекста)`;
+      const header = `[projectId=${d.projectId}] ${d.name}\n${d.spaceLine}${d.hintLine}${memberPart}${taskPart}(дайджест опущен — лимит контекста)`;
       if (total + header.length <= MAX_TOTAL_CHARS) {
         parts.push(header);
         total += header.length;
@@ -242,6 +265,6 @@ export async function prepareComposeContext(
   }
 
   // «Сегодня» — в начале блока: модель резолвит относительные сроки от этой даты.
-  const block = `Сегодня: ${todayIso()}\n\n${parts.join('\n\n---\n\n')}`;
+  const block = `Сегодня: ${todayIso()}\n${TRANSLIT_NOTE}\n\n${parts.join('\n\n---\n\n')}`;
   return { block, candidates };
 }

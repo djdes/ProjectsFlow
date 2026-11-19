@@ -1,14 +1,24 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, or } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { projects, workspaceProjectExclusions } from '../db/schema.js';
+import { projectWorkspaceAccess, projects, workspaceProjectExclusions } from '../db/schema.js';
 import type { WorkspaceProjectAccessRepository } from '../../application/workspace/WorkspaceProjectAccessRepository.js';
 
 export class DrizzleWorkspaceProjectAccessRepository implements WorkspaceProjectAccessRepository {
   constructor(private readonly db: Database) {}
 
+  // Проекты пространства и подключённые к нему общие проекты (db/182): скрыть галочкой можно
+  // и общий проект — от участника именно этого пространства.
   async listProjects(workspaceId: string) {
+    const linked = await this.db
+      .select({ projectId: projectWorkspaceAccess.projectId })
+      .from(projectWorkspaceAccess)
+      .where(eq(projectWorkspaceAccess.workspaceId, workspaceId));
+    const linkedIds = [...new Set(linked.map((row) => row.projectId))];
+    const inWorkspace = linkedIds.length > 0
+      ? or(eq(projects.workspaceId, workspaceId), inArray(projects.id, linkedIds))
+      : eq(projects.workspaceId, workspaceId);
     return this.db.select({ id: projects.id, name: projects.name, icon: projects.icon })
-      .from(projects).where(and(eq(projects.workspaceId, workspaceId), eq(projects.isInbox, false)))
+      .from(projects).where(and(inWorkspace, eq(projects.isInbox, false)))
       .orderBy(asc(projects.createdAt));
   }
 

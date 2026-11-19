@@ -136,3 +136,27 @@ test('scope=all при одном пространстве — подписи н
   assert.ok(ctx);
   assert.doesNotMatch(ctx!.block, /Пространство:/);
 });
+
+test('scope={projectIds} (рабочая Telegram-группа): только проекты группы', async () => {
+  const ctx = await prepareComposeContext('u1', spacesDeps(), 'поправить сайт', { projectIds: ['b1'] });
+  assert.ok(ctx);
+  assert.deepEqual(ctx!.candidates.map((c) => c.projectId), ['b1']);
+});
+
+test('привычные названия и описание проекта (db/192) уходят модели', async () => {
+  const ctx = await prepareComposeContext(
+    'u1',
+    makeDeps(undefined, [
+      { id: 'p1', name: 'Конфигуратор', role: 'owner', isInbox: false, aliases: ['конфиг'], shortDescription: 'Настройки касс' },
+      { id: 'p2', name: 'Бета', role: 'owner', isInbox: false },
+    ]),
+  );
+  assert.ok(ctx);
+  assert.match(ctx!.block, /\[projectId=p1\] Конфигуратор\nТакже называют: конфиг\nО проекте: Настройки касс\n/);
+  assert.match(ctx!.block, /\[projectId=p2\] Бета\nУчастники/);
+});
+
+test('модели сказано, что названия проектов пишут транслитом', async () => {
+  const ctx = await prepareComposeContext('u1', makeDeps());
+  assert.match(ctx!.block, /транслитом/);
+});

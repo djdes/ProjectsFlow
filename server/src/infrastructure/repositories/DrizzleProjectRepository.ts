@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   kbDocuments,
@@ -10,6 +10,7 @@ import {
   projectInvites,
   projectJoinRequests,
   projectMembers,
+  projectWorkspaceAccess,
   projects,
   secrets,
   taskAttachments,
@@ -73,6 +74,9 @@ function toProject(row: ProjectRow): Project {
     dispatcherUserId: row.dispatcherUserId ?? null,
     multiTaskWorker: row.multiTaskWorker,
     description: row.description ?? null,
+    aliases: parseAliases(row.aliases),
+    shortDescription: row.shortDescription ?? null,
+    groupFullRunDefault: row.groupFullRunDefault ?? false,
     coverUrl: row.coverUrl ?? null,
     coverPosition: row.coverPosition,
     publicSlug: row.publicSlug ?? null,
@@ -189,7 +193,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async update(id: string, patch: UpdateProjectInput): Promise<Project | null> {
     // Собираем set-объект только из реально переданных полей.
     // undefined = поле не указано клиентом (не трогаем), null = очистить.
-    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status' | 'description' | 'coverUrl' | 'coverPosition' | 'appRepoFullName' | 'publicAppearance'>> = {};
+    const set: Partial<Pick<ProjectRow, 'name' | 'icon' | 'gitRepoUrl' | 'kbRepoFullName' | 'kbKind' | 'financeVisibility' | 'dispatcherUserId' | 'multiTaskWorker' | 'status' | 'description' | 'coverUrl' | 'coverPosition' | 'appRepoFullName' | 'publicAppearance' | 'aliases' | 'shortDescription' | 'groupFullRunDefault'>> = {};
     if (patch.name !== undefined) set.name = patch.name;
     if (patch.icon !== undefined) set.icon = patch.icon;
     if (patch.gitRepoUrl !== undefined) set.gitRepoUrl = patch.gitRepoUrl;
@@ -204,6 +208,9 @@ export class DrizzleProjectRepository implements ProjectRepository {
     if (patch.coverPosition !== undefined) set.coverPosition = patch.coverPosition;
     if (patch.appRepoFullName !== undefined) set.appRepoFullName = patch.appRepoFullName;
     if (patch.publicAppearance !== undefined) set.publicAppearance = patch.publicAppearance;
+    if (patch.aliases !== undefined) set.aliases = patch.aliases.length > 0 ? [...patch.aliases] : null;
+    if (patch.shortDescription !== undefined) set.shortDescription = patch.shortDescription;
+    if (patch.groupFullRunDefault !== undefined) set.groupFullRunDefault = patch.groupFullRunDefault;
 
     if (Object.keys(set).length > 0) {
       try {
@@ -266,12 +273,49 @@ export class DrizzleProjectRepository implements ProjectRepository {
 
   async setWorkspace(projectId: string, workspaceId: string): Promise<void> {
     try {
-      await this.db.update(projects).set({ workspaceId }).where(eq(projects.id, projectId));
+      await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .select({ workspaceId: projects.workspaceId })
+          .from(projects)
+          .where(eq(projects.id, projectId))
+          .for('update');
+        if (!row) return;
+        await tx.update(projects).set({ workspaceId }).where(eq(projects.id, projectId));
+        // Общий проект (db/182): ни старое, ни новое основное пространство больше не
+        // подключения — участники старого теряют доступ (перенос меняет аудиторию), а строка
+        // нового не должна переопределять правило основного. Задачи обоих пространств
+        // становятся задачами основного; updated_at задач не трогаем.
+        const homes = [...new Set([row.workspaceId, workspaceId])];
+        await tx
+          .delete(projectWorkspaceAccess)
+          .where(and(eq(projectWorkspaceAccess.projectId, projectId), inArray(projectWorkspaceAccess.workspaceId, homes)));
+        await tx
+          .update(tasks)
+          .set({ originWorkspaceId: null, updatedAt: sql`${tasks.updatedAt}` })
+          .where(and(eq(tasks.projectId, projectId), inArray(tasks.originWorkspaceId, homes)));
+      });
     } catch (err) {
       // Конфликт имени в целевом пространстве (uq_projects_workspace_name).
       if (isDuplicateKey(err)) throw new ProjectNameAlreadyExistsError('');
       throw err;
     }
+  }
+
+  async isInWorkspace(projectId: string, workspaceId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.id, projectId),
+          or(
+            eq(projects.workspaceId, workspaceId),
+            sql`${projects.id} IN (SELECT a.project_id FROM project_workspace_access a WHERE a.workspace_id = ${workspaceId})`,
+          ),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
   }
 
   async getWorkspaceId(projectId: string): Promise<string | null> {
@@ -288,6 +332,21 @@ export class DrizzleProjectRepository implements ProjectRepository {
       .select({ id: projects.id, name: projects.name, icon: projects.icon })
       .from(projects)
       .where(and(eq(projects.workspaceId, workspaceId), eq(projects.isInbox, false)))
+      .orderBy(projects.createdAt);
+    return rows.map((r) => ({ id: r.id, name: r.name, icon: r.icon ?? null }));
+  }
+
+  async listLinkedToWorkspace(workspaceId: string): Promise<Array<{ id: string; name: string; icon: string | null }>> {
+    const rows = await this.db
+      .select({ id: projects.id, name: projects.name, icon: projects.icon })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.isInbox, false),
+          sql`${projects.workspaceId} <> ${workspaceId}`,
+          sql`${projects.id} IN (SELECT a.project_id FROM project_workspace_access a WHERE a.workspace_id = ${workspaceId})`,
+        ),
+      )
       .orderBy(projects.createdAt);
     return rows.map((r) => ({ id: r.id, name: r.name, icon: r.icon ?? null }));
   }
@@ -356,74 +415,93 @@ export class DrizzleProjectRepository implements ProjectRepository {
   async deleteCascade(projectId: string): Promise<void> {
     // Одна транзакция: или всё, или ничего. FK ON DELETE CASCADE на схеме нет
     // (см. db/*.sql) — вручную чистим в порядке children → parent.
-    await this.db.transaction(async (tx) => {
-      // Список task-ID этого проекта — нужен для удаления task_attachments/
-      // task_comments/task_commits, у которых FK по task_id, а не по project_id.
-      // БЕЗ фильтра deleted_at (db/134) намеренно: физический снос проекта должен
-      // забрать и задачи из корзины, иначе они останутся сиротами без проекта.
-      const taskIds = (
-        await tx
-          .select({ id: tasks.id })
-          .from(tasks)
-          .where(eq(tasks.projectId, projectId))
-      ).map((r) => r.id);
-
-      if (taskIds.length > 0) {
-        await tx.delete(taskAttachments).where(inArray(taskAttachments.taskId, taskIds));
-        await tx.delete(taskComments).where(inArray(taskComments.taskId, taskIds));
-        await tx.delete(taskCommits).where(inArray(taskCommits.taskId, taskIds));
-        // B3: task-scoped без projectId — чистим по taskId, иначе сироты.
-        await tx.delete(taskDelegations).where(inArray(taskDelegations.taskId, taskIds));
-      }
-
-      // Удаляем сами task'и после очистки их child-таблиц.
-      await tx.delete(tasks).where(eq(tasks.projectId, projectId));
-
-      // Прочие project-scoped таблицы. FK нет — порядок между ними не важен.
-      await tx.delete(kbDocuments).where(eq(kbDocuments.projectId, projectId));
-      await tx.delete(secrets).where(eq(secrets.projectId, projectId));
-      await tx.delete(projectEmployeeAssignments).where(eq(projectEmployeeAssignments.projectId, projectId));
-      await tx.delete(projectExpenses).where(eq(projectExpenses.projectId, projectId));
-      await tx.delete(projectIncomes).where(eq(projectIncomes.projectId, projectId));
-      await tx.delete(projectInvites).where(eq(projectInvites.projectId, projectId));
-      await tx.delete(projectJoinRequests).where(eq(projectJoinRequests.projectId, projectId));
-      await tx.delete(projectMembers).where(eq(projectMembers.projectId, projectId));
-      // Git-token delegation + audit-log (см. db/029).
-      await tx
-        .delete(projectGitTokenAccessLog)
-        .where(eq(projectGitTokenAccessLog.projectId, projectId));
-      await tx
-        .delete(projectGitTokenDelegations)
-        .where(eq(projectGitTokenDelegations.projectId, projectId));
-
-      // B3: раньше эти project-scoped таблицы НЕ чистились → сироты (задачи-версии,
-      // live-сессии, события ленты, метрики серверов, job-очереди, автоматизация,
-      // site-артефакты и т.д.). aiUsageLedger НАМЕРЕННО не трогаем — биллинг-история.
-      await tx.delete(taskVersions).where(eq(taskVersions.projectId, projectId));
-      await tx.delete(taskProgressEvents).where(eq(taskProgressEvents.projectId, projectId));
-      await tx.delete(liveSessions).where(eq(liveSessions.projectId, projectId));
-      await tx.delete(siteArtifacts).where(eq(siteArtifacts.projectId, projectId));
-      await tx.delete(activityEvents).where(eq(activityEvents.projectId, projectId));
-      await tx.delete(projectViews).where(eq(projectViews.projectId, projectId));
-      await tx.delete(recentTaskViews).where(eq(recentTaskViews.projectId, projectId));
-      await tx.delete(serverSnapshots).where(eq(serverSnapshots.projectId, projectId));
-      await tx.delete(serverAlerts).where(eq(serverAlerts.projectId, projectId));
-      await tx.delete(serverAlertRules).where(eq(serverAlertRules.projectId, projectId));
-      await tx.delete(projectServers).where(eq(projectServers.projectId, projectId));
-      await tx.delete(commitSyncJobs).where(eq(commitSyncJobs.projectId, projectId));
-      await tx.delete(aiPromptJobs).where(eq(aiPromptJobs.projectId, projectId));
-      await tx.delete(monitoringAnalysisJobs).where(eq(monitoringAnalysisJobs.projectId, projectId));
-      await tx.delete(projectAutomationCriteria).where(eq(projectAutomationCriteria.projectId, projectId));
-      await tx.delete(projectAutomation).where(eq(projectAutomation.projectId, projectId));
-      await tx.delete(projectDigestSettings).where(eq(projectDigestSettings.projectId, projectId));
-      await tx.delete(syncWorkspaces).where(eq(syncWorkspaces.projectId, projectId));
-      await tx.delete(telegramTaskDrafts).where(eq(telegramTaskDrafts.projectId, projectId));
-      await tx.delete(telegramTaskMessages).where(eq(telegramTaskMessages.projectId, projectId));
-      await tx.delete(emailActionTokens).where(eq(emailActionTokens.projectId, projectId));
-      await tx.delete(appDashboardSettings).where(eq(appDashboardSettings.projectId, projectId));
-
-      // Финальный — сам проект.
-      await tx.delete(projects).where(eq(projects.id, projectId));
-    });
+    await this.db.transaction((tx) => deleteProjectRows(tx, projectId));
   }
+}
+
+type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+// Removes a project with all child rows inside the caller transaction. Shared with the admin
+// account deletion, which drops personal projects in the same transaction as the account.
+export async function deleteProjectRows(tx: Transaction, projectId: string): Promise<void> {
+  // Список task-ID этого проекта — нужен для удаления task_attachments/
+  // task_comments/task_commits, у которых FK по task_id, а не по project_id.
+  // БЕЗ фильтра deleted_at (db/134) намеренно: физический снос проекта должен
+  // забрать и задачи из корзины, иначе они останутся сиротами без проекта.
+  const taskIds = (
+    await tx
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(eq(tasks.projectId, projectId))
+  ).map((r) => r.id);
+
+  if (taskIds.length > 0) {
+    await tx.delete(taskAttachments).where(inArray(taskAttachments.taskId, taskIds));
+    await tx.delete(taskComments).where(inArray(taskComments.taskId, taskIds));
+    await tx.delete(taskCommits).where(inArray(taskCommits.taskId, taskIds));
+    // B3: task-scoped без projectId — чистим по taskId, иначе сироты.
+    await tx.delete(taskDelegations).where(inArray(taskDelegations.taskId, taskIds));
+  }
+
+  // Удаляем сами task'и после очистки их child-таблиц.
+  await tx.delete(tasks).where(eq(tasks.projectId, projectId));
+
+  // Прочие project-scoped таблицы. FK нет — порядок между ними не важен.
+  await tx.delete(kbDocuments).where(eq(kbDocuments.projectId, projectId));
+  await tx.delete(secrets).where(eq(secrets.projectId, projectId));
+  await tx.delete(projectEmployeeAssignments).where(eq(projectEmployeeAssignments.projectId, projectId));
+  await tx.delete(projectExpenses).where(eq(projectExpenses.projectId, projectId));
+  await tx.delete(projectIncomes).where(eq(projectIncomes.projectId, projectId));
+  await tx.delete(projectInvites).where(eq(projectInvites.projectId, projectId));
+  await tx.delete(projectJoinRequests).where(eq(projectJoinRequests.projectId, projectId));
+  await tx.delete(projectMembers).where(eq(projectMembers.projectId, projectId));
+  // Git-token delegation + audit-log (см. db/029).
+  await tx
+    .delete(projectGitTokenAccessLog)
+    .where(eq(projectGitTokenAccessLog.projectId, projectId));
+  await tx
+    .delete(projectGitTokenDelegations)
+    .where(eq(projectGitTokenDelegations.projectId, projectId));
+
+  // B3: раньше эти project-scoped таблицы НЕ чистились → сироты (задачи-версии,
+  // live-сессии, события ленты, метрики серверов, job-очереди, автоматизация,
+  // site-артефакты и т.д.). aiUsageLedger НАМЕРЕННО не трогаем — биллинг-история.
+  await tx.delete(taskVersions).where(eq(taskVersions.projectId, projectId));
+  await tx.delete(taskProgressEvents).where(eq(taskProgressEvents.projectId, projectId));
+  await tx.delete(liveSessions).where(eq(liveSessions.projectId, projectId));
+  await tx.delete(siteArtifacts).where(eq(siteArtifacts.projectId, projectId));
+  await tx.delete(activityEvents).where(eq(activityEvents.projectId, projectId));
+  await tx.delete(projectViews).where(eq(projectViews.projectId, projectId));
+  await tx.delete(recentTaskViews).where(eq(recentTaskViews.projectId, projectId));
+  await tx.delete(serverSnapshots).where(eq(serverSnapshots.projectId, projectId));
+  await tx.delete(serverAlerts).where(eq(serverAlerts.projectId, projectId));
+  await tx.delete(serverAlertRules).where(eq(serverAlertRules.projectId, projectId));
+  await tx.delete(projectServers).where(eq(projectServers.projectId, projectId));
+  await tx.delete(commitSyncJobs).where(eq(commitSyncJobs.projectId, projectId));
+  await tx.delete(aiPromptJobs).where(eq(aiPromptJobs.projectId, projectId));
+  await tx.delete(monitoringAnalysisJobs).where(eq(monitoringAnalysisJobs.projectId, projectId));
+  await tx.delete(projectAutomationCriteria).where(eq(projectAutomationCriteria.projectId, projectId));
+  await tx.delete(projectAutomation).where(eq(projectAutomation.projectId, projectId));
+  await tx.delete(projectDigestSettings).where(eq(projectDigestSettings.projectId, projectId));
+  await tx.delete(syncWorkspaces).where(eq(syncWorkspaces.projectId, projectId));
+  await tx.delete(telegramTaskDrafts).where(eq(telegramTaskDrafts.projectId, projectId));
+  await tx.delete(telegramTaskMessages).where(eq(telegramTaskMessages.projectId, projectId));
+  await tx.delete(emailActionTokens).where(eq(emailActionTokens.projectId, projectId));
+  await tx.delete(appDashboardSettings).where(eq(appDashboardSettings.projectId, projectId));
+
+  // Финальный — сам проект.
+  await tx.delete(projects).where(eq(projects.id, projectId));
+}
+
+// JSON-колонка aliases (db/192): MySQL-драйвер может отдать строку — разбираем бережно.
+function parseAliases(raw: unknown): string[] {
+  let value = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(value) ? value.filter((a): a is string => typeof a === 'string') : [];
 }

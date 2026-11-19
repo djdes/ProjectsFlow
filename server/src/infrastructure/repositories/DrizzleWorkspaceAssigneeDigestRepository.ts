@@ -54,6 +54,7 @@ function rowToSettings(
     eodReminderHour: row.eodReminderHour,
     eodReminderMinute: row.eodReminderMinute,
     eodReminderLastSentOn: row.eodReminderLastSentOn ?? null,
+    urgentRemindersEnabled: row.urgentRemindersEnabled,
     lastSentOn: row.lastSentOn ?? null,
   };
 }
@@ -113,6 +114,7 @@ export class DrizzleWorkspaceAssigneeDigestRepository
       eodReminderEnabled: input.eodReminderEnabled,
       eodReminderHour: input.eodReminderHour,
       eodReminderMinute: input.eodReminderMinute,
+      urgentRemindersEnabled: input.urgentRemindersEnabled,
     };
     await this.db
       .insert(workspaceAssigneeDigestSettings)

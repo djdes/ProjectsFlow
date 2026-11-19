@@ -1,5 +1,6 @@
 import type { TaskAssignee } from './TaskAssignee';
 import type { TaskCreator } from './TaskCreator';
+import type { TaskRecurrence } from './TaskRecurrence';
 
 // 'awaiting_clarification' — активная задача на паузе до действия человека (ответ на
 // ralph-question, разбор после maxAttempts retry, переформулировка). Между in_progress
@@ -85,6 +86,22 @@ export const RALPH_MODE_META: Record<RalphMode, { label: string; description: st
   },
 };
 
+// Режим запуска воркера по задаче (spec 2026-11-17 §5, db/188). Выбирает человек.
+export type RunMode = 'quick' | 'full';
+
+export const RUN_MODES: readonly RunMode[] = ['quick', 'full'];
+
+export const RUN_MODE_META: Record<RunMode, { label: string; description: string }> = {
+  quick: {
+    label: 'Обычное изменение',
+    description: 'Исполнитель без ревьюера — быстрее и дешевле',
+  },
+  full: {
+    label: 'Полный прогон',
+    description: 'Проверки, ревьюер, эскалация, доставка; расход токенов в 2–3 раза выше',
+  },
+};
+
 export type Task = {
   // Task-scoped capability returned by the direct task endpoint.
   readonly canEdit?: boolean;
@@ -123,6 +140,8 @@ export type Task = {
   readonly commentCount?: number;
   // Режим работы Ralph (default 'normal' если backend без 035).
   readonly ralphMode: RalphMode;
+  // Режим запуска воркера (default 'quick', если backend без db/188).
+  readonly runMode: RunMode;
   // Pull-based отмена Ralph-работы (db/037). null = нет запроса. См. spec
   // C:/www/ralph/prompts/task-ralph-cancel.md.
   readonly ralphCancelRequestedAt: Date | null;
@@ -139,6 +158,23 @@ export type Task = {
   readonly priority: TaskPriority | null;
   // Тип задачи ('feature' | 'bug'). null = не определён. См. db/153.
   readonly taskType: TaskType | null;
+  // Пространство, где создана задача общего проекта (db/182). null — основное.
+  readonly originWorkspaceId?: string | null;
+  // Рабочая Telegram-группа, из которой поставили задачу (db/190). null — не из группы.
+  // Optional — старые кэши/фикстуры поля не знают.
+  readonly groupOrigin?: TaskGroupOrigin | null;
+  // Правило повтора (db/185). null = не повторяется. Выполнили задачу — сервер сам ставит
+  // следующую. Optional — старые кэши/фикстуры поля не знают.
+  readonly recurrence?: TaskRecurrence | null;
+};
+
+// Откуда пришла задача: рабочая Telegram-группа (db/190). Снимки названия группы и имени
+// автора — на момент постановки; время — createdAt задачи.
+export type TaskGroupOrigin = {
+  readonly chatId: number;
+  readonly title: string | null;
+  readonly authorUserId: string | null;
+  readonly authorName: string | null;
 };
 
 // Короткий ID задачи (первые 8 hex-символов UUID без дефисов) — для вставки в commit

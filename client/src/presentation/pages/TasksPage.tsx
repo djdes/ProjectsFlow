@@ -31,6 +31,7 @@ import { ProjectDescription } from '@/presentation/components/project/ProjectDes
 import { randomCover } from '@/presentation/components/project/coverGallery';
 import { actionErrorMessage } from '@/lib/actionFeedback';
 import { hasOwnerRights } from '@/domain/project/ProjectMembership';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 
 // Ключ и чтение переключателя «Скрыть описание» — пер-проектные, живут вне компонента,
 // чтобы их можно было звать из инициализатора состояния и при смене проекта в рендере.
@@ -60,6 +61,10 @@ export function TasksPage(): React.ReactElement {
   // Число активных алертов — для бейджа на кнопке.
   const [monitoringAlerts, setMonitoringAlerts] = useState(0);
   const [automationOpen, setAutomationOpen] = useState(false);
+  // Строка крошек вмещает подписи («Изменено …», «Поделиться», аватары) только от 1024px.
+  const wideCrumbs = useMediaQuery('(min-width: 1024px)');
+  // Телефон: описание проекта свёрнуто в строку-превью, пока его не открыли.
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
   // Окно активности открыто? Пока открыто — действия в шапке страницы прячем (они в окне).
   // Окно активности переживает перезагрузку страницы (sessionStorage пер-проект): открыто
   // до reload → открыто после. Восстанавливаем синхронно в инициализаторе useState.
@@ -181,7 +186,8 @@ export function TasksPage(): React.ReactElement {
   const settleBanner = useCallback((key: string): void => {
     setSettledBanners((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
   }, []);
-  const canEditProject = data ? hasOwnerRights(data.role) || data.role === 'editor' : false;
+  // Гость общего проекта (db/182) ведёт задачи, но не настраивает проект и не приглашает.
+  const canEditProject = data ? (hasOwnerRights(data.role) || data.role === 'editor') && !data.guest : false;
   const onboardingShown = Boolean(data) && !bannersHidden && !data?.isInbox && canEditProject;
   const bannersSettled =
     Boolean(data) &&
@@ -209,7 +215,10 @@ export function TasksPage(): React.ReactElement {
     );
   }
 
-  const canEdit = hasOwnerRights(data.role) || data.role === 'editor';
+  const canEdit = canEditProject;
+  // The board itself is task work, which a guest of a shared project does (GUEST_ACTIONS on
+  // the server: create/update/move tasks); only views, columns and automation stay closed.
+  const canEditTasks = hasOwnerRights(data.role) || data.role === 'editor';
   // Блок описания рендерим, только когда он реально что-то показывает. У редактора это всегда
   // так: пустое поле — это плейсхолдер «Добавьте описание проекта…», т.е. сам способ описание
   // завести. А наблюдателю ProjectDescription при пустом описании возвращает null, и обёртка
@@ -217,6 +226,13 @@ export function TasksPage(): React.ReactElement {
   // от НИЖНЕГО ВИДИМОГО элемента шапки, поэтому невидимых узлов внутри неё быть не должно.
   const descriptionVisible =
     !descriptionHidden && (canEdit || (data.description ?? '').trim().length > 0);
+  // Телефон: строка-превью вместо поля, пока описание не открыли (или не правят «Оформлением»).
+  const descriptionPreview = !descriptionOpen && !appearanceOpen && (data.description ?? '').trim().length > 0;
+  const openDescription = (): void => {
+    setDescriptionOpen(true);
+    // Поле правки — сразу в фокус; наблюдателю просто показываем текст целиком.
+    requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Описание проекта"]')?.focus());
+  };
   const addRandomCover = async (): Promise<void> => {
     if (coverBusy) return;
     setCoverBusy(true);
@@ -236,14 +252,14 @@ export function TasksPage(): React.ReactElement {
       {!compact && members.length > 1 && (
         <MemberAvatarStack
           members={members}
-          canInvite={hasOwnerRights(data.role) || data.role === 'editor'}
+          canInvite={canEditProject}
           ownerId={data.ownerId}
         />
       )}
       <ProjectSharePopover
         project={data}
         members={members}
-        canInvite={hasOwnerRights(data.role) || data.role === 'editor'}
+        canInvite={canEditProject}
         isOwner={hasOwnerRights(data.role)}
         compact={compact}
       />
@@ -270,11 +286,17 @@ export function TasksPage(): React.ReactElement {
           висит шапка приложения, а при листании доски сверху закрепляется шапка колонки —
           третья липкая полоса отнимала у карточек ещё 48px экрана. Строка уезжает вместе со
           страницей и возвращается при прокрутке вверх. */}
-      <div id="pf-project-mobile-header" className="flex min-h-12 items-center justify-between gap-2 bg-background px-4 sm:hidden">
-        <div className="min-w-0 truncate text-sm font-medium">
-          {data.icon ? `${data.icon} ` : ''}
-          {data.name}
-        </div>
+      {/* Название здесь не повторяем: оно стоит крупным заголовком сразу ниже. Слева — крошки
+          «Проекты › раздел»: тап по первой открывает список проектов, по второй — разделы
+          этого проекта (обзор, база знаний, финансы), без похода в меню. */}
+      <div id="pf-project-mobile-header" className="flex min-h-12 items-center justify-between gap-2 bg-background pe-4 ps-2.5 sm:hidden">
+        <ProjectBreadcrumbs
+          projectId={data.id}
+          projectName={data.name}
+          projectIcon={data.icon}
+          view="board"
+          compact
+        />
         <TooltipProvider delayDuration={550}>
           <div className="flex shrink-0 items-center gap-0.5">
             <ProjectActivityButton
@@ -320,14 +342,18 @@ export function TasksPage(): React.ReactElement {
             {/* Активность/аналитика проекта. */}
             {/* Кнопка «Изменено …» открывает окно активности; ему же отдаём действия,
                 чтобы они были в правом верхнем углу окна (Notion-style). Пока окно открыто —
-                и кнопку «Изменено», и действия шапки прячем (они уже внутри окна). */}
+                и кнопку «Изменено», и действия шапки прячем (они уже внутри окна).
+                Уже 1024px (планшет, окно с панелью) — значками, как в мобильной шапке:
+                «Изменено 3 ч назад», аватары и «Поделиться» занимали почти всю строку, и
+                крошки «Проекты › Проект» уезжали под счётчик «сделано сегодня». */}
             <ProjectActivityButton
               projectId={data.id}
-              actions={projectActions()}
+              actions={projectActions(!wideCrumbs)}
               open={activityOpen}
               onOpenChange={setActivityOpen}
+              compact={!wideCrumbs}
             />
-            {projectActions()}
+            {projectActions(!wideCrumbs)}
           </div>
         </TooltipProvider>
       </div>
@@ -482,8 +508,36 @@ export function TasksPage(): React.ReactElement {
           // вплотную (строка описания начинается ровно на нижней кромке названия, y=118),
           // а весь зазор до вкладок живёт в нижнем паддинге блока. На мобиле оставляем
           // mt-2.5: там название набрано мельче и слипание читается хуже.
-          <div className={cn('order-1 mbs-1 max-w-3xl sm:mbs-0 sm:ps-3', !(data.description ?? '').trim() && !appearanceOpen && 'hidden sm:block')}>
-            <ProjectDescription projectId={data.id} description={data.description} canEdit={canEdit} />
+          <div
+            className={cn('order-1 mbs-1 max-w-3xl sm:mbs-0 sm:ps-3', !(data.description ?? '').trim() && !appearanceOpen && 'hidden sm:block')}
+            // Телефон: превью уходит, как только поле теряет фокус.
+            onBlurCapture={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDescriptionOpen(false);
+            }}
+          >
+            {/* Телефон: описание — одной строкой мелким вторичным текстом, нажатие раскрывает
+                его целиком (и поле правки). Поле набрано 16px, чтобы iOS не увеличивал
+                страницу при фокусе, и две такие строки отодвигали доску ещё на 52px. */}
+            {descriptionPreview && (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={openDescription}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openDescription();
+                  }
+                }}
+                className="line-clamp-1 cursor-text text-meta text-muted-foreground sm:hidden"
+                data-pf-project-description-preview
+              >
+                {(data.description ?? '').trim()}
+              </div>
+            )}
+            <div className={cn(descriptionPreview && 'max-sm:hidden')}>
+              <ProjectDescription projectId={data.id} description={data.description} canEdit={canEdit} />
+            </div>
           </div>
         )}
       </div>
@@ -499,7 +553,8 @@ export function TasksPage(): React.ReactElement {
         projectId={data.id}
         projectName={data.name}
         memberCount={data.memberCount}
-        canEdit={canEdit}
+        canEdit={canEditTasks}
+        canManage={canEditProject}
         onOpenAutomation={() => setAutomationOpen(true)}
         // Full-bleed: доска и её нижний горизонтальный скролл во всю ширину окна (по краям
         // обложки/плашки). Первая колонка отступает как тело страницы (px-4/14/24), последняя

@@ -2,6 +2,7 @@ import type {
   InviteAcceptResult,
   InvitePreview,
   InviteRole,
+  InviteTelegramStep,
 } from '@/domain/invite/InvitePreview';
 import type { InviteRepository } from '@/application/project/InviteRepository';
 import { httpClient } from './httpClient';
@@ -34,9 +35,15 @@ export class HttpInviteRepository implements InviteRepository {
   }
 
   async accept(token: string): Promise<InviteAcceptResult> {
-    const res = await httpClient.post<{ workspaceId?: string | null; projectId?: string | null }>(
-      `/invites/${token}/accept`,
-    );
-    return { workspaceId: res.workspaceId ?? null, projectId: res.projectId ?? null };
+    const res = await httpClient.post<{
+      workspaceId?: string | null;
+      projectId?: string | null;
+      telegram?: InviteTelegramStep;
+    }>(`/invites/${token}/accept`);
+    return {
+      workspaceId: res.workspaceId ?? null,
+      projectId: res.projectId ?? null,
+      telegram: res.telegram ?? null,
+    };
   }
 }

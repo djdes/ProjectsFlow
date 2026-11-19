@@ -136,7 +136,7 @@ test('personal digest card shows task details and action buttons', () => {
   );
 
   assert.match(card.text, /^📌 <b>Переделать шаблон письма<\/b>/);
-  assert.match(card.text, /📁 DocsFlow · 🟠 Высокий · В работе/);
+  assert.match(card.text, /📁 DocsFlow · 🟠 Высокий · У воркера/);
   assert.match(card.text, /❗ Срок: .* — просрочено на 2 дня/);
   assert.match(card.text, /👤 Поставил\(а\): Ольга/);
   assert.match(card.text, /<blockquote expandable>Восстановление пароля и &lt;script&gt;<\/blockquote>/);

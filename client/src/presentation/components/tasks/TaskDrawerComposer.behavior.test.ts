@@ -39,6 +39,7 @@ async function harness(initial: Task, options: { create?: TaskRepository['create
   const created: TaskComment[] = [];
   const calls: Parameters<TaskRepository['createComment']>[] = [];
   let memberLoads = 0;
+  let candidateLoads = 0;
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -50,13 +51,21 @@ async function harness(initial: Task, options: { create?: TaskRepository['create
   function Providers() {
     const c = useContainer();
     if (!restore) {
-      const originals = { auth: c.authRepository.getCurrentOrNull, members: c.projectRepository.listMembers, workspaces: c.listWorkspaces.execute, create: c.taskRepository.createComment, move: c.taskRepository.move, upload: c.taskRepository.uploadCommentAttachment };
+      const originals = { auth: c.authRepository.getCurrentOrNull, members: c.projectRepository.listMembers, candidates: c.taskRepository.listCommentNotifyCandidates, workspaces: c.listWorkspaces.execute, create: c.taskRepository.createComment, move: c.taskRepository.move, upload: c.taskRepository.uploadCommentAttachment };
       c.authRepository.getCurrentOrNull = async () => user;
       c.listWorkspaces.execute = async () => [];
       c.projectRepository.listMembers = async () => {
         memberLoads++;
         if (options.privateTask) throw new Error('forbidden');
         return ['author', 'executor', 'approver'].map((id) => ({ projectId: 'project', userId: id, role: 'editor' as const, joinedAt: new Date(), user: { id, displayName: id === 'executor' ? 'Исполнитель' : id, email: id + '@example.invalid', avatarUrl: null } }));
+      };
+      // Since 5095c643 the composer asks the server who can be notified (it also answers for
+      // task-only access) instead of loading project members. The server excludes the
+      // author and, when the author manages the task, defaults to its assignee.
+      c.taskRepository.listCommentNotifyCandidates = async () => {
+        candidateLoads++;
+        const assignee = props?.task.assignee?.userId ?? null;
+        return ['executor', 'approver'].map((id) => ({ userId: id, displayName: id === 'executor' ? 'Исполнитель' : id, avatarUrl: null, isDefault: id === assignee, isManager: false }));
       };
       c.taskRepository.createComment = async (...args) => {
         calls.push(args);
@@ -67,6 +76,7 @@ async function harness(initial: Task, options: { create?: TaskRepository['create
       restore = () => {
         c.authRepository.getCurrentOrNull = originals.auth;
         c.projectRepository.listMembers = originals.members;
+        c.taskRepository.listCommentNotifyCandidates = originals.candidates;
         c.listWorkspaces.execute = originals.workspaces;
         c.taskRepository.createComment = originals.create;
         c.taskRepository.move = originals.move;
@@ -92,6 +102,7 @@ async function harness(initial: Task, options: { create?: TaskRepository['create
   return {
     host, calls, created, editable, send, button, click,
     get memberLoads() { return memberLoads; },
+    get candidateLoads() { return candidateLoads; },
     type: async (body: string) => { await act(async () => { (editable() as HTMLElement & { editor: Editor }).editor.commands.setContent(body, { contentType: 'markdown' }); }); },
     attach: async (file: File) => {
       const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
@@ -142,6 +153,7 @@ test('comments default to the assignee, manual silence survives refresh and re-e
   try {
     assert.match(view.host.textContent!, /Исполнитель/);
     assert.equal(view.memberLoads, 1, 'audience control reuses loaded members');
+    assert.equal(view.candidateLoads, 1, 'audience candidates load once per task');
     await view.type('Исполнителю');
     await view.click(view.send());
     assert.deepEqual(view.calls[0][3], { mode: 'selected', userIds: ['executor'] });

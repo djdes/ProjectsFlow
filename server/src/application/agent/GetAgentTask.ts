@@ -5,6 +5,7 @@ import type { TaskComment } from '../../domain/task/TaskComment.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
+import { isTaskHiddenByRules } from '../task/taskAuthorization.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { TaskAttachmentRepository } from '../task/TaskAttachmentRepository.js';
 import type { TaskCommentRepository } from '../task/TaskCommentRepository.js';
@@ -51,9 +52,11 @@ export class GetAgentTask {
     ownerUserId: string,
     taskId: string,
   ): Promise<AgentTaskResult> {
-    await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
+    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
+    // Общий проект (db/182): скрытой правилами задачи для этого человека нет.
+    if (await isTaskHiddenByRules(this.deps, project, task, ownerUserId)) throw new TaskNotFoundError(taskId);
 
     const [attachmentsMeta, comments] = await Promise.all([
       this.deps.attachments.listAllByTask(taskId),

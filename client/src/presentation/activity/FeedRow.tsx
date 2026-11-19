@@ -57,50 +57,58 @@ export function FeedRow({
       <li onClick={onClick} className={cn('group flex gap-2.5 rounded-md px-2 py-1.5 transition-colors', className)}>
         <span className="shrink-0">{avatar}</span>
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
+          {/* Узкая лента (сайдбар 270px): длинная метка («На утверждение») съедала место, и
+              проект сжимался до одного символа «(». Теперь у проекта есть минимум ширины, а без
+              места он переносится на вторую строку вместе со временем. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <KindChip kind={kind} />
-            {context && (
-              <span title={context} className="min-w-0 truncate text-2xs text-muted-foreground">
-                {context}
-              </span>
-            )}
-            <span className="flex-1" />
-            {/* Короткое время («5 мин»); наведение — точная дата до секунды (Notion-style). */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <time
-                  dateTime={createdAt.toISOString()}
-                  className="shrink-0 text-2xs tabular-nums text-muted-foreground hover:text-foreground"
-                >
-                  {formatRelativeTime(createdAt.getTime())}
-                </time>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" align="end" className="flex items-center gap-1.5 border-border/60 shadow-lg">
-                <CalendarDays className="size-3.5 text-muted-foreground" />
-                {formatExactDateTime(createdAt)}
-              </TooltipContent>
-            </Tooltip>
-            {/* Непрочитанное — точка в конце строки, а не поверх аватара. С onMarkRead точка —
-                кнопка: наведение показывает галочку, клик гасит уведомление без перехода. */}
-            {unread &&
-              (onMarkRead ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onMarkRead();
-                  }}
-                  aria-label="Отметить прочитанным"
-                  title="Отметить прочитанным"
-                  className="group/read -me-1 grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover max-sm:size-8"
-                >
-                  <span className="size-2 rounded-full bg-primary group-hover/read:hidden group-focus-visible/read:hidden" />
-                  <Check className="hidden size-3.5 group-hover/read:block group-focus-visible/read:block" />
-                </button>
+            {/* Проект, время и точка — один блок: переносятся вместе, время не уезжает одно. Без
+                проекта минимум не нужен — время остаётся в строке с меткой. */}
+            <span className={cn('flex flex-1 basis-0 items-center gap-1.5', context && 'min-w-[8.5rem]')}>
+              {context ? (
+                <span title={context} className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
+                  {context}
+                </span>
               ) : (
-                <span className="size-2 shrink-0 rounded-full bg-primary" role="img" aria-label="Не прочитано" />
-              ))}
-            {aside}
+                <span className="flex-1" />
+              )}
+              {/* Короткое время («5 мин»); наведение — точная дата до секунды (Notion-style). */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <time
+                    dateTime={createdAt.toISOString()}
+                    className="shrink-0 text-2xs tabular-nums text-muted-foreground hover:text-foreground"
+                  >
+                    {formatRelativeTime(createdAt.getTime())}
+                  </time>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" align="end" className="flex items-center gap-1.5 border-border/60 shadow-lg">
+                  <CalendarDays className="size-3.5 text-muted-foreground" />
+                  {formatExactDateTime(createdAt)}
+                </TooltipContent>
+              </Tooltip>
+              {/* Непрочитанное — точка в конце строки, а не поверх аватара. С onMarkRead точка —
+                  кнопка: наведение показывает галочку, клик гасит уведомление без перехода. */}
+              {unread &&
+                (onMarkRead ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMarkRead();
+                    }}
+                    aria-label="Отметить прочитанным"
+                    title="Отметить прочитанным"
+                    className="group/read -me-1 grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover max-sm:size-8"
+                  >
+                    <span className="size-2 rounded-full bg-primary group-hover/read:hidden group-focus-visible/read:hidden" />
+                    <Check className="hidden size-3.5 group-hover/read:block group-focus-visible/read:block" />
+                  </button>
+                ) : (
+                  <span className="size-2 shrink-0 rounded-full bg-primary" role="img" aria-label="Не прочитано" />
+                ))}
+              {aside}
+            </span>
           </div>
           <div className="mbs-0.5 flex min-w-0 items-center gap-1.5">
             <p

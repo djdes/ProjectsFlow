@@ -1,0 +1,121 @@
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import { z } from 'zod';
+import type { AuthenticateAgentToken } from '../../application/agent/AuthenticateAgentToken.js';
+import {
+  DesktopNotePinLimitError,
+  DesktopNoteStatusError,
+  type DesktopNote,
+  type DesktopNotesService,
+} from '../../application/desktop-notes/DesktopNotesService.js';
+import { requireAgentToken } from '../middleware/requireAgentToken.js';
+import { TASK_STATUSES, type TaskStatus } from '../../domain/task/Task.js';
+import { requireAuth } from '../middleware/requireAuth.js';
+
+type Deps = {
+  readonly service: DesktopNotesService;
+  readonly authenticate: AuthenticateAgentToken;
+};
+
+const taskIdSchema = z.string().uuid();
+const statusSchema = z.object({
+  status: z.enum(TASK_STATUSES as unknown as [TaskStatus, ...TaskStatus[]]),
+  restore: z.boolean().optional(),
+});
+const versionSchema = z.string().trim().max(32).regex(/^[0-9A-Za-z.+-]*$/u);
+
+const dto = (n: DesktopNote) => ({ ...n });
+
+// /api/desktop-notes — общий для интерфейса (cookie) и приложения «ProjectsFlow Заметки»
+// (Bearer-токен аккаунта, выданный через /device). Приложение опрашивает GET раз в несколько
+// секунд; этот же запрос отмечает, что оно на связи.
+export function desktopNotesRouter(deps: Deps): Router {
+  const router = Router();
+
+  router.use((req, res, next) => {
+    if (!req.headers.authorization) {
+      next();
+      return;
+    }
+    requireAgentToken(deps.authenticate)(req, res, (error?: unknown) => {
+      if (error) {
+        next(error);
+        return;
+      }
+      if (req.agentToken?.scopeKind !== 'account') {
+        res.status(403).json({ error: 'account_token_required' });
+        return;
+      }
+      next();
+    });
+  });
+  router.use(requireAuth);
+
+  router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user!.id;
+      if (req.agentToken) {
+        const header = req.headers['x-pf-notes-version'];
+        const version = versionSchema.safeParse(typeof header === 'string' ? header : '');
+        await deps.service.heartbeat(userId, version.success && version.data ? version.data : null);
+      }
+      const view = await deps.service.list(userId);
+      res.set('Cache-Control', 'private, no-store').json({
+        notes: view.notes.map(dto),
+        appLastSeenAt: view.appLastSeenAt?.toISOString() ?? null,
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.put('/:taskId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const note = await deps.service.pin(req.user!.id, taskIdSchema.parse(req.params['taskId']));
+      res.json({ note: dto(note) });
+    } catch (e) {
+      if (e instanceof DesktopNotePinLimitError) {
+        res.status(409).json({ error: 'pin_limit', message: e.message });
+        return;
+      }
+      next(e);
+    }
+  });
+
+  router.get('/:taskId/detail', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const d = await deps.service.detail(req.user!.id, taskIdSchema.parse(req.params['taskId']));
+      res.set('Cache-Control', 'private, no-store').json({
+        ...d,
+        note: dto(d.note),
+        comments: d.comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/:taskId/status', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { status, restore } = statusSchema.parse(req.body);
+      const note = await deps.service.setStatus(req.user!.id, taskIdSchema.parse(req.params['taskId']), status, restore ?? false);
+      res.json({ note: dto(note) });
+    } catch (e) {
+      if (e instanceof DesktopNoteStatusError) {
+        res.status(409).json({ error: 'status_change_failed', message: e.message });
+        return;
+      }
+      next(e);
+    }
+  });
+
+  router.delete('/:taskId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await deps.service.unpin(req.user!.id, taskIdSchema.parse(req.params['taskId']));
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  return router;
+}

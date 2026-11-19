@@ -16,9 +16,13 @@ export function UserAvatar({
 }): React.ReactElement {
   // rounded-[25%] — скруглённый квадрат как в Notion (не круг), размер-независимо.
   return (
-    <Avatar className={cn('shrink-0 rounded-[25%]', className)}>
+    // Размер инициалов задаёт className аватара (`size-5 text-[9px]`, `size-11 text-base`…):
+    // text-xs по умолчанию стоит на корне, а подложка наследует его. Раньше подложка брала
+    // свой text-xs и перебивала размер вызывающего — «ДД» вылезали за чип size-5, а в
+    // увеличенном аватаре (size-64) инициалы оставались 12px.
+    <Avatar className={cn('shrink-0 rounded-[25%] text-xs', className)}>
       {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} className="object-cover" />}
-      <AvatarFallback className={cn('rounded-[25%] font-semibold', avatarColor(displayName))}>
+      <AvatarFallback className={cn('rounded-[25%] text-[length:inherit] font-semibold', avatarColor(displayName))}>
         {getInitials(displayName)}
       </AvatarFallback>
     </Avatar>

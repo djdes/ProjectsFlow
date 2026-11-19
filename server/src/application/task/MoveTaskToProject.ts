@@ -14,6 +14,14 @@ type Deps = {
   readonly tasks: TaskRepository;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
+  // Пространство создания задачи в новом проекте (db/182): прежнее, если оно есть у нового
+  // проекта, иначе как при создании. Без него задача станет задачей основного пространства.
+  readonly resolveOrigin?: (input: {
+    readonly projectId: string;
+    readonly homeWorkspaceId: string;
+    readonly userId: string;
+    readonly requested: string | null | undefined;
+  }) => Promise<string | null>;
 };
 
 // Перенос сохраняет ответственного, если он допустим в целевом проекте. Иначе задача
@@ -47,11 +55,21 @@ export class MoveTaskToProject {
       if (!membership) assigneeUserId = userId;
     }
 
+    const originWorkspaceId =
+      targetProject.isInbox || !this.deps.resolveOrigin
+        ? null
+        : await this.deps.resolveOrigin({
+            projectId: targetProjectId,
+            homeWorkspaceId: targetProject.workspaceId,
+            userId,
+            requested: task.originWorkspaceId ?? null,
+          });
     const moved = await this.deps.tasks.moveToProject(
       taskId,
       targetProjectId,
       assigneeUserId,
       userId,
+      originWorkspaceId,
     );
     if (!moved) throw new TaskNotFoundError(taskId);
     return moved;

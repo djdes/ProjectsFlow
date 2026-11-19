@@ -11,6 +11,7 @@ import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { AssignedTaskView } from './ListTasksAssignedToMe.js';
 import { requireTaskModifyAccess, requireTaskReadAccess } from './taskAuthorization.js';
+import { commentPreviewText } from '../../domain/task/commentContent.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -79,7 +80,10 @@ export class ListTasksAwaitingMyReply {
         const task = await this.deps.tasks.getById(question.taskId);
         if (!task || task.status === 'done') return null;
         const project = await projectOf(task.projectId);
-        if (!project || project.workspaceId !== ws.id) return null;
+        if (!project) return null;
+        if (project.workspaceId !== ws.id && !(await this.deps.projects.isInWorkspace?.(project.id, ws.id))) {
+          return null;
+        }
         try {
           await requireTaskReadAccess(this.deps, project.id, task.id, userId);
         } catch {
@@ -128,7 +132,7 @@ export class ListTasksAwaitingMyReply {
         commentId: question.id,
         authorUserId: question.ownerUserId,
         authorDisplayName: names.get(question.ownerUserId) ?? '',
-        excerpt: excerptOf(question.body),
+        excerpt: excerptOf(commentPreviewText(question.body)),
         askedAt: question.createdAt,
       },
     }));

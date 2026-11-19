@@ -4,6 +4,7 @@ import type { ListProjects, ProjectWithRole } from '../../application/project/Li
 import type { GetProject } from '../../application/project/GetProject.js';
 import type { CreateProject } from '../../application/project/CreateProject.js';
 import type { UpdateProject } from '../../application/project/UpdateProject.js';
+import type { SetProjectGroupHints } from '../../application/project/SetProjectGroupHints.js';
 import type { DeleteProject } from '../../application/project/DeleteProject.js';
 import type { PublishProject } from '../../application/project/PublishProject.js';
 import type { UnpublishProject } from '../../application/project/UnpublishProject.js';
@@ -78,6 +79,7 @@ import {
   setPublicIndexingSchema,
   setPublicAppearanceSchema,
   setGitTokenDelegationSchema,
+  setGroupHintsSchema,
   toggleFavoriteSchema,
   updateProjectSchema,
 } from './schemas.js';
@@ -102,6 +104,7 @@ type Deps = {
   readonly launchProject: LaunchProject;
   readonly setProjectDispatcher: SetProjectDispatcher;
   readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
+  readonly setGroupHints: SetProjectGroupHints;
   readonly listDispatcherCandidates: ListDispatcherCandidates;
   // Карточка воркера в разделе Agents: capabilities + LIVE-статус + история прогонов.
   readonly getWorkerOverview: GetProjectWorkerOverview;
@@ -149,6 +152,11 @@ type Deps = {
   readonly coverStorage: AttachmentStorage;
   // Лимит размера файла обложки в байтах.
   readonly maxCoverBytes: number;
+  // Общий проект (db/182): какие задачи скрыты от человека правилами видимости.
+  readonly hiddenTaskIds?: (
+    userId: string,
+    refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+  ) => Promise<ReadonlySet<string>>;
 };
 
 // Project всегда содержит role (для текущего юзера). На list-эндпоинте role приходит
@@ -302,7 +310,9 @@ export function projectsRouter(deps: Deps): Router {
       // по прямой ссылке видели бы danger zone. getProject уже подтвердил read-доступ, значит
       // membership есть; null возможен только для admin-bypass (не member) — ему отдаём 'owner'.
       const membership = await deps.members.findForProject(id, req.user!.id);
-      res.json({ project: toDto(project, membership?.role ?? 'owner') });
+      res.json({
+        project: { ...toDto(project, membership?.role ?? 'owner'), ...(membership?.guest ? { guest: true } : {}) },
+      });
     } catch (e) {
       next(e);
     }
@@ -731,7 +741,8 @@ export function projectsRouter(deps: Deps): Router {
         if (typeof id !== 'string') throw new ProjectNotFoundError();
         const membership = await deps.members.findForProject(id, req.user!.id);
         if (!membership) throw new ProjectNotFoundError();
-        if (membership.role === 'viewer') {
+        // Гость общего проекта (db/182) доску не настраивает — она часть проекта.
+        if (membership.role === 'viewer' || membership.guest) {
           res.status(403).json({ error: 'Недостаточно прав для изменения настроек доски' });
           return;
         }
@@ -811,7 +822,8 @@ export function projectsRouter(deps: Deps): Router {
   ): Promise<boolean> => {
     const membership = await deps.members.findForProject(projectId, userId);
     if (!membership) throw new ProjectNotFoundError();
-    if (membership.role === 'viewer') {
+    // Вью доски общие для проекта: гость общего проекта (db/182) их не меняет.
+    if (membership.role === 'viewer' || membership.guest) {
       res.status(403).json({ error: 'Недостаточно прав для изменения вью доски' });
       return false;
     }
@@ -1011,7 +1023,12 @@ export function projectsRouter(deps: Deps): Router {
       const membership = await deps.members.findForProject(id, req.user!.id);
       if (!membership) throw new ProjectNotFoundError();
       const properties = await deps.taskProperties.listForProject(id);
-      const values = await deps.taskProperties.listValuesForProject(id);
+      const all = await deps.taskProperties.listValuesForProject(id);
+      // Общий проект (db/182): значения скрытых правилами задач не отдаём.
+      const hidden = deps.hiddenTaskIds
+        ? await deps.hiddenTaskIds(req.user!.id, all.map((v) => ({ projectId: id, taskId: v.taskId })))
+        : new Set<string>();
+      const values = hidden.size > 0 ? all.filter((v) => !hidden.has(v.taskId)) : all;
       res.json({ properties: properties.map(propertyToDto), values });
     } catch (e) {
       next(e);
@@ -1095,11 +1112,21 @@ export function projectsRouter(deps: Deps): Router {
           typeof propertyId !== 'string'
         )
           throw new ProjectNotFoundError();
-        if (!(await requireViewEditor(id, req.user!.id, res))) return;
+        // Значение — часть задачи: гость общего проекта (db/182) тоже ставит, но только на
+        // видимой ему задаче.
+        const membership = await deps.members.findForProject(id, req.user!.id);
+        if (!membership) throw new ProjectNotFoundError();
+        if (membership.role === 'viewer') {
+          res.status(403).json({ error: 'Недостаточно прав для изменения вью доски' });
+          return;
+        }
         const property = await deps.taskProperties.getById(propertyId);
         if (!property || property.projectId !== id) throw new ProjectNotFoundError();
         const task = await deps.tasks.getById(taskId);
         if (!task || task.projectId !== id) throw new ProjectNotFoundError();
+        if (deps.members.canSeeTask && !(await deps.members.canSeeTask(req.user!.id, task))) {
+          throw new ProjectNotFoundError();
+        }
         const body = setTaskPropertyValueSchema.parse(req.body);
         await deps.taskProperties.setValue(taskId, propertyId, body.value);
         await deps.taskVersions.record(task, req.user!.id, task, ['customProperties']);
@@ -1183,6 +1210,21 @@ export function projectsRouter(deps: Deps): Router {
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const body = setMultiTaskWorkerSchema.parse(req.body);
       const project = await deps.setMultiTaskWorker.execute(id, req.user!.id, body.enabled);
+      deps.notifyProjectChanged(id);
+      res.json({ project: toDto(project) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Привычные названия и описание проекта для выбора из рабочих Telegram-групп (db/192).
+  // Владелец/руководитель — проверка внутри SetProjectGroupHints.
+  router.put('/:id/group-hints', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (typeof id !== 'string') throw new ProjectNotFoundError();
+      const body = setGroupHintsSchema.parse(req.body);
+      const project = await deps.setGroupHints.execute(id, req.user!.id, body);
       deps.notifyProjectChanged(id);
       res.json({ project: toDto(project) });
     } catch (e) {

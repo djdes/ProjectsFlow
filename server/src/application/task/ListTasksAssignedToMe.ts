@@ -47,7 +47,11 @@ export class ListTasksAssignedToMe {
     const contexts = await Promise.all(
       projectIds.map(async (projectId) => {
         const project = await this.deps.projects.getById(projectId);
-        if (!project || project.workspaceId !== ws.id) return null;
+        // Проект пространства: основной или подключённый к нему (общий проект, db/182).
+        if (!project) return null;
+        if (project.workspaceId !== ws.id && !(await this.deps.projects.isInWorkspace?.(project.id, ws.id))) {
+          return null;
+        }
         const membership = project.isInbox
           ? null
           : await this.deps.members.findForProject(projectId, userId);

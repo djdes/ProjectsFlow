@@ -162,6 +162,11 @@ export function WorkspacesProvider({ children }: { children: ReactNode }): React
   return <WorkspacesCtx.Provider value={value}>{children}</WorkspacesCtx.Provider>;
 }
 
+// Без провайдера (публичные страницы, изолированные тесты) — null вместо исключения.
+export function useOptionalWorkspacesContext(): WorkspacesContextValue | null {
+  return useContext(WorkspacesCtx);
+}
+
 export function useWorkspacesContext(): WorkspacesContextValue {
   const c = useContext(WorkspacesCtx);
   if (!c) throw new Error('useWorkspacesContext must be used inside <WorkspacesProvider>');

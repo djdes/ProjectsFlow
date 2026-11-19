@@ -28,7 +28,7 @@ export function taskChangeMessage(change: TaskChange, projectName: string, previ
   if (fields.includes('project')) details.push(`Проект: ${previousProjectName ?? '—'} → ${projectName}`);
   const labels = {
     description: 'Изменены название или описание', priority: 'Изменён приоритет',
-    taskType: 'Изменён тип задачи', ralphMode: 'Изменён режим', appearance: 'Изменено оформление',
+    taskType: 'Изменён тип задачи', recurrence: 'Изменён повтор', ralphMode: 'Изменён режим', runMode: 'Изменён режим запуска', appearance: 'Изменено оформление',
     parent: 'Изменена родительская задача', cancellation: 'Изменён запрос остановки воркера',
     files: 'Изменены вложения', customProperties: 'Изменены свойства', commits: 'Изменены связанные коммиты',
   };

@@ -6,6 +6,14 @@ import type {
 } from '@/domain/workspace/Workspace';
 import type { WorkspaceInvite, WorkspaceInviteRole } from '@/domain/workspace/WorkspaceInvite';
 import type { WorkspaceProjectAccess } from '@/domain/workspace/WorkspaceProjectAccess';
+import type { InviteCandidate, InviteNeighborStatus } from '@/domain/workspace/InviteCandidate';
+import type {
+  TelegramGroupLinkPurpose,
+  TelegramGroupMembers,
+  TelegramWorkGroup,
+  TelegramWorkGroupMode,
+  TelegramWorkGroups,
+} from '@/domain/workspace/TelegramWorkGroup';
 import type {
   SaveWorkspaceAssigneeDigestInput,
   WorkspaceAssigneeDigestGroup,
@@ -69,6 +77,33 @@ export interface WorkspaceRepository {
   getInviteLink(workspaceId: string, inviteId: string): Promise<string>;
   createInvite(workspaceId: string, input: CreateWorkspaceInviteInput): Promise<WorkspaceInvite>;
   deleteInvite(workspaceId: string, inviteId: string): Promise<void>;
+  // «Из соседних пространств»: люди из других пространств приглашающего и пакетное
+  // приглашение по id (почту сервер берёт сам, доставка — как у обычного приглашения).
+  listInviteCandidates(workspaceId: string): Promise<InviteCandidate[]>;
+  inviteNeighbors(
+    workspaceId: string,
+    userIds: readonly string[],
+    role: WorkspaceInviteRole,
+  ): Promise<Array<{ userId: string; status: InviteNeighborStatus }>>;
+
+  // Рабочие Telegram-группы (db/181). Ссылка «Подключить группу» открывает в Telegram выбор
+  // группы; бот сам сообщает серверу её id.
+  listTelegramGroups(id: string): Promise<TelegramWorkGroups>;
+  createTelegramGroupLink(
+    id: string,
+    purpose: TelegramGroupLinkPurpose,
+  ): Promise<{ url: string; expiresAt: string }>;
+  addTelegramGroup(id: string, chatId: number): Promise<TelegramWorkGroup>;
+  removeTelegramGroup(id: string, chatId: number): Promise<void>;
+  // Черновик группы (бот сам добавлен в группу, db/189): «Подключить». «Отклонить» — remove.
+  confirmTelegramGroup(id: string, chatId: number): Promise<TelegramWorkGroup>;
+  // Проекты группы целиком; пустой список — все проекты пространства.
+  // Перенос отключённой группы в другое пространство — решение владельца (db/189).
+  decideTelegramGroupTransfer(id: string, chatId: number, decision: 'approve' | 'reject'): Promise<void>;
+  setTelegramGroupProjects(id: string, chatId: number, projectIds: readonly string[]): Promise<TelegramWorkGroup>;
+  setTelegramGroupMode(id: string, chatId: number, mode: TelegramWorkGroupMode): Promise<TelegramWorkGroup>;
+  // Участники группы: «N в Telegram, M связаны с PF» и связанные поимённо (db/191).
+  getTelegramGroupMembers(id: string, chatId: number): Promise<TelegramGroupMembers>;
 
   listProjects(id: string): Promise<Array<{ id: string; name: string; icon: string | null }>>;
   moveProject(workspaceId: string, projectId: string, targetWorkspaceId: string): Promise<void>;

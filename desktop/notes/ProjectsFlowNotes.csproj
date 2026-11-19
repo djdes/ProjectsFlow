@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    «ProjectsFlow Заметки» — стикеры закреплённых задач поверх окон Windows.
+    .NET Framework 4.8 встроен в Windows 10/11: на выходе один маленький .exe без установки
+    рантайма. WPF без XAML (интерфейс собран в коде), поэтому проект собирается и на Linux
+    в CI (`dotnet build`, справочные сборки приходят пакетом Microsoft.NETFramework.ReferenceAssemblies).
+    Версию поднимать при каждом изменении: приложения у людей обновляются, сравнивая её
+    с /downloads/notes-version.txt.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>ProjectsFlowNotes</AssemblyName>
+    <RootNamespace>ProjectsFlowNotes</RootNamespace>
+    <Version>1.2.1</Version>
+    <Product>ProjectsFlow Заметки</Product>
+    <AssemblyTitle>ProjectsFlow Заметки</AssemblyTitle>
+    <Company>ProjectsFlow</Company>
+    <Copyright>ProjectsFlow</Copyright>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>none</DebugType>
+    <SatelliteResourceLanguages>ru</SatelliteResourceLanguages>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Security" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+</Project>

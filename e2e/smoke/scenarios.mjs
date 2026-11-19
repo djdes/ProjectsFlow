@@ -14,12 +14,14 @@
 //   t.boxFitsCheck(label, selector) — a dialog/sheet fits the screen horizontally,
 //   t.visible / t.hidden / t.waitFor / t.assert / t.waitForMutation — helpers.
 
-import { BOARD_PROJECT_ID, COLLEAGUES, INBOX_ID, ME, WORKSPACE_ID, firstLine } from './fixtures.mjs';
+import { BOARD_PROJECT_ID, COLLEAGUES, INBOX_ID, ME, SMOKE_PNG_BASE64, WORKSPACE_ID, firstLine, moscowDate } from './fixtures.mjs';
 import { workspaceIsolationScenarios } from './workspace-isolation.mjs';
 import { telegramConnectScenarios } from './telegram-connect.mjs';
 import { taskCreationDefaultsScenarios } from './task-creation-defaults.mjs';
 import { quickTaskSettingsScenarios } from './quick-task-settings.mjs';
-import { liveChatScenarios } from './live-chat.mjs';
+import { liveChatScenarios, liveRolesScenarios } from './live-chat.mjs';
+import { adminMailingScenarios } from './admin-mailing.mjs';
+import { adminUsersScenarios } from './admin-users.mjs';
 
 export const VIEWPORTS = {
   desktop: { label: 'десктоп 1440×900', viewport: { width: 1440, height: 900 } },
@@ -50,7 +52,7 @@ const INBOX_SECTION_SWITCH_REQUIRED = true;
 
 // ---------------------------------------------------------------- helpers ----
 
-const NOW = 'section[aria-label="В работе"]';
+const NOW = 'section[aria-label="Сейчас"]';
 const QUEUE = 'section[aria-label="Очередь"]';
 const card = (id) => `[data-pf-task-id="${id}"]`;
 
@@ -145,6 +147,26 @@ async function touchSwipeRight(t, locator, distance = 150) {
   }
 }
 
+// Swipe left starts near the card's right edge so the finger stays on screen.
+async function touchSwipeLeft(t, locator, distance = 150) {
+  await locator.first().scrollIntoViewIfNeeded();
+  const box = await locator.first().boundingBox();
+  if (!box) throw new Error('карточка вне экрана');
+  const x = box.x + box.width - 24;
+  const y = box.y + Math.min(20, box.height / 2);
+  const cdp = await t.page.context().newCDPSession(t.page);
+  try {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (let step = 1; step <= 15; step += 1) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x - (distance * step) / 15, y }] });
+      await t.page.waitForTimeout(16);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
 // Long press (longer than the TouchSensor delay of 220ms), then a drag onto `target`, which
 // appears only once the drag has started (the dock of drop targets).
 async function touchLongDrag(t, locator, target) {
@@ -214,6 +236,9 @@ async function openAndCloseTask(t, cardLocator, title) {
 
 export const scenarios = [
   ...liveChatScenarios,
+  ...liveRolesScenarios,
+  ...adminMailingScenarios,
+  ...adminUsersScenarios,
   ...telegramConnectScenarios,
   ...taskCreationDefaultsScenarios,
   ...quickTaskSettingsScenarios,
@@ -351,7 +376,7 @@ export const scenarios = [
 
   {
     id: 'inbox',
-    title: 'Входящие: «В работе» и «Очередь»',
+    title: 'Входящие: «Сейчас» и «Очередь»',
     matrix: [
       ['desktop', 'light'],
       ['desktop', 'dark'],
@@ -363,12 +388,12 @@ export const scenarios = [
       await t.check('заголовок «Задачи пространства»', () =>
         t.visible(page.getByRole('heading', { name: 'Задачи пространства', level: 1 }), 'h1 «Задачи пространства»'),
       );
-      await t.check('«В работе»: полки «На утверждении» и «Вручную» с карточками', async () => {
+      await t.check('«Сейчас»: полки «На утверждении» и «В работе» с карточками', async () => {
         const now = page.locator(NOW);
-        await t.visible(now, 'колонка «В работе»');
+        await t.visible(now, 'колонка «Сейчас»');
         await t.visible(now.getByText('На утверждении', { exact: true }), 'полка «На утверждении»');
-        await t.visible(now.getByText('Вручную', { exact: true }), 'полка «Вручную»');
-        await expectCards(t, NOW, [...approvalTasks(state), ...manualTasks(state)].map((x) => x.id), '«В работе»');
+        await t.visible(now.getByText('В работе', { exact: true }), 'полка «В работе»');
+        await expectCards(t, NOW, [...approvalTasks(state), ...manualTasks(state)].map((x) => x.id), '«Сейчас»');
       });
       await t.check('«Очередь»: колонки проектов и все мои задачи', async () => {
         const queue = page.locator(QUEUE);
@@ -414,7 +439,7 @@ export const scenarios = [
       const { page, state } = t;
       // Вера спросила меня в своей задаче — её нет в моих лентах «Мои».
       state.awaitingReply = [{ taskId: 't-prices', authorUserId: 'u-vera', excerpt: 'Какие цены ставить на услуги?' }];
-      // На телефоне сначала открыт раздел «В работе», очереди на экране ещё нет.
+      // На телефоне сначала открыт раздел «Сейчас», очереди на экране ещё нет.
       await t.goto('/', {
         ready: () => page.locator(t.isMobile ? '[data-pf-inbox-section-switch]' : QUEUE),
         readyName: 'доска «Входящих» загрузилась',
@@ -465,6 +490,21 @@ export const scenarios = [
       });
 
       const chip = page.getByRole('group', { name: 'Срок' }).getByRole('button', { name: /^Просрочено/ });
+      // Colour is meaning: a due chip with tasks is tinted (overdue red), an empty one is not.
+      await t.check('чип «Просрочено» с задачами подсвечен, пустой «Без срока» — нет', async () => {
+        const counts = await page.getByRole('group', { name: 'Срок' }).getByRole('button').evaluateAll((els) =>
+          els.map((el) => ({
+            label: el.textContent.trim(),
+            count: Number(el.querySelector('[data-pf-due-count]')?.textContent ?? '0'),
+            tinted: el.hasAttribute('data-pf-due-tinted'),
+          })),
+        );
+        const late = counts.find((c) => c.label.startsWith('Просрочено'));
+        t.assert(late && late.count > 0, 'в фикстуре нет просроченных задач');
+        t.assert(late.tinted, '«Просрочено» с задачами не подсвечен');
+        const none = counts.find((c) => c.label.startsWith('Без срока'));
+        t.assert(none && !none.tinted, '«Без срока» подсвечен, хотя срок не горит');
+      });
       await t.check('чип «Просрочено» оставляет только просроченные', async () => {
         await chip.click();
         await t.waitFor(async () => (await chip.getAttribute('aria-pressed')) === 'true', 'чип не нажат');
@@ -489,7 +529,7 @@ export const scenarios = [
       const { page, state } = t;
       await t.goto('/', { ready: () => page.locator(QUEUE), readyName: 'доска «Входящих» загрузилась' });
 
-      await t.check('«Взять в работу»: POST move → manual, карточка во «Вручную»', async () => {
+      await t.check('«Взять в работу»: POST move → manual, карточка в «В работе»', async () => {
         const queueCard = page.locator(`${QUEUE} ${card('t-pay')}`);
         await t.visible(queueCard, `карточка «${taskTitle(state, 't-pay')}» в очереди`);
         await queueCard.hover();
@@ -499,10 +539,10 @@ export const scenarios = [
           'нет POST /api/projects/p-shop/tasks/t-pay/move с targetStatus "manual"',
         );
         const nowCard = page.locator(`${NOW} ${card('t-pay')}`);
-        await t.visible(nowCard, 'карточка в «В работе»');
+        await t.visible(nowCard, 'карточка в «Сейчас»');
         await t.waitFor(
           async () => (await nowCard.locator('button[aria-label="Вернуть в очередь"]').count()) > 0,
-          'у карточки нет действия «Вернуть в очередь» — она не на полке «Вручную»',
+          'у карточки нет действия «Вернуть в очередь» — она не на полке «В работе»',
         );
         await expectGone(t, `${QUEUE} ${card('t-pay')}`, 'карточка осталась в очереди');
       });
@@ -521,9 +561,9 @@ export const scenarios = [
       await t.check('«Передать воркеру»: только в колонке проекта, POST move → todo', async () => {
         const handoff = 'button[aria-label="Передать воркеру"]';
         const manualCard = page.locator(`${NOW} ${card('t-form')}`);
-        await t.visible(manualCard, `карточка «${taskTitle(state, 't-form')}» во «Вручную»`);
+        await t.visible(manualCard, `карточка «${taskTitle(state, 't-form')}» в «В работе»`);
         await manualCard.hover();
-        t.assert((await manualCard.locator(handoff).count()) === 0, '«Передать воркеру» на полке «Вручную»');
+        t.assert((await manualCard.locator(handoff).count()) === 0, '«Передать воркеру» на полке «В работе»');
         t.assert(
           (await page.locator(`${QUEUE} ${card('t-domain')} ${handoff}`).count()) === 0,
           '«Передать воркеру» у личной задачи',
@@ -532,6 +572,12 @@ export const scenarios = [
         await t.visible(queueCard, `карточка «${taskTitle(state, 't-home')}» в очереди`);
         await queueCard.hover();
         await queueCard.locator(`${handoff}:visible`).click();
+        // Передача спрашивает режим запуска: выбранный сохраняется ДО постановки в очередь.
+        await page.locator('[role="menuitem"][data-run-mode="full"]').click();
+        await t.waitForMutation(
+          (m) => m.method === 'PATCH' && m.path === '/projects/p-site/tasks/t-home' && m.body?.runMode === 'full',
+          'нет PATCH /api/projects/p-site/tasks/t-home с runMode "full"',
+        );
         await t.waitForMutation(
           (m) => m.method === 'POST' && m.path === '/projects/p-site/tasks/t-home/move' && m.body?.targetStatus === 'todo',
           'нет POST /api/projects/p-site/tasks/t-home/move с targetStatus "todo"',
@@ -579,6 +625,115 @@ export const scenarios = [
   },
 
   {
+    id: 'inbox-approval-summary',
+    title: 'Полка «На утверждении»: сводка ИИ на карточке и «Принять все»',
+    matrix: [['desktop', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      await t.goto('/', { ready: () => page.locator(QUEUE), readyName: 'доска «Входящих» загрузилась' });
+      await t.check('сводка ИИ на карточке задачи на утверждении', async () => {
+        const summary = page.locator(`${NOW} ${card('t-doctors')} [data-pf-approval-summary="ready"]`);
+        await t.visible(summary, 'сводка на карточке «Сверстать страницу врачей»');
+        const text = await summary.innerText();
+        t.assert(text.includes(`Сделано по задаче «${taskTitle(state, 't-doctors')}»`), `неожиданный текст сводки: ${text}`);
+      });
+      const dialog = page.getByRole('dialog', { name: 'Принять все задачи на утверждении' });
+      await t.check('«Принять все» открывает окно со всеми задачами полки', async () => {
+        await page.locator(NOW).getByRole('button', { name: 'Принять все', exact: true }).click();
+        await t.visible(dialog, 'окно «Принять все»');
+        for (const task of approvalTasks(state)) {
+          await t.visible(dialog.locator(`[data-pf-accept-all-item="${task.id}"]`), `задача «${taskTitle(state, task.id)}» в окне`);
+        }
+        await t.visible(
+          dialog.locator(`[data-pf-accept-all-item="t-brands"] [data-pf-approval-summary="ready"]`),
+          'сводка ИИ у задачи в окне',
+        );
+        await dialog.getByRole('button', { name: 'Отмена' }).click();
+        await t.waitFor(async () => (await dialog.count()) === 0, 'окно не закрылось по «Отмена»');
+      });
+      await t.check('«Принять все (N)» принимает задачи по одной и закрывает окно', async () => {
+        const ids = approvalTasks(state).map((task) => ({ id: task.id, projectId: task.projectId }));
+        await page.locator(NOW).getByRole('button', { name: 'Принять все', exact: true }).click();
+        await dialog.getByRole('button', { name: `Принять все (${ids.length})` }).click();
+        for (const { id, projectId } of ids) {
+          await t.waitForMutation(
+            (m) => m.method === 'POST' && m.path === `/projects/${projectId}/tasks/${id}/move` && m.body?.targetStatus === 'done',
+            `нет POST move → done для ${id}`,
+          );
+        }
+        await t.waitFor(async () => (await dialog.count()) === 0, 'окно не закрылось после приёмки');
+        for (const { id } of ids) await expectGone(t, `${NOW} ${card(id)}`, `принятая задача ${id} осталась на полке`);
+      });
+      await t.pageChecks('Входящие: сводка и «Принять все»');
+    },
+  },
+
+  {
+    // A team that does not fit the phone: a fade alone did not read as «swipe for more», so
+    // the cut edge carries «+N ›» (N — people cut off) that pages the ribbon, and «‹» back.
+    id: 'inbox-people-ribbon',
+    title: 'Входящие на телефоне: лента людей листается кнопкой «+N»',
+    matrix: [
+      ['phone', 'light'],
+      ['narrow', 'dark'],
+    ],
+    async run(t) {
+      const { page, state } = t;
+      const extra = ['Денис Волков', 'Ирина Петрова', 'Максим Дронов', 'Олег Боев', 'Сергей Ким'].map((displayName, i) => ({
+        id: `u-extra-${i}`,
+        email: `extra${i}@smoke.test`,
+        displayName,
+        avatarUrl: null,
+      }));
+      state.membersByWorkspace = { ...(state.membersByWorkspace ?? {}), [WORKSPACE_ID]: [...COLLEAGUES, ...extra] };
+      await t.goto('/', {
+        ready: () => page.locator('[data-pf-task-id]:visible'),
+        readyName: 'карточки «Входящих» видны',
+      });
+      await t.pageChecks('Входящие с большой командой');
+      const forward = page.getByRole('button', { name: /листать вперёд/ });
+      const back = page.getByRole('button', { name: 'Листать назад' });
+      // People whose chip reaches under the «+N ›» button or past the ribbon's edge.
+      const cutOff = () =>
+        page.evaluate(() => {
+          const button = [...document.querySelectorAll('button')].find((b) => /листать вперёд/.test(b.getAttribute('aria-label') ?? ''));
+          if (!button) return { hidden: 0, label: null };
+          const edge = button.getBoundingClientRect().left;
+          const people = [...document.querySelectorAll('[role="group"][aria-label="Люди"] > *')];
+          return { hidden: people.filter((el) => el.getBoundingClientRect().right > edge + 1).length, label: button.textContent.trim() };
+        });
+      await t.step('у обрезанного края — «+N ›», N = сколько людей не видно', async () => {
+        await t.visible(forward, 'кнопка «+N ›» у края ленты людей');
+        await t.waitFor(async () => {
+          const { hidden, label } = await cutOff();
+          return { ok: hidden > 0 && label === `+${hidden}`, hidden, label };
+        }, 'число на кнопке не совпадает с числом обрезанных людей');
+        t.assert((await back.count()) === 0, 'у начала ленты не должно быть «‹»');
+      });
+      // On a phone the ribbon is swiped back; «‹» appears only in mouse layouts (from 768px):
+      // on 320–393px it left no room for a whole person between the two buttons.
+      await t.step('«+N ›» листает ленту до последнего человека; назад — свайпом, без «‹»', async () => {
+        for (let i = 0; i < 12 && (await forward.count()) > 0; i += 1) {
+          await forward.first().click();
+          await page.waitForTimeout(150);
+        }
+        t.assert((await forward.count()) === 0, 'после листания до конца кнопка «+N ›» осталась');
+        t.assert(!(await back.first().isVisible().catch(() => false)), 'на телефоне видна кнопка «‹»');
+        const last = await page.evaluate(() => {
+          const people = [...document.querySelectorAll('[role="group"][aria-label="Люди"] > *')];
+          const box = people.at(-1).getBoundingClientRect();
+          return { right: Math.round(box.right), viewport: document.documentElement.clientWidth };
+        });
+        t.assert(last.right <= last.viewport, `последний человек за краем экрана: ${last.right} > ${last.viewport}`);
+        await page.evaluate(() => {
+          const row = document.querySelector('[role="group"][aria-label="Люди"]');
+          row?.parentElement?.scrollTo({ left: 0 });
+        });
+        await t.visible(forward, 'кнопка «+N ›» снова у края после возврата к началу');
+      });
+    },
+  },
+  {
     id: 'inbox-mobile',
     title: 'Входящие на телефоне',
     matrix: [
@@ -593,24 +748,60 @@ export const scenarios = [
         readyName: 'карточки «Входящих» видны',
       });
       await checkDarkTheme(t);
-      await t.check('заголовок «Задачи пространства»', () =>
-        t.visible(page.getByRole('heading', { name: 'Задачи пространства', level: 1 }), 'h1 «Задачи пространства»'),
-      );
+      // Phone: no title row — the app header names the workspace, the bottom nav the section;
+      // the h1 stays for screen readers, «Фильтры» sit next to the section switch.
+      await t.check('заголовок «Задачи пространства» — только для скринридеров, «Фильтры» у «Сейчас / Очередь»', async () => {
+        const heading = page.getByRole('heading', { name: 'Задачи пространства', level: 1 });
+        t.assert((await heading.count()) === 1, 'нет h1 «Задачи пространства»');
+        t.assert(await heading.evaluate((el) => Boolean(el.closest('.sr-only'))), 'строка заголовка видна на телефоне');
+        const filtersNearSwitch = await page.evaluate(() => {
+          const row = document.querySelector('[data-pf-inbox-section-switch]')?.closest('[role="group"]')?.parentElement;
+          return Boolean(row?.querySelector('button[aria-label="Фильтры"]'));
+        });
+        t.assert(filtersNearSwitch, 'кнопки «Фильтры» нет рядом с «Сейчас / Очередь»');
+      });
       await t.pageChecks('Входящие');
+      // The «who» ribbon: «Мои / Все» and the people's avatars sit on one line at one height;
+      // each person's name hangs under the avatar (initials alone did not say who is who).
+      await t.check('лента «кто»: «Мои / Все» и аватары — в одну строку одной высоты, под аватарами имена', async () => {
+        const boxes = await page.evaluate(() => {
+          const rect = (el) => { const r = el.getBoundingClientRect(); return { top: Math.round(r.top), height: Math.round(r.height) }; };
+          const scope = [...document.querySelectorAll('[role="group"][aria-label="Чьи задачи"] button')].map(rect);
+          const people = [...document.querySelectorAll('[role="group"][aria-label="Люди"] > *')];
+          const avatars = people.map((el) => el.querySelector('[data-pf-who-avatar]')).filter(Boolean).map(rect);
+          const names = people.map((el) => {
+            const name = el.querySelector('[data-pf-who-name]');
+            const r = name?.getBoundingClientRect();
+            return name && r && r.height > 0 ? name.textContent.trim() : '';
+          });
+          return { scope, people: people.length, avatars, names };
+        });
+        t.assert(boxes.scope.length === 2, `чипов «Мои / Все»: ${boxes.scope.length}`);
+        t.assert(boxes.people > 0, 'людей в ленте нет');
+        t.assert(boxes.avatars.length === boxes.people, `аватаров ${boxes.avatars.length} из ${boxes.people} людей`);
+        const all = [...boxes.scope, ...boxes.avatars];
+        const tops = new Set(all.map((b) => b.top));
+        t.assert(Math.max(...tops) - Math.min(...tops) <= 1, `чипы и аватары на разной высоте: ${[...tops].join(', ')}`);
+        const heights = new Set(all.map((b) => b.height));
+        t.assert(heights.size === 1, `чипы и аватары разной высоты: ${[...heights].join(', ')}`);
+        t.assert(all[0].height >= 44, `высота чипа ${all[0].height}px меньше 44px`);
+        const unnamed = boxes.names.filter((n) => !n).length;
+        t.assert(unnamed === 0, `без имени под аватаром: ${unnamed} из ${boxes.names.length}`);
+      });
 
       const nowIds = [...approvalTasks(state), ...manualTasks(state)].map((x) => x.id);
       const queueIds = myQueueTasks(state).map((x) => x.id);
       const switches = page.locator('[data-pf-inbox-section-switch]');
       if (!INBOX_SECTION_SWITCH_REQUIRED && (await switches.count()) === 0) {
         const why = 'в вёрстке ещё нет кнопок [data-pf-inbox-section-switch] — их добавляет мобильная доработка «Входящих»';
-        t.expected('переключатель «В работе»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', why);
-        t.expected('«В работе» и «Очередь» показываются по одному', why);
-        await t.check('карточки «В работе» и «Очередь» видны', async () => {
-          await expectCards(t, NOW, nowIds, '«В работе»');
+        t.expected('переключатель «Сейчас»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', why);
+        t.expected('«Сейчас» и «Очередь» показываются по одному', why);
+        await t.check('карточки «Сейчас» и «Очередь» видны', async () => {
+          await expectCards(t, NOW, nowIds, '«Сейчас»');
           await expectCards(t, QUEUE, queueIds, '«Очередь»');
         });
       } else {
-        await t.check('переключатель «В работе»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', async () => {
+        await t.check('переключатель «Сейчас»/«Очередь»: кнопки now и queue, выбрана одна (aria-pressed)', async () => {
           const found = await switches.evaluateAll((els) =>
             els.map((el) => ({
               value: el.getAttribute('data-pf-inbox-section-switch'),
@@ -623,7 +814,7 @@ export const scenarios = [
           t.assert(pressed.length === 1, `aria-pressed="true" у: ${pressed.join(', ') || 'ни одной'}`);
         });
         for (const [value, shown, other, label, ids] of [
-          ['now', NOW, QUEUE, 'В работе', nowIds],
+          ['now', NOW, QUEUE, 'Сейчас', nowIds],
           ['queue', QUEUE, NOW, 'Очередь', queueIds],
         ]) {
           await t.check(`переключатель → «${label}»: виден только этот раздел, все его карточки`, async () => {
@@ -665,13 +856,29 @@ export const scenarios = [
         await expectGone(t, `${QUEUE} ${card('t-home')}`, 'карточка осталась в очереди');
       });
       if (swiped) {
-        await t.check('взятая задача — в разделе «В работе»', async () => {
+        await t.check('взятая задача — в разделе «Сейчас»', async () => {
           await showSection(t, 'now');
-          await t.visible(page.locator(`${NOW} ${card('t-home')}`), 'карточка в «В работе»');
+          await t.visible(page.locator(`${NOW} ${card('t-home')}`), 'карточка в «Сейчас»');
         });
       } else {
-        t.skip('взятая задача — в разделе «В работе»', 'свайп не сработал');
+        t.skip('взятая задача — в разделе «Сейчас»', 'свайп не сработал');
       }
+
+      // Swipe left = «Отложить»: pick a new deadline, the card moves, the toast offers undo.
+      await t.check('свайп влево по карточке очереди — «Отложить до» → «Завтра» (PATCH deadline)', async () => {
+        await showSection(t, 'queue');
+        const queueCard = page.locator(`${QUEUE} ${card('t-domain')}`);
+        await t.visible(queueCard, `карточка «${taskTitle(state, 't-domain')}» в очереди`);
+        await touchSwipeLeft(t, queueCard);
+        const dialog = page.getByRole('dialog', { name: 'Отложить до' });
+        await t.visible(dialog, 'окно «Отложить до»');
+        await dialog.getByRole('button', { name: 'Завтра' }).tap();
+        await t.waitForMutation(
+          (m) => m.method === 'PATCH' && m.path === `/projects/${INBOX_ID}/tasks/t-domain` && m.body?.deadline === moscowDate(1),
+          `нет PATCH срока ${moscowDate(1)} для t-domain`,
+        );
+        await t.visible(page.getByText(/^Отложено до /), 'тост «Отложено до …»');
+      });
 
       await t.check('долгий тап и бросок на «Готово» в доке закрывает задачу (POST move → done)', async () => {
         await showSection(t, 'queue');
@@ -781,9 +988,20 @@ export const scenarios = [
           );
         }
       });
+      await t.check('повторяющаяся задача отмечена значком повтора', async () => {
+        const badge = page.locator(card('t-form')).first().locator('[data-pf-recurrence-badge]');
+        await t.visible(badge, 'значок повтора на карточке');
+        t.assert((await badge.getAttribute('aria-label')) === 'Повторяется: по будням', 'нет подписи правила у значка повтора');
+      });
+      await t.check('задача из рабочей группы помечена «из группы «Скрипты»»', async () => {
+        const badge = page.locator(card('t-prices')).first().locator('[data-testid="task-group-origin"]');
+        await t.visible(badge, 'пометка группы на карточке');
+        t.assert(/из группы «Скрипты»/.test((await badge.textContent()) ?? ''), 'нет названия группы в пометке');
+        t.assert(/Автор: Вера/.test((await badge.getAttribute('title')) ?? ''), 'нет автора в подсказке пометки');
+      });
       await t.pageChecks('доска проекта');
       await openAndCloseTask(t, page.locator(card('t-home')), taskTitle(state, 't-home'));
-      await t.check('кнопка «Взять в работу» на черновике переносит его в «Вручную»', async () => {
+      await t.check('кнопка «Взять в работу» на черновике переносит его в «В работе»', async () => {
         const draft = page.locator(card('t-prices')).first();
         if (!t.isMobile) await draft.hover();
         const take = draft.getByRole('button', { name: 'Взять в работу' }).filter({ visible: true }).first();
@@ -792,7 +1010,7 @@ export const scenarios = [
         else await take.click();
         await t.waitForMutation(
           (m) => m.method === 'POST' && m.path === `/projects/${BOARD_PROJECT_ID}/tasks/t-prices/move` && m.body?.targetStatus === 'manual',
-          'нет переноса черновика в «Вручную»',
+          'нет переноса черновика в «В работе»',
         );
       });
     },
@@ -916,7 +1134,7 @@ export const scenarios = [
       const press = (locator) => t.isMobile ? locator.tap() : locator.click();
       await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/t-home`, { ready: () => properties });
       await t.check('подписи свойств и «Создано» в меню', async () => {
-        for (const label of ['Статус', 'Проект', 'Исполнитель', 'Срок до', 'Кто утверждает']) {
+        for (const label of ['Статус', 'Проект', 'Исполнитель', 'Срок до', 'Повтор', 'Кто утверждает']) {
           await t.visible(properties.getByText(label, { exact: true }), label);
         }
         t.assert(await properties.getByText('Создано', { exact: true }).count() === 0, 'метаданные остались среди свойств');
@@ -924,14 +1142,48 @@ export const scenarios = [
         await t.visible(page.getByRole('menu').getByText('Создано', { exact: true }), 'дата создания в меню');
         await page.keyboard.press('Escape');
       });
+      await t.check('«Сохранить как шаблон» отправляет текст, приоритет и тип в шаблоны пространства', async () => {
+        await press(page.getByRole('button', { name: 'Ещё', exact: true }));
+        await press(page.getByRole('menuitem', { name: 'Сохранить как шаблон', exact: true }));
+        await t.waitForMutation(
+          (m) => m.method === 'POST' && m.path === `/workspaces/${WORKSPACE_ID}/task-templates`
+            && String(m.body?.description ?? '').startsWith('Обновить главную страницу клиники') && m.body?.priority === 2,
+          'шаблон не сохранён',
+        );
+        await t.visible(page.getByText('Шаблон «Обновить главную страницу клиники» сохранён', { exact: true }), 'тост о сохранении шаблона');
+      });
       await t.check('выбор статуса сохраняет ручную работу', async () => {
         await press(page.getByRole('button', { name: 'Сменить статус', exact: true }));
         const menu = page.getByRole('menu');
         await t.visible(menu.getByText('Статус задачи', { exact: true }), 'заголовок выбора статуса');
         if (t.isMobile) t.assert(await menu.getAttribute('data-pf-mobile-sheet') === 'true', 'статус открылся не нижней шторкой');
-        await press(menu.getByRole('menuitemradio', { name: 'Вручную', exact: true }));
+        await press(menu.getByRole('menuitemradio', { name: 'В работе', exact: true }));
         await t.waitForMutation((m) => m.path.endsWith('/t-home/move') && m.body?.targetStatus === 'manual', 'статус не сохранён');
-        await t.waitFor(async () => (await page.getByRole('button', { name: 'Сменить статус', exact: true }).innerText()).includes('Вручную'), 'статус не обновился');
+        await t.waitFor(async () => (await page.getByRole('button', { name: 'Сменить статус', exact: true }).innerText()).includes('В работе'), 'статус не обновился');
+      });
+      await t.check('повтор: «Каждую неделю» сохраняется, дни недели выбираются в том же меню', async () => {
+        await press(properties.getByRole('button', { name: 'Повтор задачи', exact: true }));
+        // Имя меню Radix берёт у кнопки, а та после выбора называет правило — ищем без имени.
+        const menu = page.getByRole('menu');
+        await t.visible(menu.getByText('Не повторять', { exact: true }), 'пункт «Не повторять»');
+        if (t.isMobile) t.assert(await menu.getAttribute('data-pf-mobile-sheet') === 'true', 'повтор открылся не нижней шторкой');
+        await press(menu.getByRole('menuitem', { name: 'Каждую неделю', exact: true }));
+        await t.waitForMutation(
+          (m) => m.method === 'PATCH' && m.path.endsWith('/t-home') && m.body?.recurrence?.kind === 'weekly' && m.body.recurrence.days.length === 1,
+          'недельный повтор не сохранён',
+        );
+        await t.visible(menu.getByText('Дни недели', { exact: true }), 'выбор дней недели');
+        await press(menu.getByRole('menuitemcheckbox', { checked: false }).first());
+        await t.waitForMutation(
+          (m) => m.method === 'PATCH' && m.path.endsWith('/t-home') && m.body?.recurrence?.days?.length === 2,
+          'второй день недели не сохранён',
+        );
+        await page.keyboard.press('Escape');
+        await t.hidden(menu, 'меню повтора закрылось');
+        await t.waitFor(
+          async () => (await properties.locator('[data-pf-task-property="recurrence"]').innerText()).includes('Каждую неделю'),
+          'правило повтора не показано в строке',
+        );
       });
       await t.check('список утверждающих открывается с полными именами', async () => {
         await press(properties.getByRole('button', { name: 'Кто утверждает', exact: true }));
@@ -989,6 +1241,59 @@ export const scenarios = [
         await expectGone(t, card('t-home'), 'задача осталась на исходной доске');
       });
       await t.pageChecks('доска после переноса');
+    },
+  },
+
+  {
+    id: 'task-comment-composer',
+    title: 'Комментарий: картинка без текста и уведомление руководителя по умолчанию',
+    matrix: [['desktop', 'dark'], ['phone', 'light']],
+    async run(t) {
+      const { page } = t;
+      const press = (locator) => t.isMobile ? locator.tap() : locator.click();
+      const commentsPath = `/projects/${BOARD_PROJECT_ID}/tasks/t-home/comments`;
+      const shots = process.env.SMOKE_SHOTS_DIR;
+      const shot = async (name) => {
+        if (shots) await page.screenshot({ path: `${shots}/${name}-${t.isMobile ? 'phone' : 'desktop'}.png`, animations: 'disabled' });
+      };
+      await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/t-home`, { ready: () => page.locator('[data-pf-comment-composer]:visible') });
+      const composer = page.locator('[data-pf-comment-composer]:visible');
+      const audience = composer.getByTitle('Кого уведомить');
+      await t.step('по умолчанию уведомляется руководитель', async () => {
+        await t.waitFor(async () => (await audience.innerText()).includes('Борис Котов'), 'по умолчанию выбран не руководитель');
+      });
+      await t.check('в «Выбрать» можно отметить любого участника', async () => {
+        await press(audience);
+        for (const name of ['Борис Котов', 'Вера Лебедева', 'Глеб Орлов']) {
+          await t.visible(page.getByRole('menuitemcheckbox', { name: new RegExp(name) }), name);
+        }
+        await t.visible(page.getByRole('menuitemcheckbox', { name: /Руководитель/ }), 'метка руководителя');
+        await shot('comment-notify-menu');
+        await page.keyboard.press('Escape');
+      });
+      await t.step('комментарий из одной картинки отправляется без текста', async () => {
+        await composer.locator('input[type="file"]').setInputFiles({
+          name: 'screenshot.png', mimeType: 'image/png', buffer: Buffer.from(SMOKE_PNG_BASE64, 'base64'),
+        });
+        await t.visible(composer.getByRole('button', { name: 'Открыть screenshot.png' }), 'превью картинки в композере');
+        await shot('comment-composer');
+        const send = composer.getByRole('button', { name: /^Отправить/ }).first();
+        await t.waitFor(() => send.isEnabled(), 'кнопка отправки неактивна без текста');
+        await press(send);
+        await t.waitForMutation(
+          (m) => m.method === 'POST' && m.path === commentsPath && m.body?.body === '' && m.body?.attachmentCount === 1 &&
+            m.body?.notify?.mode === 'selected' && m.body.notify.userIds?.join() === 'u-boris',
+          'комментарий без текста не отправлен руководителю',
+        );
+        await t.waitForMutation((m) => m.method === 'POST' && m.path.startsWith(`${commentsPath}/`) && m.path.endsWith('/attachments'), 'картинка не загружена');
+        await t.visible(page.locator('img[alt="screenshot.png"]'), 'картинка в ленте комментариев');
+        t.assert(
+          !t.journal.mutations.some((m) => m.method === 'DELETE' && m.path.startsWith(`${commentsPath}/`)),
+          'комментарий удалён после загрузки',
+        );
+      });
+      await shot('comment-sent');
+      await t.pageChecks('окно задачи после комментария с картинкой');
     },
   },
 
@@ -1122,7 +1427,8 @@ export const scenarios = [
       for (const [label, path, ready] of [
         ['ИИ', '/ai', () => page.getByRole('heading', { name: 'ProjectsFlow ИИ', level: 1 })],
         ['Профиль', '/profile', () => page.getByText('Личные данные', { exact: true })],
-        ['Входящие', '/', () => page.getByRole('heading', { name: 'Задачи пространства', level: 1 })],
+        // Phone: the inbox has no visible title row — its section switch is the content.
+        ['Входящие', '/', () => page.locator('[data-pf-inbox-section-switch="now"]')],
       ]) {
         await t.check(`нижняя панель: «${label}» открывает ${path}`, async () => {
           const button = nav.getByRole('button', { name: label, exact: true });
@@ -1215,6 +1521,27 @@ export const scenarios = [
       await t.check('название пространства и участники', async () => {
         await t.visible(page.getByRole('heading', { name: 'Команда «Смоук»' }), 'заголовок «Команда «Смоук»»');
         await t.visible(page.getByText('Вера Лебедева').first(), 'участник «Вера Лебедева»');
+      });
+      await t.check('рабочие Telegram-группы и «Из соседних пространств»', async () => {
+        await t.visible(page.getByText('Рабочие Telegram-группы', { exact: true }), 'карточка «Рабочие Telegram-группы»');
+        await t.visible(page.getByText('Команда · задачи'), 'рабочая группа из фикстуры');
+        await t.visible(page.getByText('Новая группа «Поддержка клиентов» ждёт подтверждения'), 'черновик группы');
+        await t.visible(page.getByRole('button', { name: 'Подключить «Поддержка клиентов»' }), 'кнопка «Подключить» черновика');
+        await t.visible(page.getByRole('button', { name: 'Добавить проект' }).first(), 'кнопка «Добавить проект»');
+        await t.visible(page.getByRole('group', { name: 'Режим группы' }).first(), 'переключатель режима группы');
+        await t.visible(page.getByRole('button', { name: 'Инциденты', pressed: true }).first(), 'режим «Инциденты» у группы из фикстуры');
+        await t.visible(page.getByRole('button', { name: 'Смешанная', pressed: false }).first(), 'режим «Смешанная» в переключателе');
+        await t.visible(page.getByText('Пространство «Офис» просит перенести группу', { exact: false }), 'запрос на перенос группы');
+        await t.visible(page.getByText('Участники: 5 в Telegram, 1 связаны с PF'), 'участники рабочей группы');
+        await t.visible(page.getByText('Бот не администратор группы', { exact: false }), 'подсказка «сделайте бота администратором»');
+        await t.visible(page.getByRole('button', { name: 'Из соседних пространств' }), 'кнопка «Из соседних пространств»');
+      });
+      await t.check('включатель напоминаний о срочных задачах', async () => {
+        const urgent = page.getByRole('switch', { name: 'Напоминания о срочных задачах' });
+        await t.visible(urgent, 'переключатель «Срочные задачи»');
+        if ((await urgent.getAttribute('aria-checked')) !== 'true') {
+          throw new Error('напоминания о срочных задачах должны быть включены по умолчанию');
+        }
       });
       await t.pageChecks('настройки пространства');
     },

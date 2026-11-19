@@ -1,3 +1,4 @@
+import type { GetPlatformStats } from '../application/admin/GetPlatformStats.js';
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
@@ -6,6 +7,7 @@ import express, { type Express, type Request, type Response, type RequestHandler
 import { mountBuildAssets } from './staticAssets.js';
 import type { ImageGenerationService } from '../application/image-generation/ImageGenerationService.js';
 import { imageGenerationRouter, imageGenerationAgentRouter } from './image-generation/routes.js';
+import { aiTextJobsRouter } from './ai-text/routes.js';
 import type { VoiceTranscriber } from '../application/telegram/VoiceTranscriber.js';
 import { voiceTranscriptionRouter } from './voice-transcription/routes.js';
 import type { AppBackendRepository } from '../application/app-backend/AppBackendRepository.js';
@@ -37,6 +39,7 @@ import type { GetCurrentUser } from '../application/auth/GetCurrentUser.js';
 import type { Register } from '../application/auth/Register.js';
 import type { Login } from '../application/auth/Login.js';
 import type { Logout } from '../application/auth/Logout.js';
+import type { Impersonation } from '../application/auth/Impersonation.js';
 import type { RequestPasswordReset } from '../application/auth/RequestPasswordReset.js';
 import type { ResetPassword } from '../application/auth/ResetPassword.js';
 import type { UpdateProfile } from '../application/user/UpdateProfile.js';
@@ -66,6 +69,7 @@ import { publicBoardRouter } from './public/routes.js';
 import { telemetryRouter } from './telemetry/routes.js';
 import type { SetProjectDispatcher } from '../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../application/project/SetProjectMultiTaskWorker.js';
+import type { SetProjectGroupHints } from '../application/project/SetProjectGroupHints.js';
 import type { ListDispatcherCandidates } from '../application/project/ListDispatcherCandidates.js';
 import type { GetProjectWorkerOverview } from '../application/agent/GetProjectWorkerOverview.js';
 import type { ListMyDispatchedProjects } from '../application/agent/ListMyDispatchedProjects.js';
@@ -157,6 +161,7 @@ import type { PairTelegramAccount } from '../application/telegram/PairTelegramAc
 import type { HandleTelegramWebhook } from '../application/telegram/HandleTelegramWebhook.js';
 import type { SendAgentTelegramNotification } from '../application/telegram/SendAgentTelegramNotification.js';
 import type { BroadcastTelegramNotificationByTask } from '../application/telegram/BroadcastTelegramNotificationByTask.js';
+import type { NotifyIncidentGroup } from '../application/telegram/NotifyIncidentGroup.js';
 import type { CreateTaskComment } from '../application/task/CreateTaskComment.js';
 import type { UpdateTaskComment } from '../application/task/UpdateTaskComment.js';
 import type { DeleteTaskComment } from '../application/task/DeleteTaskComment.js';
@@ -186,13 +191,14 @@ import type { RealtimeEvent } from '../domain/realtime/RealtimeEvent.js';
 import type { ProjectNotificationService } from '../application/notifications/ProjectNotificationService.js';
 import type { DispatchCommentNotifications } from '../application/notifications/DispatchCommentNotifications.js';
 import type { GetCommentNotifications } from '../application/task/GetCommentNotifications.js';
+import type { ListCommentNotifyCandidates } from '../application/task/ListCommentNotifyCandidates.js';
 import type { ListAllProjects } from '../application/admin/ListAllProjects.js';
 import type { ListAllUsers } from '../application/admin/ListAllUsers.js';
 import type { ListUserProjectsWithDispatcher } from '../application/admin/ListUserProjectsWithDispatcher.js';
 import type { ListUserProjectsWithFavorites } from '../application/admin/ListUserProjectsWithFavorites.js';
 import type { SetUserProjectFavorite } from '../application/admin/SetUserProjectFavorite.js';
 import type { UpdateUserAsAdmin } from '../application/admin/UpdateUserAsAdmin.js';
-import type { DeleteUserAsAdmin } from '../application/admin/DeleteUserAsAdmin.js';
+import type { DeleteUserAsAdmin, GetUserDeletionPreview } from '../application/admin/DeleteUserAsAdmin.js';
 import type { ManageEmployees } from '../application/finance/ManageEmployees.js';
 import type { ManageProjectFinance } from '../application/finance/ManageProjectFinance.js';
 import type { GetProjectFinance } from '../application/finance/GetProjectFinance.js';
@@ -231,6 +237,11 @@ import { projectsRouter } from './projects/routes.js';
 import type { ManageKanbanColumns } from '../application/kanban/ManageKanbanColumns.js';
 import type { BulkManageWorkspaceKanbanColumns } from '../application/kanban/BulkManageWorkspaceKanbanColumns.js';
 import { workspacesRouter } from './workspaces/routes.js';
+import { projectWorkspaceAccessRouter } from './projects/workspaceAccessRoutes.js';
+import type { ManageProjectSharing } from '../application/project/ManageProjectSharing.js';
+import type { ManageTelegramWorkGroups } from '../application/telegram/ManageTelegramWorkGroups.js';
+import type { SyncTelegramGroupMembers } from '../application/telegram/SyncTelegramGroupMembers.js';
+import type { InviteNeighbors, ListWorkspaceInviteCandidates } from '../application/workspace/InviteNeighbors.js';
 import type { ManageWorkspaceProjectAccess } from '../application/workspace/ManageWorkspaceProjectAccess.js';
 import type { WorkspaceService } from '../application/workspace/WorkspaceService.js';
 import type { ManageWorkspaceAssigneeDigest } from '../application/digest/ManageWorkspaceAssigneeDigest.js';
@@ -247,6 +258,8 @@ import { tasksRouter } from './tasks/routes.js';
 import { searchRouter } from './search/routes.js';
 import type { EmailSender } from '../application/notifications/EmailSender.js';
 import { adminRouter } from './admin/routes.js';
+import { adminMailingRouter, mailingUnsubscribeRouter } from './mailing/routes.js';
+import type { MailingService } from '../application/mailing/MailingService.js';
 import type { ListAllSupportTickets } from '../application/admin/ListAllSupportTickets.js';
 import type { SetSupportTicketStatus } from '../application/admin/SetSupportTicketStatus.js';
 import type { SetUserPlanAsAdmin } from '../application/admin/SetUserPlanAsAdmin.js';
@@ -264,6 +277,12 @@ import { workflowRouter } from './automation/workflowRoutes.js';
 import { invitesRouter } from './invites/routes.js';
 import { taskAssigneesRouter } from './assignees/routes.js';
 import { meStatsRouter } from './stats/routes.js';
+import { desktopNotesRouter } from './desktop-notes/routes.js';
+import { accountTokenOnTaskPaths } from './desktop-notes/accountTokenPaths.js';
+import type { DesktopNotesService } from '../application/desktop-notes/DesktopNotesService.js';
+import { pushRouter } from './push/routes.js';
+import type { ManagePushSubscriptions } from '../application/push/ManagePushSubscriptions.js';
+import type { PushNotificationDispatcher } from '../application/push/PushNotificationDispatcher.js';
 import type { GetMyCompletedStats } from '../application/stats/GetMyCompletedStats.js';
 import { notificationsRouter } from './notifications/routes.js';
 import { recentTaskViewsRouter } from './recent-task-views/routes.js';
@@ -281,6 +300,7 @@ import { fileSyncRouter } from './file-sync/routes.js';
 import type { FileSyncService } from '../application/file-sync/FileSyncService.js';
 import { liveAgentRouter } from './live/agentRoutes.js';
 import { liveUserRouter } from './live/routes.js';
+import { approvalSummaryRouter, type ApprovalSummaryRouterDeps } from './approval-summary/routes.js';
 import { siteAgentRouter } from './site/agentRoutes.js';
 import type { PublishSiteArtifact } from '../application/site/PublishSiteArtifact.js';
 import type { GetProjectSite } from '../application/site/GetProjectSite.js';
@@ -290,6 +310,10 @@ import type { SiteArtifactStorage } from '../application/site/SiteArtifactStorag
 import type { LiveService } from '../application/live/LiveService.js';
 import type { LiveEventHub } from '../infrastructure/realtime/LiveEventHub.js';
 import { chatRouter, type ChatRouterDeps } from './chat/routes.js';
+import {
+  workspaceTaskTemplatesRouter,
+  type WorkspaceTaskTemplatesRouterDeps,
+} from './task-templates/routes.js';
 import type { AiConversationService } from '../application/ai-conversation/AiConversationService.js';
 import type { AiConversationEventHub } from '../infrastructure/realtime/AiConversationEventHub.js';
 import { aiConversationRouter, projectStudioConversationRouter } from './ai-conversation/routes.js';
@@ -342,6 +366,8 @@ type AppDeps = {
     readonly service: EmailActionService;
     readonly appUrl: string;
   };
+  // Admin mailings (db/176) + the public unsubscribe page.
+  readonly mailing: { readonly service: MailingService };
   readonly telegramDigestActions: {
     readonly service: TelegramDigestActionService;
   };
@@ -349,6 +375,7 @@ type AppDeps = {
     readonly register: Register;
     readonly login: Login;
     readonly logout: Logout;
+    readonly impersonation: Impersonation;
     readonly getCurrentUser: GetCurrentUser;
     readonly requestPasswordReset: RequestPasswordReset;
     readonly resetPassword: ResetPassword;
@@ -407,6 +434,8 @@ type AppDeps = {
   };
   readonly repositoryCode: ManageProjectRepositoryCode;
   readonly chat: ChatRouterDeps;
+  // Шаблоны задач пространства (db/187). Опционально — тестам не нужно.
+  readonly workspaceTaskTemplates?: WorkspaceTaskTemplatesRouterDeps;
   readonly aiConversations: {
     readonly service: AiConversationService;
     readonly eventHub: AiConversationEventHub;
@@ -431,6 +460,7 @@ type AppDeps = {
     readonly launchProject: LaunchProject;
     readonly setProjectDispatcher: SetProjectDispatcher;
     readonly setMultiTaskWorker: SetProjectMultiTaskWorker;
+    readonly setGroupHints: SetProjectGroupHints;
     readonly listDispatcherCandidates: ListDispatcherCandidates;
     readonly getWorkerOverview: GetProjectWorkerOverview;
     readonly setGitTokenDelegation: SetGitTokenDelegation;
@@ -474,6 +504,22 @@ type AppDeps = {
     // Обложка проекта: то же локальное файловое хранилище, что и у аттачей задач + лимит.
     readonly coverStorage: AttachmentStorage;
     readonly maxCoverBytes: number;
+    // Общий проект (db/182): какие задачи скрыты от человека правилами видимости.
+    readonly hiddenTaskIds?: (
+      userId: string,
+      refs: ReadonlyArray<{ readonly projectId: string; readonly taskId: string }>,
+    ) => Promise<ReadonlySet<string>>;
+  };
+  // «Доступ пространств» проекта (db/182).
+  readonly projectSharing?: ManageProjectSharing;
+  // Заметки на рабочем столе (приложение для Windows). Опционально — тестам не нужно.
+  readonly desktopNotes?: DesktopNotesService;
+  // ИИ-сводка «что сделано» на карточках полки «На утверждении» (db/186).
+  readonly approvalSummary?: ApprovalSummaryRouterDeps;
+  // "Notifications on this device", Web Push (db/184). Optional: tests do not need it.
+  readonly push?: {
+    readonly manage: ManagePushSubscriptions;
+    readonly tester: Pick<PushNotificationDispatcher, 'sendTest'>;
   };
   readonly workspaces: {
     readonly service: WorkspaceService;
@@ -484,6 +530,14 @@ type AppDeps = {
     readonly setCommitSyncProjects: SetWorkspaceCommitSyncProjects;
     // Кастомные колонки канбана на все проекты пространства (db/154).
     readonly bulkKanbanColumns: BulkManageWorkspaceKanbanColumns;
+    // Рабочие Telegram-группы (db/181).
+    readonly telegramGroups?: ManageTelegramWorkGroups;
+    // Участники рабочих групп (db/191).
+    readonly telegramGroupMembers?: Pick<SyncTelegramGroupMembers, 'summary'>;
+    readonly neighborInvites?: {
+      readonly list: ListWorkspaceInviteCandidates;
+      readonly invite: InviteNeighbors;
+    };
     readonly invites: {
       readonly create: CreateWorkspaceInvite;
     readonly manage: ManageWorkspaceInvite;
@@ -541,16 +595,22 @@ type AppDeps = {
     readonly text: GenerateLlmText;
   };
   readonly admin: {
+    readonly getPlatformStats: GetPlatformStats;
     readonly listAllProjects: ListAllProjects;
     readonly listAllUsers: ListAllUsers;
     readonly updateUser: UpdateUserAsAdmin;
     readonly deleteUser: DeleteUserAsAdmin;
+    readonly getUserDeletionPreview: GetUserDeletionPreview;
     readonly listUserProjectsWithDispatcher: ListUserProjectsWithDispatcher;
     readonly listUserProjectsWithFavorites: ListUserProjectsWithFavorites;
     readonly setUserProjectFavorite: SetUserProjectFavorite;
     readonly listAllSupportTickets: ListAllSupportTickets;
     readonly setSupportTicketStatus: SetSupportTicketStatus;
     readonly setUserPlanAsAdmin: SetUserPlanAsAdmin;
+    readonly bulkSetPlan: import('../application/admin/BulkSetPlanAsAdmin.js').BulkSetPlanAsAdmin;
+    readonly signOutEverywhere: import('../application/admin/SignOutUserEverywhere.js').SignOutUserEverywhere;
+    readonly sendPasswordReset: import('../application/admin/SendPasswordResetAsAdmin.js').SendPasswordResetAsAdmin;
+    readonly getUserOverview: import('../application/admin/GetAdminUserOverview.js').GetAdminUserOverview;
     readonly emailSender: EmailSender;
   };
   readonly finance: {
@@ -560,7 +620,7 @@ type AppDeps = {
   };
   readonly notifications: {
     readonly resolveActiveWorkspace: import('../application/workspace/activeWorkspace.js').ResolveActiveWorkspace;
-    readonly getProjectWorkspaceId: (projectId: string) => Promise<string | null>;
+    readonly getProjectWorkspaceIds: (projectId: string) => Promise<readonly string[]>;
     readonly tasks: TaskRepository;
     readonly list: ListNotifications;
     readonly alerts: NotificationAlerts;
@@ -680,6 +740,7 @@ type AppDeps = {
     readonly broadcastTelegram: BroadcastTelegramNotificationByTask;
     readonly dispatchCommentNotifications: DispatchCommentNotifications;
     readonly getCommentNotifications: GetCommentNotifications;
+    readonly listCommentNotifyCandidates: ListCommentNotifyCandidates;
     readonly projectRepo: ProjectRepository;
   };
   readonly digest: {
@@ -779,6 +840,7 @@ type AppDeps = {
     readonly dispatchCommentNotifications: DispatchCommentNotifications;
     readonly sendTelegramNotification: SendAgentTelegramNotification;
     readonly broadcastTelegramByTask: BroadcastTelegramNotificationByTask;
+    readonly notifyIncidentGroup?: NotifyIncidentGroup;
     readonly projects: ProjectRepository;
   };
 };
@@ -845,6 +907,9 @@ export function createApp(deps: AppDeps): CreatedApp {
     }),
   );
   app.use(['/api/ai/stt', '/api/ai/transcribe', '/api/agent/stt', '/api/agent/transcribe'], express.json({ limit: '35mb' }));
+  // Текстовый шлюз Codex: до 100000 символов текста + 20000 инструкции — в кириллице это
+  // больше общего лимита 256kb.
+  app.use('/api/ai/text-jobs', express.json({ limit: '1mb' }));
   app.use(express.json({ limit: '256kb' }));
   app.use(cookieParser());
 
@@ -909,6 +974,8 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Каждый запрос проходит через session-resolver. Не делает auth обязательным —
   // только прикладывает req.user, если cookie валиден.
   app.use(sessionFromCookie(deps.auth.getCurrentUser));
+  // Развёрнутая заметка (приложение для Windows): комментарии и файлы задачи по токену аккаунта.
+  app.use(accountTokenOnTaskPaths(deps.agent.authenticateAgentToken));
   if (deps.workspaceScope) app.use('/api', deps.workspaceScope);
 
   app.get('/api/health', (_req, res) => {
@@ -918,6 +985,8 @@ export function createApp(deps: AppDeps): CreatedApp {
 
   // Публичные one-click страницы действий из писем-сводок (авторизация по opaque-токену).
   app.use('/api/email-actions', emailActionsRouter(deps.emailActions));
+  // Публичная отписка от рассылок (авторизация подписанным токеном из письма).
+  app.use('/api/mailing/unsubscribe', mailingUnsubscribeRouter(deps.mailing));
   app.use(
     '/api/telegram-digest-actions',
     telegramDigestActionsRouter(deps.telegramDigestActions),
@@ -929,6 +998,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       register: deps.auth.register,
       login: deps.auth.login,
       logout: deps.auth.logout,
+      impersonation: deps.auth.impersonation,
       requestPasswordReset: deps.auth.requestPasswordReset,
       resetPassword: deps.auth.resetPassword,
       updateProfile: deps.user.updateProfile,
@@ -961,12 +1031,22 @@ export function createApp(deps: AppDeps): CreatedApp {
   );
   // Чат пространства — тот же префикс, подпути /:workspaceId/chat/... (не пересекаются с workspaces).
   app.use('/api/workspaces', chatRouter(deps.chat));
+  // Шаблоны задач пространства — подпути /:workspaceId/task-templates.
+  if (deps.workspaceTaskTemplates) {
+    app.use('/api/workspaces', workspaceTaskTemplatesRouter(deps.workspaceTaskTemplates));
+  }
   // Долговечные личные и проектные ИИ-чаты. Отдельный контур от коротких
   // ai-prompt-jobs: история сообщений не очищается вместе с очередью воркера.
   if (deps.imageGeneration) {
     app.use('/api/ai/image-jobs', imageGenerationRouter(deps.imageGeneration, deps.agent.authenticateAgentToken));
     app.use('/api/agent/image-jobs', imageGenerationAgentRouter(deps.imageGeneration, deps.agent.authenticateAgentToken));
   }
+  // Текстовый шлюз Codex (пара к image-jobs): очередь ai_prompt_jobs, mode='text'.
+  app.use('/api/ai/text-jobs', aiTextJobsRouter({
+    enqueueAiPromptJob: deps.agent.enqueueAiPromptJob,
+    waitForAiPromptJob: deps.agent.waitForAiPromptJob,
+    authenticate: deps.agent.authenticateAgentToken,
+  }));
   if (deps.voiceTranscriber) {
     const sttRouter = voiceTranscriptionRouter(deps.voiceTranscriber, deps.agent.authenticateAgentToken);
     app.use(['/api/ai/stt', '/api/ai/transcribe', '/api/agent/stt', '/api/agent/transcribe'], sttRouter);
@@ -1015,12 +1095,24 @@ export function createApp(deps: AppDeps): CreatedApp {
       activity: deps.live.activity,
     }),
   );
+  // ИИ-сводка «что сделано» для полки «На утверждении»: /:projectId/tasks/:taskId/approval-summary.
+  if (deps.approvalSummary) app.use('/api/projects', approvalSummaryRouter(deps.approvalSummary));
   // Настройки дайджеста проекта: Telegram-группа + ежедневная сводка.
   app.use('/api/projects', digestRouter(deps.digest));
+  // «Доступ пространств» проекта (db/182).
+  if (deps.projectSharing) app.use('/api/projects', projectWorkspaceAccessRouter({ manage: deps.projectSharing }));
   app.use('/api/assignees', taskAssigneesRouter(deps.assignees));
   app.use('/api/me', meStatsRouter(deps.meStats));
+  if (deps.desktopNotes) {
+    app.use(
+      '/api/desktop-notes',
+      desktopNotesRouter({ service: deps.desktopNotes, authenticate: deps.agent.authenticateAgentToken }),
+    );
+  }
+  if (deps.push) app.use('/api/push', pushRouter(deps.push));
   app.use('/api/search', searchRouter(deps.search));
   app.use('/api/admin/llm', llmAdminRouter(deps.llm));
+  app.use('/api/admin/mailings', adminMailingRouter(deps.mailing));
   app.use('/api/admin', adminRouter(deps.admin));
   app.use('/api/employees', employeesRouter({ manage: deps.finance.manageEmployees }));
   app.use(
@@ -1209,6 +1301,7 @@ export function createApp(deps: AppDeps): CreatedApp {
       dispatchCommentNotifications: deps.agent.dispatchCommentNotifications,
       sendTelegramNotification: deps.agent.sendTelegramNotification,
       broadcastTelegramByTask: deps.agent.broadcastTelegramByTask,
+      ...(deps.agent.notifyIncidentGroup ? { notifyIncidentGroup: deps.agent.notifyIncidentGroup } : {}),
       projects: deps.agent.projects,
       users: deps.telegram.users,
     }),
@@ -1427,6 +1520,19 @@ export function createApp(deps: AppDeps): CreatedApp {
     });
   }
 
+  // The app service worker and the copy of index.html it caches on install (client/public/sw.js,
+  // the pwa-service-worker plugin in vite.config.ts). Never cached: the browser must see a new
+  // version right after a deploy. Mounted before the landing static files.
+  if (!isDev && hasClient) {
+    for (const file of ['sw.js', 'app-shell.html']) {
+      app.get(`/${file}`, (_req, res, next) => {
+        const abs = resolve(clientDist, file);
+        if (!existsSync(abs)) return next();
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        res.sendFile(abs);
+      });
+    }
+  }
   if (hasLanding) mountBuildAssets(app, '/_astro', resolve(landingDist, '_astro'));
   if (!isDev && hasClient) mountBuildAssets(app, '/assets', resolve(clientDist, 'assets'));
   if (hasLanding) app.use(express.static(landingDist, { index: false }));

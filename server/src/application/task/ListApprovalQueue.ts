@@ -11,6 +11,7 @@ import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { AssignedTaskView } from './ListTasksAssignedToMe.js';
+import type { TaskApprovalService } from './TaskApprovalService.js';
 
 type Deps = {
   readonly projects: ProjectRepository;
@@ -22,6 +23,8 @@ type Deps = {
   readonly comments: TaskCommentRepository;
   readonly resolveActiveWorkspace: ResolveActiveWorkspace;
   readonly users: UserRepository;
+  // Приёмка по пространству создания задачи (db/182). Без неё — роль в проекте, как раньше.
+  readonly approval?: Pick<TaskApprovalService, 'canApprove'>;
 };
 
 /**
@@ -58,15 +61,37 @@ export class ListApprovalQueue {
     const projectEntries = await Promise.all(
       projectIds.map(async (id) => [id, await this.deps.projects.getById(id)] as const),
     );
-    const projectById = new Map(
-      projectEntries.filter((e): e is [string, Project] => e[1] !== null && e[1].workspaceId === ws.id),
-    );
-    const allowed = new Map(
-      await Promise.all(
-        [...projectById.values()].map(async (project) => [project.id, await this.canAccept(project, callerId)] as const),
+    const inWorkspace = await Promise.all(
+      projectEntries.map(async ([id, project]) =>
+        project !== null &&
+        (project.workspaceId === ws.id || (await this.deps.projects.isInWorkspace?.(id, ws.id)) === true),
       ),
     );
-    const visible = pending.filter((t) => allowed.get(t.projectId) === true);
+    const projectById = new Map(
+      projectEntries.filter((e, index): e is [string, Project] => e[1] !== null && inWorkspace[index] === true),
+    );
+    // Право принять — по проекту и пространству, где задачу создали (общий проект, db/182).
+    const allowed = new Map<string, Promise<boolean>>();
+    const decide = (project: Project, originWorkspaceId: string | null): Promise<boolean> => {
+      const key = `${project.id}|${originWorkspaceId ?? ''}`;
+      let decision = allowed.get(key);
+      if (!decision) {
+        decision = this.canAccept(project, callerId, originWorkspaceId);
+        allowed.set(key, decision);
+      }
+      return decision;
+    };
+    const verdicts = await Promise.all(
+      pending.map(async (task) => {
+        const project = projectById.get(task.projectId);
+        return project ? decide(project, task.originWorkspaceId ?? null) : false;
+      }),
+    );
+    const accepted = pending.filter((_, index) => verdicts[index] === true);
+    // Общий проект (db/182): в очереди — только задачи, видимые руководителю в этом пространстве.
+    const visible = this.deps.members.filterVisibleTasks
+      ? await this.deps.members.filterVisibleTasks(callerId, accepted)
+      : accepted;
     if (visible.length === 0) return [];
 
     const ids = visible.map((t) => t.id);
@@ -107,10 +132,12 @@ export class ListApprovalQueue {
     }));
   }
 
-  private async canAccept(project: Project, callerId: string): Promise<boolean> {
+  private async canAccept(project: Project, callerId: string, originWorkspaceId: string | null): Promise<boolean> {
     if (await this.deps.members.isProjectHidden?.(project.id, callerId)) return false;
     // Личная задача: руководитель пространства — принимающий (см. isInboxApprover).
     if (project.isInbox) return true;
+    // Руководитель основного пространства или пространства, где задачу создали (db/182).
+    if (this.deps.approval) return this.deps.approval.canApprove(project, callerId, originWorkspaceId);
     const membership = await this.deps.members.findForProject(project.id, callerId);
     return membership !== null && hasOwnerRights(membership.role);
   }

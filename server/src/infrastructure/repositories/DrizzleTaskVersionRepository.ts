@@ -41,6 +41,7 @@ function parseSnapshot(value: unknown, projectId: string): TaskSnapshot {
     status: raw.status ?? 'todo',
     statusBeforeDone: raw.statusBeforeDone ?? null,
     ralphMode: raw.ralphMode ?? 'normal',
+    ...(raw.runMode !== undefined ? { runMode: raw.runMode } : {}),
     deadline: raw.deadline ?? null,
     startDate: raw.startDate ?? null,
     parentTaskId: raw.parentTaskId ?? null,

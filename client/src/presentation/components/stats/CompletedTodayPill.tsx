@@ -35,7 +35,9 @@ export function CompletedTodayPill({
     >
       <CircleCheck className="size-3.5 shrink-0" strokeWidth={2.2} aria-hidden />
       <span className="tabular-nums">{count}</span>
-      {withLabel && <span className="font-medium">сделано сегодня</span>}
+      {/* Уже 1024px (планшет, окно с панелью) — только число: подпись вытесняла крошки
+          из строки; полный текст остаётся в подсказке и aria-label. */}
+      {withLabel && <span className="font-medium max-lg:hidden">сделано сегодня</span>}
     </span>
   );
 }

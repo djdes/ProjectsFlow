@@ -34,6 +34,8 @@ import {
   ProjectNotFoundError,
   ProjectRepoAlreadyConnectedError,
   ProjectArchiveInvalidError,
+  ProjectSharingForbiddenError,
+  ProjectSharingInvalidError,
 } from '../../domain/project/errors.js';
 import { DispatcherCandidateInvalidError } from '../../application/project/SetProjectDispatcher.js';
 import {
@@ -91,6 +93,7 @@ import {
   AssigneeNotProjectMemberError,
   AssigneeNotSharedMemberError,
   TaskNotFoundError,
+  TaskTemplateNotFoundError,
   InboxOwnerRequiredError,
 } from '../../domain/task/errors.js';
 import { TaskNotActiveError } from '../../application/task/RequestRalphCancel.js';
@@ -163,7 +166,19 @@ import {
   WorkspaceInviteExpiredError,
   WorkspaceInviteAlreadyUsedError,
   CannotInviteToDefaultWorkspaceError,
+  WorkspaceRejoinBlockedError,
 } from '../../domain/workspace/errors.js';
+import {
+  TelegramBotUnavailableError,
+  TelegramGroupNotFoundError,
+  TelegramGroupNotAdminError,
+  TelegramGroupProjectInvalidError,
+  TelegramGroupTakenError,
+  TelegramGroupDraftElsewhereError,
+  TelegramGroupTransferRequestedError,
+  TelegramGroupTransferNotFoundError,
+  TelegramNotLinkedError,
+} from '../../domain/telegram/errors.js';
 import {
   ChatMessageNotFoundError,
   NotMessageAuthorError,
@@ -541,6 +556,10 @@ export function errorHandler(
 
   if (err instanceof TaskNotFoundError) {
     res.status(404).json({ error: 'task_not_found' });
+    return;
+  }
+  if (err instanceof TaskTemplateNotFoundError) {
+    res.status(404).json({ error: 'task_template_not_found', message: err.message });
     return;
   }
   if (err instanceof TaskAwaitingApprovalError) {
@@ -969,11 +988,61 @@ export function errorHandler(
     res.status(410).json({ error: 'invite_used', message: 'Это приглашение уже использовано' });
     return;
   }
+  if (err instanceof WorkspaceRejoinBlockedError) {
+    res.status(403).json({ error: 'workspace_rejoin_blocked', message: err.message });
+    return;
+  }
   if (err instanceof CannotInviteToDefaultWorkspaceError) {
     res.status(409).json({
       error: 'cannot_invite_to_default_workspace',
       message: 'В личное пространство пригласить нельзя',
     });
+    return;
+  }
+  // --- Доступ пространств к проекту (db/182) ---
+  if (err instanceof ProjectSharingForbiddenError) {
+    res.status(403).json({ error: 'project_sharing_forbidden', message: err.message });
+    return;
+  }
+  if (err instanceof ProjectSharingInvalidError) {
+    res.status(400).json({ error: 'project_sharing_invalid', message: err.message });
+    return;
+  }
+  // --- Рабочие Telegram-группы (db/181) ---
+  if (err instanceof TelegramGroupNotFoundError) {
+    res.status(404).json({ error: 'telegram_group_not_found', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupNotAdminError) {
+    res.status(403).json({ error: 'telegram_group_not_admin', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupTakenError) {
+    res.status(409).json({ error: 'telegram_group_taken', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupDraftElsewhereError) {
+    res.status(409).json({ error: 'telegram_group_draft_elsewhere', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupTransferRequestedError) {
+    res.status(409).json({ error: 'telegram_group_transfer_requested', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupTransferNotFoundError) {
+    res.status(404).json({ error: 'telegram_group_transfer_not_found', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramGroupProjectInvalidError) {
+    res.status(400).json({ error: 'telegram_group_project_invalid', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramNotLinkedError) {
+    res.status(409).json({ error: 'telegram_not_linked', message: err.message });
+    return;
+  }
+  if (err instanceof TelegramBotUnavailableError) {
+    res.status(503).json({ error: 'telegram_bot_unavailable', message: err.message });
     return;
   }
   if (err instanceof WorkspaceNotEmptyError) {

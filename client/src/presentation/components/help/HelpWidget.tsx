@@ -72,8 +72,11 @@ export function HelpWidget({
   // роут-параметра не имеет.
   const routeProjectId = useMemo(() => {
     const match = /^\/projects\/([^/]+)/.exec(pathname);
-    return match ? match[1] : null;
-  }, [pathname]);
+    const id = match ? match[1] : null;
+    // Гость общего проекта (db/182) не ведёт ИИ-чаты проекта — помощник для него общий.
+    if (id && projects?.find((project) => project.id === id)?.guest) return null;
+    return id;
+  }, [pathname, projects]);
   const routeProjectName = useMemo(() => {
     if (!routeProjectId) return null;
     return projects?.find((project) => project.id === routeProjectId)?.name ?? null;

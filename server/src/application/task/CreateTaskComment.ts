@@ -1,6 +1,7 @@
 import type { ApprovalGuard } from './TaskApprovalService.js';
 import { TaskCommentBodyEmptyError, TaskNotFoundError } from '../../domain/task/errors.js';
 import { taskExcerpt, taskTitleExcerpt } from '../../domain/task/taskExcerpt.js';
+import { commentPreviewText, hasCommentContent } from '../../domain/task/commentContent.js';
 import type { TaskComment, TaskCommentActorKind } from '../../domain/task/TaskComment.js';
 import type { CommentNotifyMode } from '../../domain/task/TaskComment.js';
 import type { NotificationRepository } from '../notifications/NotificationRepository.js';
@@ -42,6 +43,9 @@ export type CreateTaskCommentCommand = {
   // Ответ/цитата (db/080). NULL по умолчанию.
   readonly replyToCommentId?: string | null;
   readonly quotedText?: string | null;
+  // How many attachments the client uploads into this comment right after creating it.
+  // Lets a comment consist of attachments only (empty body). Default 0: text required.
+  readonly attachmentCount?: number;
 };
 
 const EXCERPT_LIMIT = 80;
@@ -56,7 +60,7 @@ export class CreateTaskComment {
 
   async execute(input: CreateTaskCommentCommand): Promise<TaskComment> {
     const body = input.body.trim();
-    if (body.length === 0) throw new TaskCommentBodyEmptyError();
+    if (!hasCommentContent(body, input.attachmentCount ?? 0)) throw new TaskCommentBodyEmptyError();
 
     const { project } = await requireTaskModifyAccess(
       this.deps,
@@ -94,7 +98,7 @@ export class CreateTaskComment {
           taskId: task.id,
           commentId: comment.id,
           taskExcerpt: excerpt(taskTitleExcerpt(task.description, 200)),
-          commentExcerpt: excerpt(taskExcerpt(body, 1000)),
+          commentExcerpt: excerpt(taskExcerpt(commentPreviewText(body), 1000)),
         },
       });
     }
@@ -103,7 +107,11 @@ export class CreateTaskComment {
     // уже сохранён и пользователь увидит успех. Логируем ошибку, но не reject'им.
     try {
       const members = await this.deps.members.listByProject(input.projectId);
-      const mentionedUserIds = parseMentions(body, members, input.ownerUserId);
+      const parsedMentions = parseMentions(body, members, input.ownerUserId);
+      // Общий проект (db/182): упоминание не раскрывает задачу тем, кому она не видна.
+      const mentionedUserIds = this.deps.members.filterTaskAudience
+        ? await this.deps.members.filterTaskAudience(task, parsedMentions)
+        : parsedMentions;
       if (mentionedUserIds.length > 0) {
         const actor = members.find((m) => m.userId === input.ownerUserId);
         // Для agent-комментов displayName в members — это owner проекта (от чьего имени
@@ -115,7 +123,7 @@ export class CreateTaskComment {
             ? (input.agentName ?? 'Агент')
             : (actor?.user.displayName ?? 'Кто-то');
         const taskExcerpt = excerpt(task.description);
-        const commentExcerpt = excerpt(body);
+        const commentExcerpt = excerpt(commentPreviewText(body));
         for (const recipientId of mentionedUserIds) {
           await this.deps.notifications.create({
             id: this.deps.idGen(),

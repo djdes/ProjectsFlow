@@ -24,6 +24,16 @@ function uid(req: Request): string {
 }
 
 // Безопасное расширение из имени файла (для storageKey). Любой тип разрешён.
+// multer отдаёт `originalname` из заголовка multipart как latin1: кириллица в имени
+// файла превращалась в мохибейк («Ð\u0094Ð¾…»). Тот же приём, что у вложений задач.
+export function decodeUploadFilename(raw: string): string {
+  try {
+    return Buffer.from(raw, 'latin1').toString('utf8');
+  } catch {
+    return raw;
+  }
+}
+
 function extFromFilename(filename: string): string {
   const dot = filename.lastIndexOf('.');
   if (dot < 0 || dot === filename.length - 1) return 'bin';
@@ -78,11 +88,12 @@ export function chatRouter(deps: ChatRouterDeps): Router {
         const files = (req.files as Express.Multer.File[] | undefined) ?? [];
         const attachments: SendAttachmentDescriptor[] = [];
         for (const f of files) {
+          const filename = decodeUploadFilename(f.originalname);
           const storageKey = `chat/${workspaceId}/${deps.idGen()}.${extFromFilename(f.originalname)}`;
           await deps.storage.put({ storageKey, data: f.buffer, mimeType: f.mimetype });
           attachments.push({
             storageKey,
-            filename: f.originalname.slice(0, 255),
+            filename: filename.slice(0, 255),
             mimeType: f.mimetype,
             sizeBytes: f.size,
           });

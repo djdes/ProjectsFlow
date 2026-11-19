@@ -17,11 +17,13 @@ import { HttpInviteRepository } from "@/infrastructure/http/HttpInviteRepository
 import { HttpNotificationRepository } from "@/infrastructure/http/HttpNotificationRepository";
 import { HttpAgentTokenRepository } from "@/infrastructure/http/HttpAgentTokenRepository";
 import { HttpAgentDeviceRepository } from "@/infrastructure/http/HttpAgentDeviceRepository";
+import { HttpDesktopNotesRepository } from "@/infrastructure/http/HttpDesktopNotesRepository";
 import { HttpAiPromptRepository } from "@/infrastructure/http/HttpAiPromptRepository";
 import { HttpAutomationRepository } from "@/infrastructure/http/HttpAutomationRepository";
 import { HttpWorkflowRepository } from "@/infrastructure/http/HttpWorkflowRepository";
 import { HttpAdminRepository } from "@/infrastructure/http/HttpAdminRepository";
 import { HttpLlmAdminRepository } from "@/infrastructure/http/HttpLlmAdminRepository";
+import { HttpMailingRepository } from "@/infrastructure/http/HttpMailingRepository";
 import { HttpEmployeeRepository } from "@/infrastructure/http/HttpEmployeeRepository";
 import { HttpProjectFinanceRepository } from "@/infrastructure/http/HttpProjectFinanceRepository";
 import { HttpTelegramRepository } from "@/infrastructure/http/HttpTelegramRepository";
@@ -33,6 +35,7 @@ import { HttpActivityRepository } from "@/infrastructure/http/HttpActivityReposi
 import { HttpRecentTaskViewRepository } from "@/infrastructure/http/HttpRecentTaskViewRepository";
 import { HttpBoardViewRepository } from "@/infrastructure/http/HttpBoardViewRepository";
 import { HttpTaskTemplateRepository } from "@/infrastructure/http/HttpTaskTemplateRepository";
+import { HttpWorkspaceTaskTemplateRepository } from "@/infrastructure/http/HttpWorkspaceTaskTemplateRepository";
 import { HttpTaskPropertyRepository } from "@/infrastructure/http/HttpTaskPropertyRepository";
 import { HttpSiteEditorRepository } from "@/infrastructure/http/HttpSiteEditorRepository";
 import { HttpProjectCodeRepository } from "@/infrastructure/http/HttpProjectCodeRepository";
@@ -75,8 +78,10 @@ import type { InviteRepository } from "@/application/project/InviteRepository";
 import type { NotificationRepository } from "@/application/notifications/NotificationRepository";
 import type { AgentTokenRepository } from "@/application/agent/AgentTokenRepository";
 import type { AgentDeviceRepository } from "@/application/agent/AgentDeviceRepository";
+import type { DesktopNotesRepository } from "@/application/desktop-notes/DesktopNotesRepository";
 import type { AdminRepository } from "@/application/admin/AdminRepository";
 import type { LlmAdminRepository } from "@/application/llm/LlmAdminRepository";
+import type { MailingRepository } from "@/application/mailing/MailingRepository";
 import type {
   EmployeeRepository,
   ProjectFinanceRepository,
@@ -93,6 +98,7 @@ import { HttpPublicBoardRepository } from "@/infrastructure/http/HttpPublicBoard
 import type { PublicBoardRepository } from "@/application/public/PublicBoardRepository";
 import type { BoardViewRepository } from "@/application/project/BoardViewRepository";
 import type { TaskTemplateRepository } from "@/application/task/TaskTemplateRepository";
+import type { WorkspaceTaskTemplateRepository } from "@/application/task/WorkspaceTaskTemplateRepository";
 import type { TaskPropertyRepository } from "@/application/task/TaskPropertyRepository";
 import type { SiteEditorRepository } from "@/application/site-editor/SiteEditorRepository";
 import type { ProjectCodeRepository } from "@/application/project-code/ProjectCodeRepository";
@@ -107,6 +113,11 @@ import type { AiActionBatchRepository } from "@/application/ai-action/AiActionBa
 import { HttpAiActionBatchRepository } from "@/infrastructure/http/HttpAiActionBatchRepository";
 import { HttpDeploymentRepository } from '@/infrastructure/http/HttpDeploymentRepository';
 import type { DeploymentRepository } from '@/application/deployment/DeploymentRepository';
+import { HttpApprovalSummaryRepository } from '@/infrastructure/http/HttpApprovalSummaryRepository';
+import { LoadApprovalSummary } from '@/application/approval/LoadApprovalSummary';
+import { HttpPushSubscriptionRepository } from '@/infrastructure/http/HttpPushSubscriptionRepository';
+import { BrowserDevicePush } from '@/infrastructure/browser/BrowserDevicePush';
+import { DevicePushNotifications } from '@/application/push/DevicePushNotifications';
 
 type Container = {
   deploymentRepository: DeploymentRepository;
@@ -136,9 +147,11 @@ type Container = {
   notificationRepository: NotificationRepository;
   agentTokenRepository: AgentTokenRepository;
   agentDeviceRepository: AgentDeviceRepository;
+  desktopNotesRepository: DesktopNotesRepository;
   adminRepository: AdminRepository;
   // Подписка ChatGPT платформы: вход по коду, статус, очереди на сервере (только админ).
   llmAdminRepository: LlmAdminRepository;
+  mailingRepository: MailingRepository;
   employeeRepository: EmployeeRepository;
   projectFinanceRepository: ProjectFinanceRepository;
   telegramRepository: TelegramRepository;
@@ -169,11 +182,17 @@ type Container = {
   publicBoardRepository: PublicBoardRepository;
   boardViewRepository: BoardViewRepository;
   taskTemplateRepository: TaskTemplateRepository;
+  // Шаблоны задач пространства (db/187): «Сохранить как шаблон» и «Шаблон» в новой задаче.
+  workspaceTaskTemplateRepository: WorkspaceTaskTemplateRepository;
   taskPropertyRepository: TaskPropertyRepository;
   siteEditorRepository: SiteEditorRepository;
   openSiteEditorSession: OpenSiteEditorSession;
   applySiteEditorPatch: ApplySiteEditorPatch;
   startSiteEditorAiJob: StartSiteEditorAiJob;
+  // ИИ-сводка «что сделано» на карточках полки «На утверждении» (общий кэш на вкладку).
+  loadApprovalSummary: LoadApprovalSummary;
+  // "Notifications on this device" (Web Push): profile card, sync on start, sign-out.
+  devicePushNotifications: DevicePushNotifications;
 };
 
 function buildContainer(): Container {
@@ -243,8 +262,10 @@ function buildContainer(): Container {
     notificationRepository: notificationRepo,
     agentTokenRepository: agentTokenRepo,
     agentDeviceRepository: agentDeviceRepo,
+    desktopNotesRepository: new HttpDesktopNotesRepository(),
     adminRepository: adminRepo,
     llmAdminRepository: new HttpLlmAdminRepository(),
+    mailingRepository: new HttpMailingRepository(),
     employeeRepository: employeeRepo,
     projectFinanceRepository: projectFinanceRepo,
     telegramRepository: telegramRepo,
@@ -276,11 +297,14 @@ function buildContainer(): Container {
     publicBoardRepository: publicBoardRepo,
     boardViewRepository: boardViewRepo,
     taskTemplateRepository: taskTemplateRepo,
+    workspaceTaskTemplateRepository: new HttpWorkspaceTaskTemplateRepository(),
     taskPropertyRepository: taskPropertyRepo,
     siteEditorRepository: siteEditorRepo,
     openSiteEditorSession: new OpenSiteEditorSession(siteEditorRepo),
     applySiteEditorPatch: new ApplySiteEditorPatch(siteEditorRepo),
     startSiteEditorAiJob: new StartSiteEditorAiJob(siteEditorRepo),
+    loadApprovalSummary: new LoadApprovalSummary(new HttpApprovalSummaryRepository()),
+    devicePushNotifications: new DevicePushNotifications(new BrowserDevicePush(), new HttpPushSubscriptionRepository()),
   };
 }
 

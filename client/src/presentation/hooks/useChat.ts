@@ -49,7 +49,8 @@ export type UseChatResult = {
   remove: (messageId: string) => Promise<void>;
   removeMany: (messageIds: readonly string[]) => Promise<void>;
   toggleReaction: (messageId: string, emoji: string, reactedByMe: boolean) => Promise<void>;
-  markReadToNewest: () => void;
+  // newestSeq — seq последнего показанного сообщения (если вызывающий его знает точнее рефа).
+  markReadToNewest: (newestSeq?: number) => void;
 };
 
 // Управляет лентой чата активного пространства: начальная страница (REST) + подгрузка вверх
@@ -220,9 +221,9 @@ export function useChat(workspaceId: string | null): UseChatResult {
   useEffect(() => {
     lastMarkedSeqRef.current = -1;
   }, [workspaceId]);
-  const markReadToNewest = useCallback(() => {
+  const markReadToNewest = useCallback((newestSeq?: number) => {
     if (!workspaceId) return;
-    const newest = messagesRef.current.at(-1)?.seq;
+    const newest = newestSeq ?? messagesRef.current.at(-1)?.seq;
     if (newest === undefined) return;
     if (newest <= lastMarkedSeqRef.current) return; // уже прочитано до этого seq
     lastMarkedSeqRef.current = newest;

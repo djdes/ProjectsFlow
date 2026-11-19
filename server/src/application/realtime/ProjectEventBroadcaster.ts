@@ -5,6 +5,8 @@ import type { RealtimePublisher } from './RealtimePublisher.js';
 type Deps = {
   readonly members: ProjectMemberRepository;
   readonly publisher: RealtimePublisher;
+  // Общий проект (db/182): кому из участников видна задача события. Без него — всем.
+  readonly taskAudience?: (projectId: string, taskId: string, userIds: readonly string[]) => Promise<string[]>;
 };
 
 // Транслирует доменное событие проекта всем его участникам (по их userId). Так чужие
@@ -12,6 +14,14 @@ type Deps = {
 // участников не должны влиять на основной запрос (вызывающий код глотает reject).
 export class ProjectEventBroadcaster {
   constructor(private readonly deps: Deps) {}
+
+  // Участники проекта, которым видна задача (id задач скрытых правилами не рассылаем).
+  private async taskMembers(projectId: string, taskId: string): Promise<{ ids: string[]; all: Awaited<ReturnType<ProjectMemberRepository['listByProject']>> }> {
+    const all = await this.deps.members.listByProject(projectId);
+    const userIds = all.map((m) => m.userId);
+    const ids = this.deps.taskAudience ? await this.deps.taskAudience(projectId, taskId, userIds) : userIds;
+    return { ids, all };
+  }
 
   async broadcast(
     projectId: string,
@@ -37,14 +47,11 @@ export class ProjectEventBroadcaster {
     readonly createdAt: Date;
     readonly recipientUserIds: readonly string[];
   }): Promise<void> {
-    const members = await this.deps.members.listByProject(event.projectId);
+    const { ids, all: members } = await this.taskMembers(event.projectId, event.taskId);
     const actorDisplayName = event.actorUserId
       ? (members.find((member) => member.userId === event.actorUserId)?.user.displayName ?? null)
       : null;
-    const recipientUserIds = new Set([
-      ...members.map((member) => member.userId),
-      ...event.recipientUserIds,
-    ]);
+    const recipientUserIds = new Set([...ids, ...event.recipientUserIds]);
     for (const userId of recipientUserIds) {
       this.deps.publisher.publish(userId, {
         kind: 'task_version_created',
@@ -68,9 +75,9 @@ export class ProjectEventBroadcaster {
     actorKind?: 'user' | 'agent' | 'system',
     agentName?: string | null,
   ): Promise<void> {
-    const members = await this.deps.members.listByProject(projectId);
-    for (const m of members) {
-      this.deps.publisher.publish(m.userId, {
+    const { ids } = await this.taskMembers(projectId, taskId);
+    for (const userId of ids) {
+      this.deps.publisher.publish(userId, {
         kind: 'comment_added',
         projectId,
         taskId,
@@ -92,9 +99,9 @@ export class ProjectEventBroadcaster {
     newStatus: string,
     actorUserId: string,
   ): Promise<void> {
-    const members = await this.deps.members.listByProject(projectId);
-    for (const m of members) {
-      this.deps.publisher.publish(m.userId, {
+    const { ids } = await this.taskMembers(projectId, taskId);
+    for (const userId of ids) {
+      this.deps.publisher.publish(userId, {
         kind: 'task_status_changed',
         projectId,
         taskId,
@@ -137,10 +144,10 @@ export class ProjectEventBroadcaster {
       });
     }
 
-    const members = await this.deps.members.listByProject(projectId);
-    for (const m of members) {
-      if (sent.has(m.userId)) continue;
-      this.deps.publisher.publish(m.userId, {
+    const { ids } = await this.taskMembers(projectId, taskId);
+    for (const userId of ids) {
+      if (sent.has(userId)) continue;
+      this.deps.publisher.publish(userId, {
         kind: 'live_session_changed',
         projectId,
         taskId,

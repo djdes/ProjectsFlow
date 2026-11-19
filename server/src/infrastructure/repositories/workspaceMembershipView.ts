@@ -2,6 +2,7 @@
 // Вынесена из DrizzleProjectMemberRepository, чтобы инвариант приватности Входящих
 // был покрыт unit-тестами без реальной БД.
 import type { ProjectMembership, ProjectRole } from '../../domain/project/ProjectMembership.js';
+import { capGuestRole } from '../../domain/project/permissions.js';
 
 // Минимальный срез строки projects, нужный для резолва доступа.
 export type ProjectAccessRow = {
@@ -63,6 +64,47 @@ export function deriveMembership(
   if (!vis) return null;
   const joinedAt = wsMember && !project.isInbox ? wsMember.createdAt : project.createdAt;
   return { projectId: project.id, userId, role: vis.role, joinedAt };
+}
+
+// Членство юзера в одном из пространств проекта (основном или подключённом, db/182).
+export type ProjectWorkspaceAccessRow = WorkspaceMemberAccessRow & {
+  readonly workspaceId: string;
+  // Проект скрыт от юзера галочкой в этом пространстве.
+  readonly excluded: boolean;
+};
+
+const ROLE_RANK: Record<ProjectRole, number> = { viewer: 1, editor: 2, lead: 3, owner: 4 };
+
+/**
+ * Членство в проекте с учётом подключённых пространств (db/182). `rows` — членства юзера в
+ * пространствах проекта (основное + подключённые).
+ *
+ *  - Членство в основном пространстве решает всё, как и без подключений: его роль
+ *    (создатель — owner), а скрытие галочкой там закрывает проект целиком — подключённое
+ *    пространство его не обходит.
+ *  - Иначе юзер — гость (`guest: true`) через подключённое пространство: лучшая из его ролей
+ *    там, но не выше editor, и только работа с задачами (canMember). Скрытие галочкой в
+ *    подключённом пространстве закрывает этот путь.
+ */
+export function deriveSharedMembership(
+  project: ProjectAccessRow,
+  userId: string,
+  rows: readonly ProjectWorkspaceAccessRow[],
+): ProjectMembership | null {
+  if (project.isInbox) return deriveMembership(project, userId, null);
+  const home = rows.find((row) => row.workspaceId === project.workspaceId);
+  if (home) {
+    const membership = deriveMembership(project, userId, home, home.excluded);
+    // Скрыт в основном пространстве — скрыт везде.
+    return membership;
+  }
+  let best: ProjectWorkspaceAccessRow | null = null;
+  for (const row of rows) {
+    if (row.excluded && row.role !== 'owner' && row.role !== 'lead') continue;
+    if (!best || ROLE_RANK[capGuestRole(row.role)] > ROLE_RANK[capGuestRole(best.role)]) best = row;
+  }
+  if (!best) return null;
+  return { projectId: project.id, userId, role: capGuestRole(best.role), joinedAt: best.createdAt, guest: true };
 }
 
 /** Owners проекта: inbox — всегда ровно 1 (владелец); иначе owners пространства. */

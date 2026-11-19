@@ -1,4 +1,5 @@
-import { fetch as undiciFetch, ProxyAgent, type Dispatcher } from 'undici';
+import { fetch as undiciFetch, type Dispatcher } from 'undici';
+import { createProxyDispatcher } from '../http/createProxyDispatcher.js';
 import type {
   LlmDeviceAuthClient,
   LlmDeviceCodeGrant,
@@ -38,7 +39,7 @@ export class ChatGptDeviceAuthClient implements LlmDeviceAuthClient {
 
   constructor(options: ChatGptDeviceAuthClientOptions = {}) {
     this.issuer = (options.issuer?.trim() || DEFAULT_ISSUER).replace(/\/+$/, '');
-    this.dispatcher = options.proxyUrl?.trim() ? new ProxyAgent(options.proxyUrl.trim()) : undefined;
+    this.dispatcher = createProxyDispatcher(options.proxyUrl);
   }
 
   async requestDeviceCode(): Promise<LlmDeviceCodeGrant> {

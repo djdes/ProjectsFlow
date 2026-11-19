@@ -1,7 +1,41 @@
-import { createServer, defineConfig, type ViteDevServer } from 'vite';
+import { createServer, defineConfig, type Plugin, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+
+// Service worker (public/sw.js, registered by src/main.tsx). After the bundle is written, the
+// build id and the file lists are injected into dist/sw.js: every deploy ships a new sw.js, the
+// browser installs it and it deletes the previous build's caches. The id hashes index.html and
+// the file names, so an unchanged rebuild does not make devices update. app-shell.html is a copy
+// of index.html that the service worker caches on install (on prod /index.html is the landing).
+function pwaServiceWorker(): Plugin {
+  return {
+    name: 'pwa-service-worker',
+    apply: 'build',
+    writeBundle(options, bundle) {
+      const outDir = options.dir ?? path.resolve(__dirname, 'dist');
+      const html = readFileSync(path.join(outDir, 'index.html'), 'utf8');
+      const assets = Object.keys(bundle)
+        .filter((file) => file.startsWith('assets/'))
+        .map((file) => `/${file}`)
+        .sort();
+      const entry = [...new Set([...html.matchAll(/\b(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]))];
+      const build = createHash('sha256').update(html).update(assets.join('\n')).digest('hex').slice(0, 12);
+      const swPath = path.join(outDir, 'sw.js');
+      let sw = readFileSync(swPath, 'utf8');
+      const inject = (pattern: RegExp, line: string): void => {
+        if (!pattern.test(sw)) throw new Error(`pwa-service-worker: ${pattern} not found in public/sw.js`);
+        sw = sw.replace(pattern, () => line);
+      };
+      inject(/^const BUILD = .*;$/m, `const BUILD = ${JSON.stringify(build)};`);
+      inject(/^const PRECACHE = .*;$/m, `const PRECACHE = ${JSON.stringify(entry)};`);
+      inject(/^const ASSETS = .*;$/m, `const ASSETS = ${JSON.stringify(assets)};`);
+      writeFileSync(swPath, sw);
+      writeFileSync(path.join(outDir, 'app-shell.html'), html);
+    },
+  };
+}
 
 export default defineConfig({
   // Маркер сборки: git sha из CI (GITHUB_SHA) — виден в консоли и в «⋯»-меню
@@ -9,7 +43,7 @@ export default defineConfig({
   define: {
     __PF_BUILD__: JSON.stringify((process.env.GITHUB_SHA ?? 'dev').slice(0, 7)),
   },
-  plugins: [react(), {
+  plugins: [react(), pwaServiceWorker(), {
     name: 'release-version',
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'build.json', source: JSON.stringify({ revision: process.env.GITHUB_SHA ?? null }) });

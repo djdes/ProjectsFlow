@@ -29,6 +29,7 @@ import {
   Copy,
   FolderSearch,
   MoreHorizontal,
+  Network,
   Pencil,
   Plus,
   Settings,
@@ -63,6 +64,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { projectToneClass } from '@/lib/tone';
 import { RenameProjectDialog } from '@/presentation/components/project/RenameProjectDialog';
+import { ProjectWorkspaceAccessDialog } from '@/presentation/components/project/ProjectWorkspaceAccessDialog';
 import { DeleteProjectDialog } from '@/presentation/components/project/DeleteProjectDialog';
 import type { Project } from '@/domain/project/Project';
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
@@ -178,6 +180,7 @@ const SidebarProjectRowBody = memo(function SidebarProjectRowBody({
   const { submit: duplicateProject } = useDuplicateProject();
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [workspaceAccessOpen, setWorkspaceAccessOpen] = useState(false);
   const isArchived = project.status === 'archived';
   // Удалить может только owner; inbox-проект (служебный, один на юзера) удалять
   // нельзя в принципе — диалог не монтируем, пункт меню прячет buildSidebarProjectMenu.
@@ -226,6 +229,7 @@ const SidebarProjectRowBody = memo(function SidebarProjectRowBody({
     favorite: project.isFavorite ? StarOff : Star,
     kb: BookOpen,
     share: Users,
+    workspaceAccess: Network,
     moveUp: ArrowUp,
     moveDown: ArrowDown,
     duplicate: Copy,
@@ -248,6 +252,9 @@ const SidebarProjectRowBody = memo(function SidebarProjectRowBody({
         return;
       case 'share':
         navigate(`/projects/${project.id}/overview`);
+        return;
+      case 'workspaceAccess':
+        setWorkspaceAccessOpen(true);
         return;
       case 'moveUp':
         onMove(project.id, 'up');
@@ -328,6 +335,17 @@ const SidebarProjectRowBody = memo(function SidebarProjectRowBody({
             </span>
             {/* В покое справа — только иконка совместного проекта (ровный правый край).
                 По наведению она гаснет: на её место выезжают число задач + «три точки». */}
+            {/* Общий проект (db/182) — в нескольких пространствах. */}
+            {(project.sharedWorkspaces?.length ?? 0) > 1 && (
+              <Network
+                className={cn(
+                  'size-3.5 shrink-0 text-muted-foreground transition-opacity',
+                  'group-hover:opacity-0 group-focus-within:opacity-0 max-md:opacity-0',
+                  actionsActive && 'opacity-0',
+                )}
+                aria-label={`Общий проект: ${(project.sharedWorkspaces ?? []).map((w) => w.name).join(', ')}`}
+              />
+            )}
             {(project.memberCount ?? 0) > 1 && (
               <Users
                 className={cn(
@@ -402,6 +420,16 @@ const SidebarProjectRowBody = memo(function SidebarProjectRowBody({
         projectId={project.id}
         currentName={project.name}
       />
+
+      {workspaceAccessOpen && (
+        <ProjectWorkspaceAccessDialog
+          open={workspaceAccessOpen}
+          onOpenChange={setWorkspaceAccessOpen}
+          projectId={project.id}
+          projectName={project.name}
+          onSaved={refreshProjects}
+        />
+      )}
 
       {canDelete && (
         <DeleteProjectDialog

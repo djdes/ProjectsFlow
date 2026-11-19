@@ -4,6 +4,7 @@ import type { NotificationRepository } from '../notifications/NotificationReposi
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
+import type { TaskVisibility } from '../project/TaskVisibility.js';
 import type { SendAgentTelegramNotification } from '../telegram/SendAgentTelegramNotification.js';
 import type { TelegramClient } from '../telegram/TelegramClient.js';
 import type { WorkspaceAssigneeDigestRepository } from '../digest/WorkspaceAssigneeDigestRepository.js';
@@ -41,6 +42,8 @@ type Deps = {
   readonly workspaceDigestSettings: WorkspaceAssigneeDigestRepository;
   readonly idGen: () => string;
   readonly appUrl: string;
+  // Общий проект (db/182): группа основного пространства — по его правилу видимости.
+  readonly visibility?: Pick<TaskVisibility, 'filterForWorkspace'>;
 };
 
 const EXCERPT_LIMIT = 100;
@@ -131,7 +134,16 @@ export class CreateCloseProposals {
         (m.reason && m.reason.trim() ? `\n\n${escapeHtml(excerpt(m.reason, 300))}` : '') +
         `\n\nЗакрыть? <a href="${url}">Открыть задачу</a>`;
 
+      // Общий проект (db/182): только тем, кому задача видна.
+      const audience = this.deps.members.filterTaskAudience
+        ? new Set(await this.deps.members.filterTaskAudience(task, members.map((mem) => mem.userId)))
+        : null;
+      const groupSeesTask =
+        groupChatId === null || !workspaceId || !this.deps.visibility
+          ? true
+          : (await this.deps.visibility.filterForWorkspace(workspaceId, [task])).length === 1;
       for (const mem of members) {
+        if (audience && !audience.has(mem.userId)) continue;
         try {
           await this.deps.notifications.create({
             id: this.deps.idGen(),
@@ -166,7 +178,7 @@ export class CreateCloseProposals {
           }
         }
       }
-      if (groupChatId !== null && !input.suppressGroupTelegram) {
+      if (groupChatId !== null && groupSeesTask && !input.suppressGroupTelegram) {
         await this.deps.telegram
           .sendMessage({
             chatId: groupChatId,

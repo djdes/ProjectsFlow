@@ -22,7 +22,7 @@ export class GetAppBackendStatus {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, callerUserId: string): Promise<AppBackendStatus> {
-    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project_data');
     const backend = await this.deps.appBackends.getByProject(projectId);
     if (!backend || backend.status !== 'active') {
       return { status: 'none', usageBytes: 0, storageLimitBytes: 0, tables: [] };

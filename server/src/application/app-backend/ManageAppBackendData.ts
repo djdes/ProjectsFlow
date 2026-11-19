@@ -110,7 +110,7 @@ export class ManageAppBackendData {
   constructor(private readonly deps: Deps) {}
 
   async getDashboard(projectId: string, callerUserId: string): Promise<AppBackendDashboard> {
-    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project_data');
     const backend = await this.deps.appBackends.getByProject(projectId);
     if (!backend || backend.status !== 'active' || !backend.schema) {
       return {
@@ -137,7 +137,7 @@ export class ManageAppBackendData {
     tableName: string,
     query: AppRowsQuery,
   ): Promise<AppRowsPage> {
-    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project_data');
     const { table } = await this.requireTable(projectId, tableName);
     const sensitive = sensitiveColumns(table.fields);
     const { filters, search, sort } = this.buildQueryOpts(table, query, sensitive);
@@ -448,7 +448,7 @@ export class ManageAppBackendData {
       readonly offset?: number;
     },
   ): Promise<{ rows: AppAuditEntry[]; total: number }> {
-    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project_data');
     const backend = await this.deps.appBackends.getByProject(projectId);
     if (!backend || backend.status !== 'active' || !backend.schema) return { rows: [], total: 0 };
     this.deps.appDb.ensureDatabase(projectId, backend.schema);
@@ -476,7 +476,7 @@ export class ManageAppBackendData {
   }
 
   async listRuntimeUsers(projectId: string, callerUserId: string): Promise<readonly AppRuntimeUser[]> {
-    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project');
+    await requireProjectAccess(this.deps, projectId, callerUserId, 'read_project_data');
     const backend = await this.deps.appBackends.getByProject(projectId);
     if (!backend || backend.status !== 'active' || !backend.schema) return [];
     this.deps.appDb.ensureDatabase(projectId, backend.schema);

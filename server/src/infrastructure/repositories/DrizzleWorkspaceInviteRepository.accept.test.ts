@@ -2,13 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DrizzleWorkspaceInviteRepository } from './DrizzleWorkspaceInviteRepository.js';
 import type { Database } from '../db/index.js';
-import { workspaceMembers, workspaceProjectExclusions } from '../db/schema.js';
+import { workspaceMemberRemovals, workspaceMembers, workspaceProjectExclusions } from '../db/schema.js';
 import { WorkspaceInviteAlreadyUsedError, WorkspaceInviteExpiredError } from '../../domain/workspace/errors.js';
 
 const now = new Date('2026-10-07T10:00:00Z');
 const invite = { id: 'invite', workspaceId: 'ws', role: 'editor', acceptedAt: null, expiresAt: new Date('2026-10-08'), excludedProjectIds: ['hidden', 'moved'] };
 function fixture(inserted = true, row: Omit<typeof invite, 'acceptedAt'> & { acceptedAt: Date | null } = invite) {
   const writes: Array<{ table: unknown; value: unknown }> = [];
+  const deletes: unknown[] = [];
   let consumed = false;
   let lock = '';
   const queue = [[row], [{ id: 'hidden' }, { id: 'visible' }]];
@@ -23,9 +24,10 @@ function fixture(inserted = true, row: Omit<typeof invite, 'acceptedAt'> & { acc
       return chain;
     },
     update: () => ({ set: () => ({ where: async () => { consumed = true; } }) }),
+    delete: (table: unknown) => ({ where: async () => { deletes.push(table); } }),
   };
   const db = { transaction: async (run: (connection: typeof tx) => Promise<void>) => run(tx) } as unknown as Database;
-  return { repo: new DrizzleWorkspaceInviteRepository(db), writes, consumed: () => consumed, lock: () => lock };
+  return { repo: new DrizzleWorkspaceInviteRepository(db), writes, deletes, consumed: () => consumed, lock: () => lock };
 }
 test('acceptance locks the token and writes membership, valid exclusions and consumption in one transaction', async () => {
   const f = fixture();
@@ -36,6 +38,8 @@ test('acceptance locks the token and writes membership, valid exclusions and con
     { table: workspaceMembers, value: { workspaceId: 'ws', userId: 'new', role: 'editor' } },
     { table: workspaceProjectExclusions, value: [{ workspaceId: 'ws', userId: 'new', projectId: 'hidden' }] },
   ]);
+  // Приглашение руководителя снимает отметку «удалён из пространства» (db/181).
+  assert.deepEqual(f.deletes, [workspaceMemberRemovals]);
 });
 test('existing membership does not receive invitation exclusions or a changed role', async () => {
   const f = fixture(false);

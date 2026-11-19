@@ -66,6 +66,8 @@ import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
 import type { ScheduleDay } from '@/domain/digest/ScheduleDays';
 import { ScheduleDayPicker } from '@/presentation/components/forms/ScheduleDayPicker';
 import { SectionPage } from '@/presentation/pages/SectionPage';
+import { TelegramWorkGroupsCard } from '@/presentation/components/workspace/TelegramWorkGroupsCard';
+import { TelegramGroupConnectDialog } from '@/presentation/components/workspace/TelegramGroupConnectDialog';
 
 // Нативный select в виде поля ввода (Input): bg-field, 44px на мобиле и 32px на десктопе.
 const ROLE_SELECT_CLASS =
@@ -73,6 +75,9 @@ const ROLE_SELECT_CLASS =
 
 // Группа настроек внутри карточки — серая панель вместо рамки (дизайн C4).
 const GROUP_CLASS = 'rounded-lg bg-panel px-3';
+
+// Минуты в полях «ЧЧ : ММ» — двумя цифрами: «17 : 00», а не «17 : 0».
+const pad2 = (n: number): string => String(n).padStart(2, '0');
 
 
 
@@ -128,6 +133,15 @@ export function WorkspaceSettingsPage(): React.ReactElement {
         canManage={canEditSharedSettings}
         commitSyncMode={workspace.commitSyncMode}
       />
+      {/* Рабочие Telegram-группы (db/181) открывают вход в пространство — только командные
+          пространства (в личный хаб не приглашают), управляют owner/lead. */}
+      {!isDefault && (
+        <TelegramWorkGroupsCard
+          workspaceId={workspace.id}
+          canManage={isOwner || workspace.role === 'lead'}
+          isOwner={isOwner}
+        />
+      )}
       {!isDefault && (
         <TaskApprovalCard
           workspaceId={workspace.id}
@@ -530,6 +544,7 @@ type AssigneeDigestDraft = {
   eodReminderEnabled: boolean;
   eodReminderHour: number;
   eodReminderMinute: number;
+  urgentRemindersEnabled: boolean;
 };
 
 function AssigneeDigestCard({
@@ -564,6 +579,9 @@ function AssigneeDigestCard({
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [resolving, setResolving] = useState(false);
+  // «Подключить автоматически» основную группу: id, который был до открытия окна.
+  const [mainConnectOpen, setMainConnectOpen] = useState(false);
+  const [mainKnownChatId, setMainKnownChatId] = useState<number | null>(null);
   // Snapshot of the shared commit-sync schedule (time/days/mode) as last persisted. Save compares
   // against it to detect a change and, if so, propagates the schedule to every project — the
   // per-project scheduler reads project times, not the workspace one.
@@ -617,6 +635,7 @@ function AssigneeDigestCard({
           eodReminderEnabled: result.settings.eodReminderEnabled,
           eodReminderHour: result.settings.eodReminderHour,
           eodReminderMinute: result.settings.eodReminderMinute,
+          urgentRemindersEnabled: result.settings.urgentRemindersEnabled,
         });
         setMembers(result.members);
         setGroups(history);
@@ -721,6 +740,7 @@ function AssigneeDigestCard({
         eodReminderEnabled: draft.eodReminderEnabled,
         eodReminderHour: draft.eodReminderHour,
         eodReminderMinute: draft.eodReminderMinute,
+        urgentRemindersEnabled: draft.urgentRemindersEnabled,
       });
       update({
         enabled: settings.enabled,
@@ -738,6 +758,7 @@ function AssigneeDigestCard({
         eodReminderEnabled: settings.eodReminderEnabled,
         eodReminderHour: settings.eodReminderHour,
         eodReminderMinute: settings.eodReminderMinute,
+        urgentRemindersEnabled: settings.urgentRemindersEnabled,
       });
       // Режим сверки пространства (db/155) сохраняем отдельным вызовом: он живёт на самом
       // пространстве, а не в настройках рассылки. Best-effort — остальное уже сохранено.
@@ -991,10 +1012,44 @@ function AssigneeDigestCard({
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Бот ProjectsFlow_Bot должен быть добавлен в группу. Для супергруппы chat_id
-                обычно начинается с −100.
-              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  Бот ProjectsFlow_Bot должен быть в группе. ID группы бот пришлёт сам: нажмите
+                  «Подключить автоматически» или напишите в группе <code>/id</code>.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canManage}
+                  onClick={() => {
+                    const current = Number(draft.groupChatId.trim());
+                    setMainKnownChatId(draft.groupChatId.trim() && Number.isInteger(current) ? current : null);
+                    setMainConnectOpen(true);
+                  }}
+                >
+                  <Send className="size-4" />
+                  Подключить автоматически
+                </Button>
+              </div>
+              <TelegramGroupConnectDialog
+                open={mainConnectOpen}
+                onOpenChange={setMainConnectOpen}
+                workspaceId={workspaceId}
+                purpose="main"
+                detect={async () => {
+                  const result = await workspaceRepository.getAssigneeDigest(workspaceId);
+                  const chatId = result.settings.telegramGroupChatId;
+                  return chatId !== null && chatId !== mainKnownChatId
+                    ? { chatId, title: result.settings.telegramGroupTitle ?? null }
+                    : null;
+                }}
+                onConnected={(group) => {
+                  setMainConnectOpen(false);
+                  update({ groupChatId: String(group.chatId), groupTitle: group.title ?? '' });
+                  toast.success(`Группа «${group.title ?? group.chatId}» стала основной группой пространства`);
+                }}
+              />
             </div>
 
             <div className="space-y-3 border-bs pbs-4">
@@ -1006,33 +1061,35 @@ function AssigneeDigestCard({
                   aria-label="Включить ежедневную таблицу"
                 />
                 <Label className="min-w-32">Ежедневная таблица</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={23}
-                  value={draft.hour}
-                  disabled={!canManage}
-                  className="w-16"
-                  onChange={(event) =>
-                    update({
-                      hour: Math.min(23, Math.max(0, Number(event.target.value) || 0)),
-                    })
-                  }
-                />
-                <span>:</span>
-                <Input
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={draft.minute}
-                  disabled={!canManage}
-                  className="w-16"
-                  onChange={(event) =>
-                    update({
-                      minute: Math.min(59, Math.max(0, Number(event.target.value) || 0)),
-                    })
-                  }
-                />
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={draft.hour}
+                    disabled={!canManage}
+                    className="w-16"
+                    onChange={(event) =>
+                      update({
+                        hour: Math.min(23, Math.max(0, Number(event.target.value) || 0)),
+                      })
+                    }
+                  />
+                  <span>:</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={pad2(draft.minute)}
+                    disabled={!canManage}
+                    className="w-16"
+                    onChange={(event) =>
+                      update({
+                        minute: Math.min(59, Math.max(0, Number(event.target.value) || 0)),
+                      })
+                    }
+                  />
+                </div>
               </div>
               <div className={cn('flex flex-wrap items-center gap-3 py-2', GROUP_CLASS)}>
                 <Switch
@@ -1042,7 +1099,7 @@ function AssigneeDigestCard({
                   aria-label="Включить личную сводку в бота"
                 />
                 <Label className="min-w-32">Каждому в личку бота</Label>
-                <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                <span className="min-w-48 flex-1 text-xs text-muted-foreground">
                   в то же время каждый получает свои задачи по всем проектам — карточками
                   с кнопками «Завершить», «Комментировать», «Посмотреть». Telegram-группа
                   для этого не нужна.
@@ -1051,39 +1108,41 @@ function AssigneeDigestCard({
               <div className={cn('space-y-3 py-3', GROUP_CLASS)}>
                 <div className="flex flex-wrap items-center gap-3">
                   <Label className="min-w-32">Сверка коммитов</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={23}
-                    value={draft.commitSyncHour}
-                    disabled={!canManage}
-                    className="w-16"
-                    onChange={(event) =>
-                      update({
-                        commitSyncHour: Math.min(
-                          23,
-                          Math.max(0, Number(event.target.value) || 0),
-                        ),
-                      })
-                    }
-                  />
-                  <span>:</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={59}
-                    value={draft.commitSyncMinute}
-                    disabled={!canManage}
-                    className="w-16"
-                    onChange={(event) =>
-                      update({
-                        commitSyncMinute: Math.min(
-                          59,
-                          Math.max(0, Number(event.target.value) || 0),
-                        ),
-                      })
-                    }
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={23}
+                      value={draft.commitSyncHour}
+                      disabled={!canManage}
+                      className="w-16"
+                      onChange={(event) =>
+                        update({
+                          commitSyncHour: Math.min(
+                            23,
+                            Math.max(0, Number(event.target.value) || 0),
+                          ),
+                        })
+                      }
+                    />
+                    <span>:</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={pad2(draft.commitSyncMinute)}
+                      disabled={!canManage}
+                      className="w-16"
+                      onChange={(event) =>
+                        update({
+                          commitSyncMinute: Math.min(
+                            59,
+                            Math.max(0, Number(event.target.value) || 0),
+                          ),
+                        })
+                      }
+                    />
+                  </div>
                   <span className="text-xs text-muted-foreground">
                     время сверки для всех проектов пространства
                   </span>
@@ -1227,41 +1286,56 @@ function AssigneeDigestCard({
                   onCheckedChange={(eodReminderEnabled) => update({ eodReminderEnabled })}
                 />
                 <Label className="min-w-32">Перед уходом</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={23}
-                  value={draft.eodReminderHour}
-                  disabled={!canManage}
-                  className="w-16"
-                  onChange={(event) =>
-                    update({
-                      eodReminderHour: Math.min(
-                        23,
-                        Math.max(0, Number(event.target.value) || 0),
-                      ),
-                    })
-                  }
-                />
-                <span>:</span>
-                <Input
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={draft.eodReminderMinute}
-                  disabled={!canManage}
-                  className="w-16"
-                  onChange={(event) =>
-                    update({
-                      eodReminderMinute: Math.min(
-                        59,
-                        Math.max(0, Number(event.target.value) || 0),
-                      ),
-                    })
-                  }
-                />
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={draft.eodReminderHour}
+                    disabled={!canManage}
+                    className="w-16"
+                    onChange={(event) =>
+                      update({
+                        eodReminderHour: Math.min(
+                          23,
+                          Math.max(0, Number(event.target.value) || 0),
+                        ),
+                      })
+                    }
+                  />
+                  <span>:</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={pad2(draft.eodReminderMinute)}
+                    disabled={!canManage}
+                    className="w-16"
+                    onChange={(event) =>
+                      update({
+                        eodReminderMinute: Math.min(
+                          59,
+                          Math.max(0, Number(event.target.value) || 0),
+                        ),
+                      })
+                    }
+                  />
+                </div>
                 <span className="text-xs text-muted-foreground">
                   напомнить обновить статусы в группе
+                </span>
+              </div>
+              <div className={cn('flex flex-wrap items-center gap-3 py-2', GROUP_CLASS)}>
+                <Switch
+                  checked={draft.urgentRemindersEnabled}
+                  disabled={!canManage}
+                  aria-label="Напоминания о срочных задачах"
+                  onCheckedChange={(urgentRemindersEnabled) => update({ urgentRemindersEnabled })}
+                />
+                <Label className="min-w-32">Срочные задачи</Label>
+                <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  пн–пт в&nbsp;8:00 и&nbsp;16:00 — исполнителю в&nbsp;личку бота и&nbsp;по&nbsp;каждой
+                  задаче в&nbsp;группу (приоритет «Срочно»/«Высокий» или слово «срочно» в&nbsp;тексте)
                 </span>
               </div>
               <div className={cn('space-y-2 py-3', GROUP_CLASS)}>

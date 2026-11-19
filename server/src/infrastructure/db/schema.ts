@@ -92,6 +92,10 @@ export const users = mysqlTable(
     subscriptionExpiresAt: timestamp('subscription_expires_at'),
     // Разовый пробный Прайм (db/085): метка активации триала (null = не использован).
     primeTrialUsedAt: timestamp('prime_trial_used_at'),
+    // Админка «Пользователи» (db/178): последний вход по паролю и последняя активность
+    // (обновляется не чаще раза в 5 минут, см. LastSeenTracker).
+    lastLoginAt: timestamp('last_login_at'),
+    lastSeenAt: timestamp('last_seen_at'),
     createdAt: createdAtCol(),
     updatedAt: updatedAtCol(),
   },
@@ -274,6 +278,109 @@ export const telegramGroupOwners = mysqlTable(
 
 export type TelegramGroupOwnerRow = typeof telegramGroupOwners.$inferSelect;
 
+// Рабочие Telegram-группы пространства (db/181): бот принимает в них задачи пространства и
+// подключает людей без аккаунта/вне пространства. Одна группа — у одного пространства.
+export const workspaceTelegramGroups = mysqlTable(
+  'workspace_telegram_groups',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).primaryKey(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    title: varchar('title', { length: 255 }),
+    addedByUserId: char('added_by_user_id', { length: 36 }),
+    // db/189: черновик (бот сам добавил группу) → active после подтверждения руководителем.
+    status: mysqlEnum('status', ['draft', 'active', 'disconnected']).notNull().default('active'),
+    mode: mysqlEnum('mode', ['standard', 'incident', 'mixed']).notNull().default('standard'),
+    invitedByTgUserId: bigint('invited_by_tg_user_id', { mode: 'number' }),
+    // Запрос на перенос отключённой группы в другое пространство (ждёт владельца текущего).
+    transferToWorkspaceId: char('transfer_to_workspace_id', { length: 36 }),
+    transferRequestedByUserId: char('transfer_requested_by_user_id', { length: 36 }),
+    transferTargetStatus: mysqlEnum('transfer_target_status', ['draft', 'active']),
+    transferRequestedAt: timestamp('transfer_requested_at'),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_wtg_workspace').on(t.workspaceId)],
+);
+
+export type WorkspaceTelegramGroupRow = typeof workspaceTelegramGroups.$inferSelect;
+
+// Проекты рабочей группы (db/189). Пусто — все проекты пространства.
+export const telegramGroupProjects = mysqlTable(
+  'telegram_group_projects',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    projectId: char('project_id', { length: 36 }).notNull(),
+    addedByUserId: char('added_by_user_id', { length: 36 }),
+    createdAt: createdAtCol(),
+  },
+  (t) => [primaryKey({ columns: [t.tgChatId, t.projectId] }), index('idx_tgp_project').on(t.projectId)],
+);
+
+// Участники рабочих Telegram-групп (db/191): снимок администраторов, chat_member, авторы сообщений.
+export const telegramGroupMembers = mysqlTable(
+  'telegram_group_members',
+  {
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    tgUserId: bigint('tg_user_id', { mode: 'number' }).notNull(),
+    status: mysqlEnum('status', ['member', 'admin', 'left']).notNull(),
+    source: mysqlEnum('source', ['admins', 'join', 'message']).notNull(),
+    seenAt: timestamp('seen_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tgChatId, t.tgUserId] }), index('idx_tgm_user').on(t.tgUserId)],
+);
+
+// Одноразовые коды «Подключить группу» (db/181): t.me/<bot>?startgroup=wg_<code>. Только хеш.
+export const telegramGroupLinkTokens = mysqlTable(
+  'telegram_group_link_tokens',
+  {
+    tokenHash: char('token_hash', { length: 64 }).primaryKey(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    purpose: mysqlEnum('purpose', ['work', 'main']).notNull().default('work'),
+    createdByUserId: char('created_by_user_id', { length: 36 }).notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: createdAtCol(),
+  },
+  (t) => [index('idx_tglt_workspace').on(t.workspaceId)],
+);
+
+// Подключение человека, написавшего задачу в рабочей группе (db/181).
+export const telegramGroupOnboardings = mysqlTable(
+  'telegram_group_onboardings',
+  {
+    id: char('id', { length: 12 }).primaryKey(),
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }).notNull(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    tgUserId: bigint('tg_user_id', { mode: 'number' }).notNull(),
+    tgUsername: varchar('tg_username', { length: 64 }),
+    tgFirstName: varchar('tg_first_name', { length: 128 }),
+    senderName: varchar('sender_name', { length: 255 }).notNull(),
+    groupTitle: varchar('group_title', { length: 255 }),
+    pendingText: text('pending_text'),
+    lastSourceKey: varchar('last_source_key', { length: 128 }),
+    status: mysqlEnum('status', ['pending', 'invited', 'completed', 'cancelled']).notNull().default('pending'),
+    inviteId: char('invite_id', { length: 36 }),
+    promptedAt: timestamp('prompted_at'),
+    createdAt: createdAtCol(),
+    expiresAt: timestamp('expires_at').notNull(),
+  },
+  (t) => [
+    index('idx_tgo_member').on(t.tgChatId, t.tgUserId),
+    index('idx_tgo_invite').on(t.inviteId),
+  ],
+);
+
+export type TelegramGroupOnboardingRow = typeof telegramGroupOnboardings.$inferSelect;
+
+// Удалённые руководителем участники (db/181): сами не возвращаются через рабочую группу.
+export const workspaceMemberRemovals = mysqlTable(
+  'workspace_member_removals',
+  {
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    removedAt: timestamp('removed_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [primaryKey({ columns: [t.workspaceId, t.userId] })],
+);
+
 export const sessions = mysqlTable(
   'sessions',
   {
@@ -281,6 +388,8 @@ export const sessions = mysqlTable(
     userId: fkUserId('user_id'),
     expiresAt: timestamp('expires_at').notNull(),
     createdAt: createdAtCol(),
+    // Вход администратора от имени пользователя (db/175): сессия администратора, из которой вошли.
+    impersonatorSessionId: varchar('impersonator_session_id', { length: 64 }),
   },
   (t) => [
     index('idx_sessions_user').on(t.userId),
@@ -332,6 +441,12 @@ export const projects = mysqlTable(
     description: text('description'),
     coverUrl: varchar('cover_url', { length: 500 }),
     coverPosition: int('cover_position').notNull().default(50),
+    // Выбор проекта из сообщения рабочей Telegram-группы (db/192): привычные названия и
+    // короткое описание для ИИ-выбора. NULL — не задано.
+    aliases: json('aliases').$type<string[] | null>(),
+    shortDescription: varchar('short_description', { length: 300 }),
+    // db/193: задачи воркеру из рабочих групп — полный прогон (runMode='full'), иначе 'quick'.
+    groupFullRunDefault: boolean('group_full_run_default').notNull().default(false),
     // Публичная ссылка доски (Publish to web, db/096). publicSlug — случайный неугадываемый
     // slug (URL: /p/<slug>), NULL = не публиковали. isPublic гейтит анонимный доступ.
     // publicIndexing — тоггл индексации поисковиками (default off). publishedAt — момент
@@ -433,6 +548,35 @@ export const workspaces = mysqlTable(
     createdAt: createdAtCol(),
   },
   (t) => [index('idx_workspaces_owner').on(t.ownerUserId)],
+);
+
+// Один проект в нескольких пространствах (db/182): подключённые пространства и их правило
+// видимости задач (строка основного пространства хранит только его правило).
+export const projectWorkspaceAccess = mysqlTable(
+  'project_workspace_access',
+  {
+    projectId: char('project_id', { length: 36 }).notNull(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    taskScope: mysqlEnum('task_scope', ['all', 'own', 'selected']).notNull().default('own'),
+    visibleFrom: json('visible_from').$type<string[] | null>(),
+    createdByUserId: char('created_by_user_id', { length: 36 }),
+    createdAt: createdAtCol(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.workspaceId] }), index('idx_pwa_workspace').on(t.workspaceId)],
+);
+
+// Персональное правило видимости задач общего проекта (db/182).
+export const projectMemberTaskVisibility = mysqlTable(
+  'project_member_task_visibility',
+  {
+    projectId: char('project_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    taskScope: mysqlEnum('task_scope', ['all', 'mine', 'selected']).notNull(),
+    visibleFrom: json('visible_from').$type<string[] | null>(),
+    updatedByUserId: char('updated_by_user_id', { length: 36 }),
+    updatedAt: updatedAtCol(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.userId] })],
 );
 
 export type WorkspaceRow = typeof workspaces.$inferSelect;
@@ -775,6 +919,8 @@ export const tasks = mysqlTable(
     // Режим работы Ralph по задаче. См. db/035 и domain RalphMode.
     // VARCHAR (не enum) — forward-compat под новые режимы без миграции схемы Drizzle.
     ralphMode: varchar('ralph_mode', { length: 16 }).notNull().default('normal'),
+    // Режим запуска воркера ('quick' | 'full'). См. db/188 и domain RunMode.
+    runMode: varchar('run_mode', { length: 16 }).notNull().default('quick'),
     // Pull-based отмена работы Ralph (см. db/037). NULL = нет запроса; иначе момент
     // когда юзер запросил. Ralph каждые ~5с поллит — увидит флаг, убьёт worker'а, ack-нет.
     ralphCancelRequestedAt: timestamp('ralph_cancel_requested_at'),
@@ -789,6 +935,19 @@ export const tasks = mysqlTable(
     priority: tinyint('priority', { unsigned: true }),
     // Тип задачи: 'feature' | 'bug'. NULL = не определён. См. db/153.
     taskType: varchar('task_type', { length: 16 }),
+    // Пространство, в котором задачу создали (общий проект, db/182). NULL = основное.
+    originWorkspaceId: char('origin_workspace_id', { length: 36 }),
+    // Рабочая Telegram-группа, из которой поставили задачу (db/190). NULL — не из группы.
+    originGroupChatId: bigint('origin_group_chat_id', { mode: 'number' }),
+    originGroupTitle: varchar('origin_group_title', { length: 255 }),
+    originGroupAuthorUserId: char('origin_group_author_user_id', { length: 36 }),
+    originGroupAuthorName: varchar('origin_group_author_name', { length: 255 }),
+    // Правило повтора (db/185): 'daily' | 'weekdays' | 'weekly:1,3' | 'monthly:31'.
+    // NULL = не повторяется. Разбор — domain/task/TaskRecurrence.
+    recurrence: varchar('recurrence', { length: 64 }),
+    // Следующий повтор, поставленный при выполнении этой задачи (db/185) — защита от
+    // второй копии при «выполнить → вернуть → выполнить». NULL = ещё не ставили.
+    recurrenceNextTaskId: char('recurrence_next_task_id', { length: 36 }),
     // Мягкое удаление (db/134). NULL = живая задача. Заполнено = задача в корзине:
     // скрыта из ВСЕХ выборок, но строка и все её child-таблицы целы, поэтому
     // восстановление возвращает задачу с ТЕМ ЖЕ id.
@@ -804,6 +963,7 @@ export const tasks = mysqlTable(
     index('idx_tasks_ralph_cancel').on(t.ralphCancelRequestedAt),
     index('idx_tasks_project_deleted').on(t.projectId, t.deletedAt),
     index('idx_tasks_assignee_deleted').on(t.assigneeUserId, t.deletedAt),
+    index('idx_tasks_project_origin').on(t.projectId, t.originWorkspaceId),
   ],
 );
 
@@ -1163,10 +1323,11 @@ export const aiPromptJobs = mysqlTable(
     // Режим job'а: 'improve' (legacy — одиночное улучшение текста, plain в improved_text)
     // | 'compose' (pass-1: разбивка + «Простой» + классификация, JSON-строка в improved_text)
     // | 'compose-advanced' (pass-2: ленивый «Продвинутый» по сегментам pass-1)
-    // | 'assistant' (невидимая очередь ИИ-ассистентов продуктов: DocsFlow/ScanFlow).
+    // | 'assistant' (невидимая очередь ИИ-ассистентов продуктов: DocsFlow/ScanFlow)
+    // | 'text' (универсальный текстовый шлюз Codex: POST /api/ai/text-jobs).
     // См. db/060_ai_prompt_compose.sql + db/065_ai_prompt_compose_advanced.sql
-    // + db/156_ai_prompt_jobs_assistant_mode.sql.
-    mode: mysqlEnum('mode', ['improve', 'compose', 'compose-advanced', 'assistant'])
+    // + db/156_ai_prompt_jobs_assistant_mode.sql + db/180_ai_prompt_jobs_text_mode.sql.
+    mode: mysqlEnum('mode', ['improve', 'compose', 'compose-advanced', 'assistant', 'text'])
       .notNull()
       .default('improve'),
     // MEDIUMTEXT (db/066): свободный текст до 50000 символов (≈100КБ в utf8mb4) и JSON
@@ -1907,6 +2068,8 @@ export const workspaceAssigneeDigestSettings = mysqlTable(
     eodReminderHour: tinyint('eod_reminder_hour').notNull().default(17),
     eodReminderMinute: tinyint('eod_reminder_minute').notNull().default(20),
     eodReminderLastSentOn: date('eod_reminder_last_sent_on', { mode: 'string' }),
+    // Напоминания о срочных задачах в 8:00 и 16:00 по будням (db/179).
+    urgentRemindersEnabled: boolean('urgent_reminders_enabled').notNull().default(true),
     lastSentOn: date('last_sent_on', { mode: 'string' }),
     testDeliveries: json('test_deliveries').$type<
       Array<{ chatId: number; messageIds: number[] }> | null
@@ -2330,6 +2493,28 @@ export const taskTemplates = mysqlTable(
 export type TaskTemplateRow = typeof taskTemplates.$inferSelect;
 
 // ============================================================================
+// workspace_task_templates — миграция db/187. Шаблоны задач пространства: «Сохранить как
+// шаблон» в окне задачи и выбор «Шаблон» в окне «Новая задача».
+// ============================================================================
+export const workspaceTaskTemplates = mysqlTable(
+  'workspace_task_templates',
+  {
+    id: id(),
+    workspaceId: char('workspace_id', { length: 36 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    description: mediumtext('description').notNull(),
+    priority: tinyint('priority', { unsigned: true }),
+    taskType: varchar('task_type', { length: 16 }),
+    recurrence: varchar('recurrence', { length: 64 }),
+    createdBy: char('created_by', { length: 36 }),
+    createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index('idx_wtt_workspace').on(t.workspaceId, t.createdAt)],
+);
+
+export type WorkspaceTaskTemplateRow = typeof workspaceTaskTemplates.$inferSelect;
+
+// ============================================================================
 // task_properties / task_property_values — миграция db/109. Кастомные свойства
 // задач (Notion custom properties): определения пер-проект + значения пер-задача.
 // options/value — строки (JSON/кодировка по типу), парсит репозиторий.
@@ -2521,6 +2706,28 @@ export const appAdminAuditLog = mysqlTable(
 );
 
 export type AppAdminAuditLogRow = typeof appAdminAuditLog.$inferSelect;
+
+// platform_admin_audit_log — db/178. Append-only журнал действий администратора платформы
+// над учётными записями (тариф, роль, профиль, удаление, вход от имени, массовые операции).
+export const platformAdminAuditLog = mysqlTable(
+  'platform_admin_audit_log',
+  {
+    seq: bigint('seq', { mode: 'number' }).autoincrement().primaryKey(),
+    id: char('id', { length: 36 }).notNull(),
+    actorUserId: char('actor_user_id', { length: 36 }).notNull(),
+    targetUserId: char('target_user_id', { length: 36 }),
+    action: varchar('action', { length: 40 }).notNull(),
+    batchId: char('batch_id', { length: 36 }),
+    beforeJson: mediumtext('before_json'),
+    afterJson: mediumtext('after_json'),
+    createdAt: timestamp('created_at', { fsp: 3 }).notNull().default(sql`CURRENT_TIMESTAMP(3)`),
+  },
+  (t) => [
+    uniqueIndex('uq_platform_admin_audit_id').on(t.id),
+    index('idx_platform_admin_audit_target').on(t.targetUserId, t.seq),
+    index('idx_platform_admin_audit_actor').on(t.actorUserId, t.seq),
+  ],
+);
 export type NewAppAdminAuditLogRow = typeof appAdminAuditLog.$inferInsert;
 
 // Privacy-preserving traffic of the PUBLISHED application (db/137). Никакого IP и raw UA:
@@ -2598,3 +2805,24 @@ export const leadDigestState = mysqlTable('lead_digest_state', {
 });
 
 export type LeadDigestStateRow = typeof leadDigestState.$inferSelect;
+
+// Учёт напоминаний о срочных задачах (db/179): строка на задачу и слот 'YYYY-MM-DD@08|16'.
+// Ставится до отправки (INSERT IGNORE) — повтор после рестарта невозможен.
+export const urgentTaskReminders = mysqlTable(
+  'urgent_task_reminders',
+  {
+    taskId: char('task_id', { length: 36 }).notNull(),
+    slotKey: varchar('slot_key', { length: 16 }).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.taskId, t.slotKey] })],
+);
+
+// ИИ-сводки «что сделано» полки «На утверждении» (db/186): одна строка на задачу, хэш входа
+// для модели решает, можно ли отдать сводку из кэша.
+export const approvalSummaries = mysqlTable('approval_summaries', {
+  taskId: char('task_id', { length: 36 }).notNull().primaryKey(),
+  inputHash: char('input_hash', { length: 64 }).notNull(),
+  summary: text('summary').notNull(),
+  generatedAt: timestamp('generated_at').notNull().defaultNow(),
+});

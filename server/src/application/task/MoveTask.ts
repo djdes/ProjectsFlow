@@ -120,6 +120,7 @@ export class MoveTask {
       project,
       input.ownerUserId,
       targetStatus,
+      task.originWorkspaceId ?? null,
     );
 
     const beforePos = await this.resolvePosition(input.beforeTaskId, input.projectId);

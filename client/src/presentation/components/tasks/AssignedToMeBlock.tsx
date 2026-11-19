@@ -1,10 +1,11 @@
 import { selectInboxView } from './inbox/selectInboxView';
+import { filterFromGroups, isFromGroup } from '@/domain/task/groupOriginFilter';
 import { WorkerActivityBadge } from './WorkerActivityBadge';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
 import { useRememberSkeletonSize } from '@/presentation/hooks/useRememberSkeletonSize';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -24,7 +25,8 @@ import {
 } from '@dnd-kit/core';
 import { getEventCoordinates } from '@dnd-kit/utilities';
 import { STATUS_LABEL, canSendToWorker, canTakeToManual } from './statusLabels';
-import { WORKER_HANDOFF_LABEL, WorkerHandoffIcon, useWorkerHandoffAvailable } from './workerHandoff';
+import { WorkerHandoffMenu } from './WorkerHandoffMenu';
+import { WorkerHandoffIcon, useWorkerHandoffAvailable } from './workerHandoff';
 import {
   applyPatches,
   settledPatchIds,
@@ -86,7 +88,7 @@ import { useInboxRealtimeRefresh } from '@/presentation/hooks/useInboxRealtimeRe
 import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
-import type { Task, RalphMode, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { Task, RalphMode, RunMode, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import {
   ASSIGNED_GROUPING_LABELS,
@@ -95,8 +97,11 @@ import {
   type AssignedGrouping,
 } from '@/domain/user/UiPrefs';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
+import { SteppedRibbon } from '@/presentation/components/layout/EdgeFadeScroller';
+import { shortUserLabels } from '@/domain/user/shortUserLabels';
 import { UserAvatarHover } from '@/presentation/components/user/UserAvatarHover';
 import { userLabel } from '@/domain/user/userLabel';
+import { peopleWorkload, workloadLabel, type PersonWorkload } from './peopleWorkload';
 import type { SharedMember } from '@/application/project/ProjectRepository';
 import {
   endOfMonthYmd,
@@ -112,6 +117,7 @@ import {
 import {
   DueFilterChips,
   ReplyFilterChip,
+  GroupFilterChip,
   InboxSearch,
   InboxSectionSwitch,
   ManualIcon,
@@ -121,11 +127,12 @@ import {
   type SwipeAction,
 } from './inbox/InboxChrome';
 import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogProvider';
-import { COLUMN_SCROLL_CLASS, ColumnPreviewList } from './ColumnPreview';
+import { CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS, ColumnPreviewList } from './ColumnPreview';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { InlineNewCard, type InlineTaskSettings } from './InlineNewCard';
 import { matchesInboxQuery } from './inbox/searchTasks';
 import { BulkActionBar } from './BulkActionBar';
+import { bulkSnapshotFrom } from './bulkUndo';
 import {
   nextAnchor,
   nextSelection,
@@ -138,14 +145,18 @@ import { OPEN_TASK_CARD_CLASS, TASK_CARD_BODY_CLASS, taskCardTitleClass } from '
 import { splitTitleBody, plainTaskTitle } from '@/lib/taskTitleBody';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { InboxCheckbox } from './InboxCheckbox';
+import { TaskGroupOriginBadge } from './TaskGroupOriginBadge';
 import { AssigneeBadge } from './AssigneeBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { DeadlineBadge } from './DeadlineBadge';
 import { AwaitingReplyBadge } from './AwaitingReplyBadge';
 import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
 import { RalphModeBadge } from './RalphMode';
+import { TaskRecurrenceBadge } from './TaskRecurrenceBadge';
 import { TaskDrawer, type TaskDrawerState } from './TaskDrawer';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
+import { ApprovalSummary } from './ApprovalSummary';
+import { AcceptAllApprovalsButton } from './AcceptAllApprovalsDialog';
 import {
   asAssignedInboxBlockTask,
   buildToMeInboxBlockTasks,
@@ -180,6 +191,11 @@ type Props = {
   // панели действий, полностью успешное массовое действие) блок сообщает обратно.
   selectionActive?: boolean;
   onSelectionActiveChange?: (active: boolean) => void;
+  // Телефон: заголовок — это название страницы, его повторяют шапка приложения (пространство)
+  // и нижняя навигация («Входящие»). Строку заголовка тогда не рисуем (h1 остаётся для
+  // скринридеров), а фильтры и действия переезжают в липкую строку «Сейчас / Очередь».
+  // На «Всех задачах» заголовок — имя пространства блока, он нужен.
+  compactHeading?: boolean;
 };
 
 // Тип вкладки блока ответственных: «Для меня» / «Другим».
@@ -288,6 +304,8 @@ function readStoredSection(): InboxSection | null {
   }
 }
 const COLLAPSED_COLUMNS_KEY = 'pf.inbox.collapsedColumns';
+// Свёрнутая полка «На утверждении»: остаётся только шапка со счётчиком.
+const APPROVAL_COLLAPSED_KEY = 'pf.inbox.approvalCollapsed';
 function readStoredFlag(key: string): boolean {
   try {
     return localStorage.getItem(key) === '1';
@@ -332,6 +350,7 @@ export function AssignedToMeBlock({
   onHideDoneChange,
   selectionActive = false,
   onSelectionActiveChange,
+  compactHeading = false,
 }: Props): React.ReactElement | null {
   const { taskAssigneeRepository, taskRepository, userRepository, projectRepository } =
     useContainer();
@@ -348,7 +367,7 @@ export function AssignedToMeBlock({
   // Приёмка включена в пространстве вообще (независимо от роли смотрящего) — используется
   // отдельно от isApprover, чтобы решить, показывать ли полку рядовому исполнителю.
   const approvalEnabled = currentWorkspace?.requireTaskApproval === true;
-  // Без воркера «В работе» ставят люди — такие задачи на полке «Вручную» (isHandWork).
+  // Без воркера «В работе» ставят люди — такие задачи на полке «В работе» (isHandWork).
   const workerEnabled = useWorkerEnabled();
   // «Передать воркеру» на карточке очереди — те же условия, что у кнопки на доске проекта.
   const workerHandoffAvailable = useWorkerHandoffAvailable();
@@ -416,12 +435,14 @@ export function AssignedToMeBlock({
     }
     setHidePersonal(next);
   }, []);
-  // Поиск и фильтр по сроку (дизайн C4). Действуют на «Вручную» и очередь; полку приёмки
+  // Поиск и фильтр по сроку (дизайн C4). Действуют на «В работе» и очередь; полку приёмки
   // фильтрует только поиск — решение по сданной работе не прячется за сроком.
   const [query, setQuery] = useState('');
   const [due, setDue] = useState<DueKind | null>(null);
   // «Ответить»: вместо вкладок — задачи, где мне адресовали комментарий и я не ответил.
   const [replyOnly, setReplyOnly] = useState(false);
+  // «Только из групп» (groupOrigin, db/190) — поверх вкладки, как поиск.
+  const [groupOnly, setGroupOnly] = useState(false);
   useEffect(() => {
     setCreationFilters({ projectId: filterProject, due: due === 'today' || due === 'none' ? due : null });
     return () => setCreationFilters({ projectId: null, due: null });
@@ -814,6 +835,11 @@ export function AssignedToMeBlock({
     [user?.id],
   );
   const byMeDisplayTasks = useMemo(() => applyPatches(byMeRaw, patches), [byMeRaw, patches]);
+  // Что горит у каждого участника (просрочено / на сегодня) — счётчик на его аватаре.
+  const workload = useMemo(
+    () => peopleWorkload(byMeDisplayTasks, ymd(startOfDay(new Date()))),
+    [byMeDisplayTasks],
+  );
   const toMeVisible = useMemo(
     () => (hideDone ? toMeTasks.filter(notDone) : toMeTasks),
     [toMeTasks, hideDone],
@@ -927,9 +953,14 @@ export function AssignedToMeBlock({
   // (без учёта самого срока), иначе выбранный чип обнулял бы соседние.
   const today = ymd(startOfDay(new Date()));
   const normalizedQuery = query.trim().toLowerCase();
+  const groupTaskCount = useMemo(() => visibleTasks.filter(isFromGroup).length, [visibleTasks]);
   const queriedTasks = useMemo(
-    () => (normalizedQuery ? visibleTasks.filter((t) => matchesInboxQuery(t, normalizedQuery)) : visibleTasks),
-    [visibleTasks, normalizedQuery],
+    () =>
+      filterFromGroups(
+        normalizedQuery ? visibleTasks.filter((t) => matchesInboxQuery(t, normalizedQuery)) : visibleTasks,
+        groupOnly,
+      ) as InboxBlockTask[],
+    [visibleTasks, normalizedQuery, groupOnly],
   );
   // Приёмка руководителем (db/150). Состав полки зависит от роли, и это не косметика:
   //
@@ -950,11 +981,11 @@ export function AssignedToMeBlock({
     [toMeTasks, byMeDisplayTasks, focusedTasks, approvalQueueTasks, focusedMemberId, isApprover],
   );
   const approvalQueried = useMemo(
-    () => replyFilterOn
+    () => filterFromGroups(replyFilterOn
       ? awaitingReplyTasks.filter((task) => task.status === 'pending_approval' && matchesInboxQuery(task, normalizedQuery))
       : approvalTasksAll.filter((task) => matchesInboxQuery(task, normalizedQuery)
-        && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !isColleaguePersonal(task))))),
-    [replyFilterOn, awaitingReplyTasks, approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal, isColleaguePersonal],
+        && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !isColleaguePersonal(task))))), groupOnly) as InboxBlockTask[],
+    [groupOnly, replyFilterOn, awaitingReplyTasks, approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal, isColleaguePersonal],
   );
   const { section, dueCounts, manual: inProgressTasks, approvals: approvalTasks, queue: groupedTasks } = useMemo(
     () => selectInboxView({ tasks: queriedTasks, approvals: approvalQueried, today, due, section: mobileSection, wide: isWide, workerEnabled }),
@@ -1002,7 +1033,7 @@ export function AssignedToMeBlock({
   const selectionColumns = grouping === 'deadline' ? kanbanGroups : groups;
   // Bulk management uses the same server capability as individual controls.
   const columnSelectableGroups = selectionColumns.map((g) => g.items.filter((t) => t.canModify).map((t) => t.id));
-  // Полки «На утверждении» и «Вручную» — такие же участники выделения, как колонки: раньше
+  // Полки «На утверждении» и «В работе» — такие же участники выделения, как колонки: раньше
   // при включении режима они просто пропадали с экрана, и до этих задач массовые действия
   // было не достать вовсе. Идут первыми, потому что первыми же и нарисованы — порядок
   // важен для Shift-диапазона и протяжки мышью, которые считают по этому же списку.
@@ -1136,6 +1167,8 @@ export function AssignedToMeBlock({
   // Дроп в «Будущее» не применяет срок сразу — открывает всплывашку выбора (неделя / конец
   // месяца / конкретный день). null = закрыта.
   const [futureDrop, setFutureDrop] = useState<InboxBlockTask | null>(null);
+  // Карточка, которую отложили свайпом влево: ждёт выбора нового срока.
+  const [snoozeItem, setSnoozeItem] = useState<InboxBlockTask | null>(null);
   // Дроп на кубик ДРУГОГО участника не переназначает сразу — открывает подтверждение
   // В подтверждении видны текущий и новый ответственные. null = диалог закрыт.
   const [pendingReassign, setPendingReassign] = useState<{
@@ -1166,11 +1199,28 @@ export function AssignedToMeBlock({
     },
     [patchDeadlineLocal, taskRepository],
   );
+  // Срок сменили жестом (бросок в колонку срока, «Будущее», «Отложить») — в тосте «Отменить».
+  const applyDeadlineWithUndo = useCallback(
+    async (item: InboxBlockTask, deadline: string | null, message: string): Promise<void> => {
+      const prev = item.deadline ?? null;
+      if (prev === deadline) return;
+      await applyDeadline(item, deadline);
+      toast(message, {
+        action: { label: 'Отменить', onClick: () => void applyDeadline({ ...item, deadline }, prev) },
+      });
+    },
+    [applyDeadline],
+  );
 
   // Кубики людей: все участники проектов пространства (shared-members) — цель для
   // drag-назначения. Грузим один раз; себя список уже не содержит (сервер исключает).
   const [members, setMembers] = useState<SharedMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
+  // Имя на чипе человека: одного имени хватает, пока в пространстве нет тёзок.
+  const shortLabels = useMemo(
+    () => shortUserLabels(members.map((m) => ({ id: m.id, label: userLabel(m) }))),
+    [members],
+  );
   useEffect(() => {
     let cancelled = false;
     projectRepository
@@ -1212,14 +1262,32 @@ export function AssignedToMeBlock({
     grouping === 'priority' &&
     PRIORITY_BUCKET_KEYS.some((k) => !groups.some((g) => g.key === k));
 
+  // «Отменить» после смены ответственного — вернуть прежнего.
+  const undoAssign = useCallback(
+    async (item: InboxBlockTask, prevAssigneeId: string): Promise<void> => {
+      try {
+        await taskRepository.assign(item.projectId, item.id, prevAssigneeId);
+        toast.success('Ответственный возвращён');
+        void refresh();
+        onChanged?.();
+      } catch (e) {
+        toast.error(`Не удалось вернуть ответственного: ${(e as Error).message}`);
+      }
+    },
+    [taskRepository, refresh, onChanged],
+  );
+
   // Назначить ответственного дропом на участника. Операция одна для любого
   // предыдущего ответственного и идемпотентна.
   const reassignTo = useCallback(
     async (item: InboxBlockTask, member: SharedMember): Promise<void> => {
       if (member.id === item.assignee.userId) return;
+      const prevAssignee = item.assignee.userId;
       try {
         await taskRepository.assign(item.projectId, item.id, member.id);
-        toast.success(`Ответственный — ${member.displayName}`);
+        toast.success(`Ответственный — ${member.displayName}`, {
+          action: { label: 'Отменить', onClick: () => void undoAssign(item, prevAssignee) },
+        });
         // Не await: перерисовка списков не должна удерживать жест (см. setWorkStatus).
         void refresh();
         onChanged?.();
@@ -1227,7 +1295,7 @@ export function AssignedToMeBlock({
         toast.error(`Не удалось переназначить: ${(e as Error).message}`);
       }
     },
-    [taskRepository, refresh, onChanged],
+    [taskRepository, refresh, onChanged, undoAssign],
   );
 
   // Забрать задачу себе — та же смена ответственного. В именованном проекте это
@@ -1239,16 +1307,19 @@ export function AssignedToMeBlock({
         toast.info('Задача уже назначена вам');
         return;
       }
+      const prevAssignee = item.assignee.userId;
       try {
         await taskRepository.assign(item.projectId, item.id, user.id);
-        toast.success('Теперь вы ответственный');
+        toast.success('Теперь вы ответственный', {
+          action: { label: 'Отменить', onClick: () => void undoAssign(item, prevAssignee) },
+        });
         void refresh();
         onChanged?.();
       } catch (e) {
         toast.error(`Не удалось забрать: ${(e as Error).message}`);
       }
     },
-    [user, taskRepository, refresh, onChanged],
+    [user, taskRepository, refresh, onChanged, undoAssign],
   );
 
   // Отзыв задачи с утверждения самим исполнителем: «случайно нажал выполнено». Он же —
@@ -1370,7 +1441,7 @@ export function AssignedToMeBlock({
   // Возврат НЕ в todo: в личных входящих это колонка «Воркер», задачу забрал бы Ralph.
   // 'todo' — только явная кнопка «Передать воркеру» на проектной карточке очереди.
   const setWorkStatus = useCallback(
-    async (item: InboxBlockTask, next: 'manual' | 'backlog' | 'todo'): Promise<void> => {
+    async (item: InboxBlockTask, next: 'manual' | 'backlog' | 'todo', runMode?: RunMode): Promise<void> => {
       if (item.status === next) return;
       // Карточка переезжает на полку сразу, ещё до ответа сервера — иначе после дропа она
       // секунду висит на старом месте и жест читается как неудавшийся.
@@ -1378,6 +1449,10 @@ export function AssignedToMeBlock({
       // Вспышка полки — тоже сразу: она подтверждает жест, а не ответ сервера.
       if (next === 'manual') setWorkFlash((prev) => ({ id: item.id, key: (prev?.key ?? 0) + 1 }));
       try {
+        // Режим из меню «Передать воркеру» — до постановки в очередь (диспетчер читает задачу).
+        if (next === 'todo' && runMode && runMode !== item.runMode) {
+          await taskRepository.update(item.projectId, item.id, { runMode });
+        }
         await taskRepository.move(item.projectId, item.id, {
           targetStatus: next,
           beforeTaskId: null,
@@ -1555,8 +1630,8 @@ export function AssignedToMeBlock({
     const today = ymd(startOfDay(new Date()));
     const cur = item.deadline == null ? 'none' : item.deadline <= today ? 'today' : 'future';
     if (cur === data.bucket) return;
-    if (data.bucket === 'none') void applyDeadline(item, null);
-    else if (data.bucket === 'today') void applyDeadline(item, today);
+    if (data.bucket === 'none') void applyDeadlineWithUndo(item, null, 'Срок снят');
+    else if (data.bucket === 'today') void applyDeadlineWithUndo(item, today, 'Срок — сегодня');
     else if (data.bucket === 'future') setFutureDrop(item); // всплывашка выбора срока
   };
   // Отмена drag'а (Esc/потеря захвата): гасим оверлей и подсветку кубиков.
@@ -1575,13 +1650,13 @@ export function AssignedToMeBlock({
   if (!inboxReady) {
     return (
       <section id={regionId} className="flex flex-col gap-3">
-        <InboxLoadingLayout heading={heading} />
+        <InboxLoadingLayout heading={heading} compactHeading={compactHeading} />
       </section>
     );
   }
 
   // Быстрое действие карточки очереди: «Взять в работу» — то же, что перетащить её в
-  // «Вручную» (статус 'manual', агент такие не берёт). Не предлагаем там, где задачей уже
+  // «В работе» (статус 'manual', агент такие не берёт). Не предлагаем там, где задачей уже
   // занят воркер (в работе / ждёт уточнения), и для закрытой или сданной.
   if (loadError) return <section className="space-y-4">{heading}
     <p className="text-sm text-muted-foreground">Не удалось загрузить задачи этого пространства.</p>
@@ -1599,25 +1674,31 @@ export function AssignedToMeBlock({
         <Play className="size-3 fill-current" />
       </QuickAction>
     ) : null;
-  // «Передать воркеру» — только проектные задачи очереди: полки «Вручную»/«На утверждении»
+  // «Передать воркеру» — только проектные задачи очереди: полки «В работе»/«На утверждении»
   // рендерят свои действия, а в «Личных» колонка «Воркер» не для этого.
   const canHandOff = (item: InboxBlockTask): boolean =>
     workerHandoffAvailable && item.canModify && !item.isInbox && canSendToWorker(item.status);
   const workerHandoffAction = (item: InboxBlockTask): React.ReactNode =>
     canHandOff(item) ? (
-      <QuickAction
-        label={WORKER_HANDOFF_LABEL}
-        className="text-primary"
-        onClick={() => void setWorkStatus(item, 'todo')}
+      <WorkerHandoffMenu
+        runMode={item.runMode}
+        className={cn(QUICK_ACTION_CLASS, 'text-primary')}
+        onPick={(mode) => void setWorkStatus(item, 'todo', mode)}
       >
         <WorkerHandoffIcon className="size-3.5" />
-      </QuickAction>
+      </WorkerHandoffMenu>
     ) : null;
   // Свайп вправо на тач-экране — «дальше по процессу»: карточка очереди → в работу; карточка
-  // «Вручную» → на утверждение (своя, где работу принимает руководитель) или в готово.
+  // «В работе» → на утверждение (своя, где работу принимает руководитель) или в готово.
   const queueSwipe = (item: InboxBlockTask): SwipeAction | null =>
     !selectionActive && canTake(item)
       ? { label: 'Взять в работу', tone: 'manual', onCommit: () => void setWorkStatus(item, 'manual') }
+      : null;
+  // Свайп влево по карточке очереди — «Отложить»: выбор нового срока (завтра / неделя /
+  // месяц / день), карточка переезжает в свою колонку срока, в тосте — «Отменить».
+  const queueSnooze = (item: InboxBlockTask): SwipeAction | null =>
+    !selectionActive && item.canModify && item.status !== 'done'
+      ? { label: 'Отложить', tone: 'snooze', onCommit: () => setSnoozeItem(item) }
       : null;
   const manualSwipe = (item: InboxBlockTask): SwipeAction | null => {
     if (selectionActive || !item.canModify) return null;
@@ -1633,6 +1714,7 @@ export function AssignedToMeBlock({
     opts: { showCreatedAt?: boolean; hideProjectLabel?: boolean } = {},
   ): React.ReactNode => {
     const swipe = ghost ? null : queueSwipe(item);
+    const snooze = ghost ? null : queueSnooze(item);
     const card = (
       <AcceptedCard
         item={item}
@@ -1663,8 +1745,8 @@ export function AssignedToMeBlock({
         // схлопывание, — dnd-id суффиксуется, чтобы не затереть живую (см. draggableTaskId).
         ghost={ghost}
       >
-        {swipe ? (
-          <SwipeToAct action={swipe} disabled={dragActive}>
+        {swipe || snooze ? (
+          <SwipeToAct action={swipe} back={snooze} disabled={dragActive}>
             {card}
           </SwipeToAct>
         ) : (
@@ -1687,16 +1769,17 @@ export function AssignedToMeBlock({
   // Единая кнопка «Фильтры»: сортировка (когда есть задачи) + скрыть-выполненные (всегда) +
   // фильтры ответственного/проекта (только вкладка «Для всех»).
   const hasLocalFilters =
-    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null || replyFilterOn;
+    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null || replyFilterOn || groupOnly;
   const resetFilters = (): void => {
     setQuery('');
     setSearchOpen(false);
     setDue(null);
     setReplyOnly(false);
+    setGroupOnly(false);
     setFilterTo(null);
     setFilterProject(null);
   };
-  // Колонка «В работе» = полка приёмки + «Вручную». Приёмку видит и рядовой исполнитель:
+  // Колонка «В работе» = полка приёмки + «В работе». Приёмку видит и рядовой исполнитель:
   // это единственная цель дропа для «сдать первую задачу» жестом. В режиме выделения пустые
   // полки прячем: тащить в них нечего, а подсказка «перетащите сюда» врала бы.
   const filtersPopover = (
@@ -1752,15 +1835,15 @@ export function AssignedToMeBlock({
   const tabsOrFocus = focusedMember ? (
     // Режим чужой доски заменяет вкладки заголовком с именем: вкладки «Мои/Для всех»
     // тут не про что — показывается одна конкретная доска. Возврат — ×.
-    <div className="flex h-12 min-w-0 items-center gap-1 rounded-lg bg-primary-soft pe-1 ps-2 sm:h-auto">
-      <span className="min-w-0 truncate text-ui font-semibold">Задачи · {focusedMember.displayName}</span>
-      <span className="shrink-0 text-meta tabular-nums text-muted-foreground">{focusedVisible.length}</span>
+    <div className={cn(SCOPE_CHIP_CLASS, SCOPE_CHIP_ON_CLASS, 'max-w-full gap-1 pe-0 md:pe-0.5')}>
+      <span className="min-w-0 truncate">Задачи · {focusedMember.displayName}</span>
+      <span className="shrink-0 font-medium tabular-nums opacity-70">{focusedVisible.length}</span>
       <button
         type="button"
         onClick={() => setFocusedMember(null)}
         aria-label="Вернуться к своим входящим"
         title="Вернуться к своим входящим"
-        className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground sm:size-6"
+        className="grid size-11 shrink-0 place-items-center rounded-md opacity-80 transition-opacity hover:opacity-100 md:size-6"
       >
         <X className="size-3.5" />
       </button>
@@ -1777,17 +1860,32 @@ export function AssignedToMeBlock({
       byMeCount={byMeVisible.length}
     />
   );
-  // Люди: своя ава (бросить задачу — забрать себе) и участники пространства (бросить —
-  // назначить; клик — их задачи). В покое — аватары, во время перетаскивания — крупные
-  // плитки с именем: в маленький кружок трудно попасть (задача 3a36e7e8).
+  // Люди — участники пространства: бросить задачу — назначить, клик — их задачи. В покое —
+  // ровный ряд чипов той же высоты, что «Мои / Все» (десктоп: аватар с именем; телефон:
+  // аватар, имя раскрывается у выбранного), во время перетаскивания — крупные плитки с
+  // именем: в маленький аватар трудно попасть (задача 3a36e7e8). Своя плитка «Себе»
+  // (бросить — забрать себе) нужна только как цель броска, поэтому в покое её нет: «мои
+  // задачи» — это чип «Мои» слева.
   const people =
-    user || members.length > 0 ? (
-      <div role="group" aria-label="Люди" className="flex max-w-full flex-wrap items-start gap-2">
-        {user && <SelfDropAvatar user={user} dragging={dragActive} />}
+    members.length > 0 || (user && dragActive) ? (
+      // Phone at rest: one ribbon that scrolls sideways. While dragging, tiles wrap so every
+      // drop target is visible.
+      <div
+        role="group"
+        aria-label="Люди"
+        className={cn(
+          'flex items-center',
+          dragActive ? 'max-w-full flex-wrap gap-2' : isWide ? 'w-max gap-1.5' : 'w-max items-start gap-1',
+        )}
+      >
+        {user && dragActive && <SelfDropTile user={user} />}
         {members.map((m) => (
           <UserCube
             key={m.id}
             member={m}
+            workload={workload.get(m.id)}
+            shortLabel={shortLabels.get(m.id) ?? userLabel(m)}
+            compact={!isWide}
             dragging={dragActive}
             hasApproval={peopleWithApproval.has(m.id)}
             // Руководитель/владелец: клик открывает личные входящие сотрудника (на любой
@@ -1815,40 +1913,70 @@ export function AssignedToMeBlock({
       </div>
     ) : null;
 
-  // Строка управления (дизайн C4): заголовок страницы, «Мои / Для всех», люди, поиск,
-  // фильтры и действия страницы — одной строкой над доской.
-  // Телефон: заголовок с иконками (лупа, фильтры, выделение) — отдельной строкой; вкладки и
-  // люди — одной лентой, которая листается вбок, а не переносится в три строки; поле поиска
-  // появляется по лупе (и остаётся, пока в нём есть текст).
+  // Строка управления (дизайн C4): заголовок, «Мои / Все», люди, поиск, фильтры и действия
+  // страницы — одной строкой над доской; чьи задачи и люди читаются как одна лента «кто».
+  // Телефон: заголовок с иконками (фильтры, выделение) — первой строкой; под ней лента
+  // «кто»: чипы «Мои / Все» стоят на месте, люди листаются вбок и растворяются у края.
+  // Поле поиска появляется по лупе (и остаётся, пока в нём есть текст).
   const searchVisible = searchOpen || query !== '';
-  const headRow = isWide ? (
-    <div ref={inboxHeadRef} className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      {heading}
-      {hasAny && tabsOrFocus}
-      {hasAny && people}
-      <span className="flex-1" />
-      {hasAny && <InboxSearch value={query} onChange={setQuery} className="w-60" />}
-      <div className="flex items-center gap-1">
+  // Поиск и действия страницы — одна группа у правого края строки сроков (десктоп): первая
+  // строка целиком отдана «кто» (заголовок, «Мои / Все», люди). Раньше группа стояла в первой
+  // строке и при команде из 5+ человек уезжала отдельной строкой — шапка росла до трёх строк.
+  const searchGroup = (
+    <div className="ms-auto flex shrink-0 items-center gap-1">
+      {hasAny && <InboxSearch value={query} onChange={setQuery} className="me-1 w-44 2xl:w-60" />}
+      <div className="flex shrink-0 items-center gap-1">
         {filtersPopover}
         {actions}
       </div>
     </div>
+  );
+  // Телефон: сброс фильтров, «Фильтры» и действия страницы — значками.
+  const phoneTools = (
+    <>
+      {hasLocalFilters && <button type="button" onClick={resetFilters} aria-label="Сбросить фильтры" title="Сбросить фильтры"
+        className="grid size-11 shrink-0 place-items-center rounded-lg text-primary-ink transition-colors hover:bg-hover active:bg-active">
+        <RotateCcw className="size-4" />
+      </button>}
+      {filtersPopover}
+      {actions}
+    </>
+  );
+  const toolsInSticky = !isWide && compactHeading && hasAny;
+  const headRow = isWide ? (
+    <div ref={inboxHeadRef} className="flex flex-wrap items-center gap-x-2 gap-y-2">
+      {heading}
+      {hasAny && tabsOrFocus}
+      {/* Уже 1024px лента людей может уйти на свою строку — разделитель повис бы в конце. */}
+      {hasAny && people && <span aria-hidden className="h-5 w-px shrink-0 bg-border max-lg:hidden" />}
+      {/* Люди — одной лентой на всё свободное место строки (flex-basis 0: лента не
+          переносится второй строкой чипов). Не влезли — «+N ›» у края, как на телефоне. */}
+      {hasAny && people && <SteppedRibbon className="min-w-40 flex-[1_1_0%]">{people}</SteppedRibbon>}
+      {!hasAny && searchGroup}
+    </div>
   ) : (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex min-h-10 items-center gap-1">
-        {heading}
-        <span className="flex-1" />
-        {hasLocalFilters && <button type="button" onClick={resetFilters} aria-label="Сбросить фильтры" title="Сбросить фильтры"
-          className="grid size-11 shrink-0 place-items-center rounded-lg text-primary-ink transition-colors hover:bg-hover active:bg-active">
-          <RotateCcw className="size-4" />
-        </button>}
-        {filtersPopover}
-        {actions}
-      </div>
+    <div className="flex flex-col gap-3">
+      {toolsInSticky ? (
+        <div className="sr-only">{heading}</div>
+      ) : (
+        <div className="flex min-h-11 items-center gap-1">
+          {heading}
+          <span className="flex-1" />
+          {phoneTools}
+        </div>
+      )}
       {hasAny && (
-        <div ref={inboxHeadRef} className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0 max-w-[55%] shrink-0">{tabsOrFocus}</div>
-          <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain py-1 px-1 pf-scrollbar-hide">{people}</div>
+        // Имена висят под аватарами: «Мои / Все» и аватары — по верхнему краю, на одной оси.
+        <div ref={inboxHeadRef} className="flex min-h-11 min-w-0 items-start gap-2">
+          <div className={cn('shrink-0', focusedMember && 'min-w-0 max-w-[62%]')}>{tabsOrFocus}</div>
+          {/* Без разделителя: заливка «Мои / Все» и аватары и так читаются как две группы, а
+              8px на 393px — это ещё один человек с именем в ленте. */}
+          {/* «+N ›» at the cut edge: a fade alone did not read as «swipe for more». */}
+          {people && (
+            <SteppedRibbon className="flex-1" controlsClassName={dragActive ? undefined : 'h-11'}>
+              {people}
+            </SteppedRibbon>
+          )}
         </div>
       )}
     </div>
@@ -1872,8 +2000,8 @@ export function AssignedToMeBlock({
     <button
       type="button"
       onClick={toggleNowCollapsed}
-      aria-label="Свернуть «В работе»"
-      title="Свернуть «В работе»"
+      aria-label="Свернуть «Сейчас»"
+      title="Свернуть «Сейчас»"
       className={cn(COLUMN_ACTION_CLASS, 'ms-auto')}
     >
       <ChevronsLeft className="size-3.5" />
@@ -1958,10 +2086,10 @@ export function AssignedToMeBlock({
       />
     ) : null;
 
-  // «В работе»: полка приёмки сверху, «Вручную» снизу — одна серая панель.
+  // «В работе»: полка приёмки сверху, «В работе» снизу — одна серая панель.
   const nowPanel = (
     <section
-      aria-label="В работе"
+      aria-label="Сейчас"
       className="flex w-full shrink-0 flex-col rounded-xl bg-panel md:w-[284px]"
     >
       {showApprovalZone && (
@@ -2165,7 +2293,7 @@ export function AssignedToMeBlock({
                       </ColumnHead>
                       <div
                         onPointerDown={columnSelection ? dragSelect.onPointerDown : undefined}
-                        className={cn('flex flex-col gap-[5px]', COLUMN_SCROLL_CLASS)}
+                        className={cn('flex flex-col', CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS)}
                       >
                         {composer(group.key)}
                         {group.items.length === 0 && composingProject !== group.key && (
@@ -2300,18 +2428,60 @@ export function AssignedToMeBlock({
   // Тело блока (дизайн C4 «Одна доска»): строка управления, строка сроков, затем доска —
   // закреплённая колонка «В работе» и очередь по проектам, которая листается вбок. На телефоне
   // вместо доски — переключатель разделов и один раздел на всю ширину.
+  // Сроки (и «Ответить»). Телефон: три равные колонки внутри липкой полосы; десктоп — строка
+  // сроков с поиском и действиями у правого края.
+  const dueRow = (
+    <div
+      className={cn(
+        'flex items-center gap-x-2 gap-y-1.5',
+        // Телефон: три равные колонки, все фильтры доступны без прокрутки.
+        isWide ? 'flex-wrap' : 'min-w-0',
+      )}
+    >
+      <DueFilterChips value={due} onChange={setDue} counts={dueCounts} wrap={isWide} />
+      {!focusedMemberId && (replyFilterOn || awaitingReplyTasks.length > 0) && (
+        <ReplyFilterChip
+          active={replyFilterOn}
+          count={awaitingReplyTasks.length}
+          onToggle={() => setReplyOnly((on) => !on)}
+        />
+      )}
+      {(groupOnly || groupTaskCount > 0) && (
+        <GroupFilterChip active={groupOnly} count={groupTaskCount} onToggle={() => setGroupOnly((on) => !on)} />
+      )}
+      {isWide && hasLocalFilters && (
+        <button
+          type="button"
+          onClick={resetFilters}
+          className="inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 text-sm font-medium text-primary-ink transition-colors hover:bg-hover sm:h-[26px] sm:text-meta"
+        >
+          Сбросить фильтры
+        </button>
+      )}
+      {isWide && (
+        <span title={subtitleBase} className="hidden min-w-0 flex-[1_1_0%] truncate pe-2 text-end text-meta text-muted-foreground xl:block">
+          {subtitleBase}
+        </span>
+      )}
+      {isWide && searchGroup}
+    </div>
+  );
   const body = (
     // Телефон: запас снизу под плавающую кнопку «Новая задача», чтобы последняя карточка
     // прокручивалась выше неё.
-    <section id={regionId} className={cn('flex flex-col gap-3', !isWide && 'gap-2.5 pbe-20')}>
+    <section id={regionId} className={cn('flex flex-col gap-3', !isWide && 'pbe-20')}>
       {headRow}
 
-      {/* Нулевая метка над переключателем; -mbe-2.5 гасит лишний зазор колонки. */}
-      {!isWide && <div ref={sectionTopRef} aria-hidden className="-mbe-2.5" />}
+      {/* Нулевая метка над переключателем; -mbe-3 гасит лишний зазор колонки. */}
+      {!isWide && <div ref={sectionTopRef} aria-hidden className="-mbe-3" />}
       {!isWide && (
-        // Липнет к верху при прокрутке: раздел переключается, не возвращаясь наверх.
-        <div className="sticky inset-bs-0 z-20 -mx-4 flex flex-col gap-2 bg-background px-4 py-1.5 sm:-mx-6 sm:px-6">
-          <div className="flex min-w-0 items-center gap-2">
+        // Липнет к верху при прокрутке: раздел, сроки, поиск и фильтры — одна полоса, которая
+        // остаётся под пальцем, пока листаешь список (раньше сроки уезжали вверх вместе с
+        // шапкой, и чтобы сменить фильтр, приходилось возвращаться к началу).
+        // py-1.5 — воздух над переключателем, когда он прилип; -my-1.5 убирает эти же 6px
+        // из потока, чтобы зазоры до соседних строк остались теми же 12px, что везде.
+        <div className="sticky inset-bs-0 z-20 -mx-4 -my-1.5 flex flex-col gap-2 bg-background px-4 py-1.5 sm:-mx-6 sm:px-6">
+          <div className="flex min-w-0 items-center gap-1.5 max-[359px]:gap-1">
             <InboxSectionSwitch
               className="min-w-0 flex-1"
               value={section}
@@ -2330,46 +2500,22 @@ export function AssignedToMeBlock({
                 if (searchVisible) setQuery('');
               }}
               className={cn(
-                'grid size-12 shrink-0 place-items-center rounded-lg border border-border bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                'grid size-12 shrink-0 place-items-center rounded-lg border border-border bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-[359px]:size-11',
                 searchVisible && 'border-primary/30 bg-primary/10 text-primary-ink',
               )}
             >
               {searchVisible ? <X className="size-4" /> : <Search className="size-4" />}
             </button>
+            {toolsInSticky && phoneTools}
           </div>
           {searchVisible && (
             <InboxSearch id={`${regionId}-mobile-search`} value={query} onChange={setQuery} autoFocus={searchOpen} />
           )}
+          {dueRow}
         </div>
       )}
 
-      <div
-        className={cn(
-          'flex items-center gap-x-2 gap-y-1.5',
-          // Телефон: три равные колонки, все фильтры доступны без прокрутки.
-          isWide ? 'flex-wrap' : 'min-w-0',
-        )}
-      >
-        <DueFilterChips value={due} onChange={setDue} counts={dueCounts} wrap={isWide} />
-        {!focusedMemberId && (replyFilterOn || awaitingReplyTasks.length > 0) && (
-          <ReplyFilterChip
-            active={replyFilterOn}
-            count={awaitingReplyTasks.length}
-            onToggle={() => setReplyOnly((on) => !on)}
-          />
-        )}
-        {isWide && hasLocalFilters && (
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 text-sm font-medium text-primary-ink transition-colors hover:bg-hover sm:h-[26px] sm:text-meta"
-          >
-            Сбросить фильтры
-          </button>
-        )}
-        {isWide && <span className="flex-1" />}
-        {isWide && <span className="hidden text-meta text-muted-foreground lg:inline">{subtitleBase}</span>}
-      </div>
+      {isWide && dueRow}
 
       {focusedError ? (
         <div role="alert" className="space-y-3 rounded-xl border p-4 text-sm">
@@ -2384,11 +2530,11 @@ export function AssignedToMeBlock({
               <button
                 type="button"
                 onClick={toggleNowCollapsed}
-                aria-label="Развернуть «В работе»"
-                title="Развернуть «В работе»"
+                aria-label="Развернуть «Сейчас»"
+                title="Развернуть «Сейчас»"
                 className="flex min-h-[200px] w-10 shrink-0 flex-col items-center gap-2.5 rounded-xl bg-panel py-2.5 text-meta font-semibold transition-colors hover:bg-active"
               >
-                <span className="[writing-mode:vertical-rl]">В работе</span>
+                <span className="[writing-mode:vertical-rl]">Сейчас</span>
                 <span className="tabular-nums text-approval">{approvalTasks.length}</span>
                 <span className="tabular-nums text-manual">{inProgressTasks.length}</span>
               </button>
@@ -2415,7 +2561,7 @@ export function AssignedToMeBlock({
         ) : (
           // Режим выделения прячет пустые полки — раздел не подменяем очередью молча.
           <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
-            В «В работе» выбирать нечего
+            В «Сейчас» выбирать нечего
           </p>
         )
       ) : (
@@ -2444,7 +2590,9 @@ export function AssignedToMeBlock({
           type="button"
           onClick={openAddTask}
           aria-label="Новая задача"
-          className="fixed end-4 inset-be-[calc(5.25rem_+_env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-float transition-colors hover:bg-primary/90"
+          // Уже 360px кнопка меньше (48px) и ближе к краю: на таком экране 56-пиксельный
+          // круг закрывал заметную часть карточки под собой.
+          className="fixed end-4 inset-be-[calc(5.25rem_+_env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-float transition-colors hover:bg-primary/90 max-[359px]:end-3 max-[359px]:size-12"
         >
           <Plus className="size-6" />
         </button>
@@ -2493,6 +2641,7 @@ export function AssignedToMeBlock({
           дайджест сервер рендерит одним project-scoped запросом. */}
       {selectionActive && orderedSelectedIds.length > 0 && (
         <BulkActionBar
+          snapshot={bulkSnapshotFrom([toMeTasks, byMeDisplayTasks, focusedMemberTasks, approvalQueue])}
           selectedIds={orderedSelectedIds}
           projectId={bulkProjectId}
           isInbox
@@ -2511,7 +2660,20 @@ export function AssignedToMeBlock({
         onPick={(deadline) => {
           const it = futureDrop;
           setFutureDrop(null);
-          if (it) void applyDeadline(it, deadline);
+          if (it) void applyDeadlineWithUndo(it, deadline, `Срок — ${formatShortDate(deadline)}`);
+        }}
+      />
+      {/* Свайп влево — «Отложить»: тот же выбор срока плюс «Завтра», в тосте «Отменить». */}
+      <FutureDeadlineDialog
+        title="Отложить до"
+        withTomorrow
+        open={snoozeItem !== null}
+        onClose={() => setSnoozeItem(null)}
+        onPick={(deadline) => {
+          const it = snoozeItem;
+          setSnoozeItem(null);
+          if (!it) return;
+          void applyDeadlineWithUndo(it, deadline, `Отложено до ${formatShortDate(deadline)}`);
         }}
       />
 
@@ -2640,10 +2802,10 @@ function ColumnSelectionControls({
 }
 
 // === Колонки доски «Входящих» (дизайн C4) ===
-// Колонка — серая панель 256px с радиусом 10px, карточки внутри с зазором 5px; шапка 28px:
+// Колонка — серая панель 256px с радиусом 10px, карточки внутри с зазором 5px (на телефоне 10px); шапка 28px:
 // метка-тон, счётчик, действия справа. Свёрнутая колонка — вертикальная полоска 38px.
 const INBOX_COLUMN_CLASS =
-  'flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col gap-[5px] rounded-xl bg-panel p-1.5 transition-[background-color,outline-color] duration-150 sm:w-64 sm:max-w-none';
+  `flex w-[86vw] max-w-[22rem] shrink-0 snap-center snap-always flex-col ${CARD_STACK_GAP_CLASS} rounded-xl bg-panel p-1.5 transition-[background-color,outline-color] duration-150 sm:w-64 sm:max-w-none`;
 const COLLAPSED_COLUMN_CLASS =
   'flex min-h-[200px] w-[38px] shrink-0 flex-col rounded-xl bg-panel transition-[background-color,outline-color] duration-150';
 // Ряд колонок: свой скролл вбок, родная полоса спрятана — видимую и закреплённую снизу даёт
@@ -2866,7 +3028,7 @@ function MobileQueueGroup({
         </button>
         {actions}
       </div>
-      {!collapsed && <div className="flex flex-col gap-[5px] px-1.5 pbe-1.5">{children}</div>}
+      {!collapsed && <div className={cn('flex flex-col px-1.5 pbe-1.5', CARD_STACK_GAP_CLASS)}>{children}</div>}
     </div>
   );
 }
@@ -3025,7 +3187,7 @@ function TimeBucketColumn({
           <div
             // Хук пассивен вне режима выделения, но лишний слушатель на обычной колонке не вешаем.
             onPointerDown={selection ? onCardsPointerDown : undefined}
-            className={cn('flex min-h-[3rem] flex-col gap-[5px]', COLUMN_SCROLL_CLASS)}
+            className={cn('flex min-h-[3rem] flex-col', CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS)}
           >
             {children}
           </div>
@@ -3323,34 +3485,65 @@ function ApprovalShelf({
     data: { type: 'approval' },
     disabled: !canDrop || selecting,
   });
+  // Полку можно свернуть до шапки: длинная очередь приёмки выталкивала колонку вниз.
+  // Цель дропа при этом остаётся — сдать работу можно и в свёрнутую полку.
+  const [collapsed, setCollapsed] = useState<boolean>(() => readStoredFlag(APPROVAL_COLLAPSED_KEY));
+  const toggleCollapsed = (): void => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(APPROVAL_COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
   // Пустую полку видит и рядовой исполнитель (не только принимающий) — текст по умолчанию
   // объясняет её именно ему: это цель для СВОЕЙ сделанной работы, а не чужая очередь.
-  // На телефоне «Вручную» и полка — один раздел без перетаскивания между колонками, поэтому
+  // На телефоне «В работе» и полка — один раздел без перетаскивания между колонками, поэтому
   // подсказка называет жест, который там работает.
   const defaultEmptyHint = isApprover
     ? 'Здесь появятся задачи, которые сотрудники отметили выполненными. Закрыть их можете только вы.'
     : narrow
-      ? 'Сделали задачу из «Вручную» — смахните её вправо, и руководитель примет работу.'
-      : 'Готовую задачу перетащите сюда из «Вручную» — её примет руководитель.';
+      ? 'Сделали задачу из «В работе» — смахните её вправо, и руководитель примет работу.'
+      : 'Готовую задачу перетащите сюда из «В работе» — её примет руководитель.';
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col gap-[5px] rounded-xl p-[7px] transition-[background-color,outline-color] duration-150',
+        'flex flex-col rounded-xl p-[7px] transition-[background-color,outline-color] duration-150',
+        CARD_STACK_GAP_CLASS,
         canDrop && dragActive && !isOver && DROP_TARGET_CLASS,
         isOver && 'bg-approval-zone outline outline-2 -outline-offset-2 outline-primary',
         className,
       )}
     >
       <div className="flex h-7 items-center gap-1.5 px-[3px] text-ui">
-        <span className="pf-tag pf-tag-lg pf-tag-plain pf-tone-approval">
-          <ShieldCheck className="size-3.5 shrink-0 text-approval" strokeWidth={2.3} />
-          На утверждении
-        </span>
-        <span className="tabular-nums text-muted-foreground">{items.length}</span>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Развернуть задачи на утверждении' : 'Свернуть задачи на утверждении'}
+          className="flex min-w-0 items-center gap-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronRight
+            aria-hidden
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground motion-safe:transition-transform motion-safe:duration-150',
+              !collapsed && 'rotate-90',
+            )}
+          />
+          <span className="pf-tag pf-tag-lg pf-tag-plain pf-tone-approval">
+            <ShieldCheck className="size-3.5 shrink-0 text-approval" strokeWidth={2.3} />
+            На утверждении
+          </span>
+          <span className="tabular-nums text-muted-foreground">{items.length}</span>
+        </button>
+        {isApprover && !selecting && <AcceptAllApprovalsButton items={items} onAccept={onAccept} />}
         {headerEnd}
       </div>
-      {items.length === 0 ? (
+      {collapsed ? null : items.length === 0 ? (
         <p className="px-1 pbe-1 text-meta leading-snug text-muted-foreground">
           {emptyHint ?? defaultEmptyHint}
         </p>
@@ -3514,7 +3707,7 @@ function ApprovalItemCard({
               onDelete={onReject}
               hideQuickActions
               showAssignee
-              footer={footer}
+              footer={footer && isApprover ? <><ApprovalSummary projectId={item.projectId} taskId={item.id} revision={item.updatedAt} className="mbe-1.5" />{footer}</> : footer}
               selecting={selecting}
               selected={selected}
               {...(onSelectToggle ? { onSelectToggle } : {})}
@@ -3526,7 +3719,7 @@ function ApprovalItemCard({
   );
 }
 
-// Полка «Вручную»: нижняя часть колонки «В работе», куда перетаскивают задачи, которыми
+// Полка «В работе»: нижняя часть колонки «В работе», куда перетаскивают задачи, которыми
 // занимаются сами (статус manual — агент такие не берёт). Подсвечивается при наведении
 // драга; внизу всегда штриховая подсказка-цель «перетащите сюда».
 function InProgressShelf({
@@ -3553,7 +3746,7 @@ function InProgressShelf({
   onOpen: (item: InboxBlockTask) => void;
   onChanged: () => void;
   onDelete: (item: InboxBlockTask) => void;
-  // Быстрые действия карточки «Вручную» (сдать на утверждение, вернуть в очередь) —
+  // Быстрые действия карточки «В работе» (сдать на утверждение, вернуть в очередь) —
   // их собирает родитель: только он знает правила приёмки.
   renderActions: (item: InboxBlockTask) => React.ReactNode;
   // Свайп вправо по карточке на тач-экране — «дальше по процессу» (готово или сдать).
@@ -3604,7 +3797,8 @@ function InProgressShelf({
     <div
       ref={setNodeRef}
       className={cn(
-        'relative flex flex-col gap-[5px] rounded-xl p-[7px] transition-[background-color,outline-color] duration-150',
+        'relative flex flex-col rounded-xl p-[7px] transition-[background-color,outline-color] duration-150',
+        CARD_STACK_GAP_CLASS,
         dragActive && !isOver && DROP_TARGET_CLASS,
         isOver && 'bg-manual-zone outline outline-2 -outline-offset-2 outline-primary',
         flash && 'pf-shelf-flash',
@@ -3612,9 +3806,8 @@ function InProgressShelf({
       )}
     >
       <div className="flex h-7 items-center gap-1.5 px-[3px] text-ui">
-        {/* Полка — это статус 'manual', и называться должна так же. «В работе» здесь
-            было бы вторым смыслом того же слова: в сводках/TG/EOD «В работе» — это
-            статус 'in_progress' (задача у воркера), а не «делаю руками». */}
+        {/* Полка — это статус 'manual', и называться должна так же: «В работе» — то, что
+            человек делает сам. Задача у воркера (in_progress) — «У воркера». */}
         <span className="pf-tag pf-tag-lg pf-tag-plain pf-tone-manual">
           <ManualIcon className="text-manual" />
           {STATUS_LABEL.manual}
@@ -3749,15 +3942,39 @@ function DraggableTask({
   );
 }
 
-// Участник пространства = drop-цель смены ответственного (дизайн C4: ряд аватаров рядом с
-// вкладками). В покое — аватар 30px с карточкой по наведению; фиолетовая точка — у человека
-// есть сданная работа. Во время drag'а аватар раскрывается в плитку с именем — большую цель,
-// в которую легко попасть (задача 3a36e7e8); под курсором подпись меняется на «Назначить».
+// Чипы ленты «кто» («Мои / Все» и люди): одна высота и одно скругление, выбранный —
+// инвертированный (тёмный на светлой теме, светлый на тёмной), чтобы «чьи задачи сейчас
+// на экране» читалось с первого взгляда и не путалось с чипами срока (те — про фильтр).
+const SCOPE_CHIP_CLASS =
+  'inline-flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-ui transition-colors md:h-7 md:px-2.5 md:text-meta';
+const SCOPE_CHIP_ON_CLASS = 'border-foreground bg-foreground font-semibold text-background';
+// Телефон: невыбранный чип — мягкая подложка без рамки (как чипы сроков и переключатель
+// разделов ниже): шапка из четырёх рядов рамок читалась как стена одинаковых коробок.
+const SCOPE_CHIP_OFF_CLASS =
+  'border-border font-medium text-muted-foreground hover:bg-hover hover:text-foreground active:bg-active max-md:border-transparent max-md:bg-panel';
+
+// Плитка-цель на время перетаскивания: крупная, с именем, под курсором — действие.
+const DROP_TILE_CLASS =
+  'flex shrink-0 items-center gap-1.5 rounded-lg border py-1 pe-2.5 ps-1 text-xs transition-[background-color,border-color,box-shadow] duration-200 motion-safe:transition-[background-color,border-color,box-shadow,transform]';
+const dropTileTone = (isOver: boolean): string =>
+  isOver
+    ? 'scale-105 border-primary bg-primary-soft ring-2 ring-inset ring-primary'
+    : 'border-dashed border-primary/50 bg-primary-soft';
+
+// Участник пространства = drop-цель смены ответственного и чип ленты «кто» (дизайн C4).
+// В покое — чип: на десктопе аватар с именем, на телефоне (compact) — один аватар, а имя
+// раскрывается у выбранного: так в строке рядом с «Мои / Все» помещается вся небольшая
+// команда. Фиолетовая точка — у человека есть сданная работа. Во время drag'а чип
+// раскрывается в плитку с именем — большую цель, в которую легко попасть (задача 3a36e7e8);
+// под курсором подпись меняется на «Назначить».
 // filterActive/onToggleFilter — клик переключает состояние, за которое отвечает вызывающий:
 // у руководителя пространства это открытая доска входящих сотрудника, у остальных на
-// вкладке «Для всех» — single-фильтр «кому» (спека 2026-07-13).
+// вкладке «Все» — single-фильтр «кому» (спека 2026-07-13).
 function UserCube({
   member,
+  workload,
+  shortLabel,
+  compact = false,
   dragging,
   hasApproval = false,
   filterActive = false,
@@ -3765,6 +3982,12 @@ function UserCube({
   hint,
 }: {
   member: SharedMember;
+  // Что у человека горит (просрочено / на сегодня) — счётчик на аватаре.
+  workload?: PersonWorkload;
+  // Короткое имя для чипа (shortUserLabels); полное остаётся в aria-label и подсказке.
+  shortLabel: string;
+  // Телефон: без имени, пока человек не выбран.
+  compact?: boolean;
   dragging: boolean;
   hasApproval?: boolean;
   filterActive?: boolean;
@@ -3773,25 +3996,100 @@ function UserCube({
   hint?: string;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: `user-${member.id}`, data: { type: 'user', member } });
-  const label = userLabel(member);
+  const name = userLabel(member);
+  const load = workloadLabel(workload);
+  // Имя кнопки — только человек (по нему его находят и скринридер, и тесты); загрузка —
+  // описанием (aria-describedby) и в подсказке.
+  const label = name;
+  const loadId = useId();
+  const tooltip = load ? `${name}: ${load}` : name;
+  const burning = workload ? workload.late + workload.today : 0;
+  const burningTone =
+    workload && workload.late > 0 ? 'bg-destructive text-destructive-foreground' : 'bg-today text-background';
   if (dragging) {
     return (
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'flex shrink-0 items-center gap-1.5 rounded-lg border py-1 pe-2.5 ps-1 text-xs transition-[background-color,border-color,box-shadow] duration-200 motion-safe:transition-[background-color,border-color,box-shadow,transform]',
-          isOver
-            ? 'scale-105 border-primary bg-primary-soft ring-2 ring-inset ring-primary'
-            : 'border-dashed border-primary/50 bg-primary-soft',
-        )}
-      >
+      <div ref={setNodeRef} className={cn(DROP_TILE_CLASS, dropTileTone(isOver))}>
         <UserAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} className="size-6 text-2xs" />
-        <span className="max-w-[8rem] truncate font-medium">{isOver ? 'Назначить' : label}</span>
+        <span className="max-w-[8rem] truncate font-medium">{isOver ? 'Назначить' : name}</span>
+        {!isOver && burning > 0 && (
+          <span aria-hidden className={cn('grid h-4 min-w-4 place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums', burningTone)}>
+            {burning}
+          </span>
+        )}
       </div>
     );
   }
   // Клик-фильтр доступен только когда проп передан (см. место рендера).
   const clickable = !!onToggleFilter;
+  const interactiveProps = clickable
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        'aria-pressed': filterActive,
+        onClick: onToggleFilter,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          onToggleFilter?.();
+        },
+      }
+    : {};
+  if (compact) {
+    // Телефон: аватар 44px (как чипы «Мои / Все»), имя — под ним, как в ленте историй.
+    // Одни инициалы не читались: кто есть кто, было видно только по наведению, которого на
+    // телефоне нет. Выбранный — обводка вокруг аватара и имя основным цветом.
+    return (
+      <div
+        ref={setNodeRef}
+        {...interactiveProps}
+        aria-label={label}
+        aria-describedby={load ? loadId : undefined}
+        title={tooltip}
+        data-pf-who-person
+        className={cn(
+          'flex w-[3.25rem] shrink-0 flex-col items-center gap-1 rounded-lg',
+          clickable &&
+            'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+        )}
+      >
+        <span
+          data-pf-who-avatar
+          className={cn(
+            'relative grid size-11 place-items-center rounded-[28%] transition-shadow',
+            filterActive && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
+          )}
+        >
+          <UserAvatar displayName={name} avatarUrl={member.avatarUrl} className="size-11 text-ui" />
+          {hasApproval && (
+            <span aria-hidden className="absolute -end-0.5 -inset-be-0.5 size-3 rounded-full bg-approval ring-2 ring-background" />
+          )}
+          {burning > 0 && (
+            <span
+              aria-hidden
+              data-pf-who-load
+              className={cn(
+                'absolute -end-1.5 -inset-bs-1.5 grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums ring-2 ring-background',
+                burningTone,
+              )}
+            >
+              {burning}
+            </span>
+          )}
+        </span>
+        <span
+          data-pf-who-name
+          className={cn(
+            'max-w-full truncate text-2xs leading-tight',
+            filterActive ? 'font-semibold text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          {shortLabel}
+        </span>
+        {load && <span id={loadId} className="sr-only">{load}</span>}
+      </div>
+    );
+  }
+  const named = !compact || filterActive;
   return (
     <div
       ref={setNodeRef}
@@ -3799,7 +4097,8 @@ function UserCube({
       tabIndex={clickable ? 0 : undefined}
       aria-pressed={clickable ? filterActive : undefined}
       aria-label={label}
-      title={label}
+      aria-describedby={load ? loadId : undefined}
+      title={tooltip}
       onClick={clickable ? onToggleFilter : undefined}
       onKeyDown={
         clickable
@@ -3811,41 +4110,65 @@ function UserCube({
           : undefined
       }
       className={cn(
-        'flex w-16 shrink-0 flex-col items-center gap-1 rounded-lg transition-shadow',
-        clickable && 'cursor-pointer active:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-        filterActive && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+        'inline-flex h-11 shrink-0 items-center rounded-lg border text-ui transition-colors md:h-7 md:text-meta',
+        named ? 'gap-1.5 pe-3 ps-1 md:gap-1.5 md:pe-2 md:ps-[3px]' : 'w-11 justify-center',
+        filterActive
+          ? SCOPE_CHIP_ON_CLASS
+          : cn(
+              'font-medium text-muted-foreground',
+              // Телефон: в покое рамки нет — ряд аватаров и так читается как лента.
+              compact ? 'border-transparent' : 'border-border',
+              clickable && 'hover:bg-hover hover:text-foreground active:bg-active',
+            ),
+        clickable &&
+          'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
       )}
     >
-      <span className="relative inline-flex">
+      <span className="relative inline-flex shrink-0">
         <UserAvatarHover
-          displayName={label}
+          displayName={name}
           avatarUrl={member.avatarUrl}
           subtitle={`участник пространства. Перетащите сюда задачу, чтобы назначить${
             hint ? `. ${hint}` : ''
           }`}
-          triggerClassName={cn('size-9 text-2xs sm:size-[30px]', clickable && 'cursor-pointer')}
+          triggerClassName={cn('size-9 text-2xs md:size-5 md:text-[9px]', clickable && 'cursor-pointer')}
         />
         {hasApproval && (
           <span
             aria-hidden
-            className="absolute -end-0.5 -inset-be-0.5 size-2.5 rounded-full bg-approval ring-2 ring-background"
+            className={cn(
+              'absolute -end-0.5 -inset-be-0.5 size-2.5 rounded-full bg-approval ring-2 md:size-2 md:ring-[1.5px]',
+              filterActive ? 'ring-foreground' : 'ring-background',
+            )}
           />
         )}
       </span>
-      <span className="block max-w-full break-words text-center text-2xs text-muted-foreground">{label}</span>
+      {named && <span className="max-w-[7rem] truncate">{shortLabel}</span>}
+      {burning > 0 && (
+        <span
+          aria-hidden
+          data-pf-who-load
+          className={cn(
+            'grid h-4 min-w-4 shrink-0 place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums',
+            !named && 'absolute -end-1 -inset-bs-1',
+            burningTone,
+          )}
+        >
+          {burning}
+        </span>
+      )}
+      {load && <span id={loadId} className="sr-only">{load}</span>}
     </div>
   );
 }
 
-// Своя ава = drop-цель «забрать себе» — первая в ряду людей. В покое — обычный аватар;
-// во время drag'а — плитка «Себе», под курсором — «Забрать себе». Дроп сюда идёт по тому же
+// Своя плитка = drop-цель «забрать себе» — первая в ряду людей, только на время
+// перетаскивания: «Себе», под курсором — «Забрать себе». Дроп сюда идёт по тому же
 // type:'user' с member.id === user.id (см. handleDragEnd).
-function SelfDropAvatar({
+function SelfDropTile({
   user,
-  dragging,
 }: {
   user: { id: string; displayName: string; email: string; avatarUrl?: string | null };
-  dragging: boolean;
 }): React.ReactElement {
   const { setNodeRef, isOver } = useDroppable({
     id: `user-${user.id}`,
@@ -3854,32 +4177,10 @@ function SelfDropAvatar({
       member: { id: user.id, displayName: userLabel(user), email: user.email, avatarUrl: user.avatarUrl ?? null },
     },
   });
-  if (dragging) {
-    return (
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'flex shrink-0 items-center gap-1.5 rounded-lg border py-1 pe-2.5 ps-1 text-xs transition-[background-color,border-color,box-shadow] duration-200 motion-safe:transition-[background-color,border-color,box-shadow,transform]',
-          isOver
-            ? 'scale-105 border-primary bg-primary-soft ring-2 ring-inset ring-primary'
-            : 'border-dashed border-primary/50 bg-primary-soft',
-        )}
-      >
-        <UserAvatar displayName={user.displayName} avatarUrl={user.avatarUrl} className="size-6 text-2xs" />
-        <span className="whitespace-nowrap font-medium">{isOver ? 'Забрать себе' : 'Себе'}</span>
-      </div>
-    );
-  }
   return (
-    <div ref={setNodeRef} className="flex w-16 shrink-0 flex-col items-center gap-1" title={userLabel(user)}>
-      <UserAvatarHover
-        displayName={userLabel(user)}
-        avatarUrl={user.avatarUrl}
-        you
-        subtitle="перетащите сюда задачу, чтобы забрать себе"
-        triggerClassName="size-9 text-2xs sm:size-[30px]"
-      />
-      <span className="block max-w-full break-words text-center text-2xs text-muted-foreground">{userLabel(user)}</span>
+    <div ref={setNodeRef} className={cn(DROP_TILE_CLASS, dropTileTone(isOver))}>
+      <UserAvatar displayName={user.displayName} avatarUrl={user.avatarUrl} className="size-6 text-2xs" />
+      <span className="whitespace-nowrap font-medium">{isOver ? 'Забрать себе' : 'Себе'}</span>
     </div>
   );
 }
@@ -3887,14 +4188,25 @@ function SelfDropAvatar({
 // Всплывашка выбора срока при дропе в «Будущее»: неделя / до конца месяца / конкретный день.
 // Отмена (закрытие) — ничего не меняем, карточка остаётся где была. От задачи ей ничего не
 // нужно (только open/onPick).
+// «18 нояб.» — срок в тосте «Отложено до …».
+function formatShortDate(ymdValue: string): string {
+  const [y, m, d] = ymdValue.split('-').map(Number);
+  return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
 export function FutureDeadlineDialog({
   open,
   onClose,
   onPick,
+  title = 'Срок на будущее',
+  withTomorrow = false,
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (deadline: string) => void;
+  title?: string;
+  // «Отложить» свайпом: первым вариантом — завтра.
+  withTomorrow?: boolean;
 }): React.ReactElement {
   const dateRef = useRef<HTMLInputElement>(null);
   const now = new Date();
@@ -3915,9 +4227,19 @@ export function FutureDeadlineDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xs gap-3 p-5">
         <DialogHeader>
-          <DialogTitle className="text-base">Срок на будущее</DialogTitle>
+          <DialogTitle className="text-base">{title}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-1.5">
+          {withTomorrow && (
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => onPick(ymd(startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))))}
+            >
+              <CalendarClock className="size-4" />
+              Завтра
+            </Button>
+          )}
           <Button
             variant="outline"
             className="justify-start gap-2"
@@ -4055,8 +4377,8 @@ export function AssigneeConfirmDialog({
   );
 }
 
-// Вкладки блока ответственных: «Мои» / «Все» — переключатель в стиле C4: серая
-// подложка, выбранная вкладка — белая плашка (в тёмной теме — приподнятая графитовая).
+// Чьи задачи: «Мои» / «Все» — два чипа в начале ленты «кто», в одном ряду с людьми и
+// той же формы. Выбранный — инвертированный (SCOPE_CHIP_ON_CLASS).
 function AssigneeTabs({
   tab,
   onChange,
@@ -4073,14 +4395,7 @@ function AssigneeTabs({
   return (
     // Без role=tablist/tab: полный ARIA-паттерн табов требует roving tabindex и
     // стрелочной навигации — вместо ложной семантики честные toggle-кнопки (aria-pressed).
-    <div
-      role="group"
-      aria-label="Чьи задачи"
-      className={cn(
-        'flex min-w-0 items-center rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel',
-        className,
-      )}
-    >
+    <div role="group" aria-label="Чьи задачи" className={cn('flex min-w-0 items-center gap-1.5', className)}>
       <TabButton
         active={tab === 'toMe'}
         label="Мои"
@@ -4113,16 +4428,10 @@ function TabButton({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={cn(
-        // min-w-0 — на 320px подпись ужимается truncate'ом, а не вылезает из бокса.
-        'inline-flex h-11 min-w-0 items-center justify-center gap-1 rounded-md px-2 text-ui transition-colors md:h-7',
-        active
-          ? 'bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
-          : 'font-medium text-muted-foreground hover:text-foreground',
-      )}
+      className={cn(SCOPE_CHIP_CLASS, active ? SCOPE_CHIP_ON_CLASS : SCOPE_CHIP_OFF_CLASS)}
     >
       <span className="truncate">{label}</span>
-      <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
+      <span className={cn('shrink-0 font-medium tabular-nums', active ? 'opacity-70' : 'text-muted-foreground')}>{count}</span>
     </button>
   );
 }
@@ -4410,7 +4719,7 @@ function TimeBucketIcon({ bucket }: { bucket: string }): React.ReactElement {
 
 // === Карточки канбана (колонка = группа) ===
 // Карточка задачи «Входящих» (дизайн C4): белая плашка с кольцом-тенью (в тёмной — графит с
-// линией). Сверху — метка проекта (и автор работы на полке приёмки, срок — у «Вручную»),
+// линией). Сверху — метка проекта (и автор работы на полке приёмки, срок — у «В работе»),
 // заголовок 13.5px, первая строка описания вторичным цветом, снизу — срок и счётчики.
 // Быстрые действия — плашкой в правом верхнем углу по наведению; на тач-экранах — рядом
 // снизу. Клик открывает drawer, ПКМ и Ctrl+клик — «выполнено».
@@ -4453,7 +4762,7 @@ function AcceptedCard({
   footer?: React.ReactNode;
   // Аватар и имя ответственного в верхней строке — на полке приёмки «чья это работа».
   showAssignee?: boolean;
-  // Срок — в верхней строке справа (полка «Вручную»), а не внизу.
+  // Срок — в верхней строке справа (полка «В работе»), а не внизу.
   dueOnTop?: boolean;
 }): React.ReactElement {
   const isDone = item.status === 'done';
@@ -4569,6 +4878,10 @@ function AcceptedCard({
     !dueOnTop && deadline ? <span key="due">{deadline}</span> : null,
     item.priority !== null && item.priority !== undefined ? (
       <PriorityBadge key="priority" priority={item.priority} />
+    ) : null,
+    item.recurrence ? <TaskRecurrenceBadge key="repeat" recurrence={item.recurrence} /> : null,
+    item.groupOrigin ? (
+      <TaskGroupOriginBadge key="group" origin={item.groupOrigin} createdAt={item.createdAt} className="max-w-[12rem]" />
     ) : null,
     item.ralphMode !== 'normal' ? <RalphModeBadge key="ralph" mode={item.ralphMode} /> : null,
     (item.commentCount ?? 0) > 0 ? (

@@ -19,7 +19,7 @@ type AuthContextValue = {
 const AuthCtx = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }): React.ReactElement {
-  const { authRepository } = useContainer();
+  const { authRepository, devicePushNotifications } = useContainer();
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<User | null>(null);
   const generation = useRef(0);
@@ -91,6 +91,13 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
     logout: async () => {
       generation.current += 1;
       try {
+        // The device must not receive the account's notifications after sign-out: drop the
+        // subscription while the session is still alive. At most two seconds, so a slow network
+        // does not hold the sign-out.
+        await Promise.race([
+          devicePushNotifications.disable().catch(() => undefined),
+          new Promise((resolve) => setTimeout(resolve, 2000)),
+        ]);
         await authRepository.logout();
       } finally {
         setUser(null);

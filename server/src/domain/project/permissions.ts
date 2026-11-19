@@ -9,6 +9,10 @@ import type { ProjectRole } from './ProjectMembership.js';
 
 export type ProjectAction =
   | 'read_project'
+  // Данные проекта целиком (финансы, база знаний, код и коммиты, сайт и бэкенд приложения,
+  // настройки, аналитика, ИИ-чаты проекта). Для участников — как read_project; гость общего
+  // проекта (db/182) их не читает: он видит задачи, а не проект.
+  | 'read_project_data'
   | 'update_project'
   | 'delete_project'
   | 'create_task'
@@ -55,6 +59,7 @@ export type ProjectAction =
 
 const REQUIRED_ROLE: Record<ProjectAction, ProjectRole> = {
   read_project: 'viewer',
+  read_project_data: 'viewer',
   update_project: 'editor',
   delete_project: 'owner',
   create_task: 'editor',
@@ -126,6 +131,40 @@ export function can(actorRole: ProjectRole, action: ProjectAction): boolean {
 // join-requests). Там, где нужен ИМЕННО владелец пространства, литерал остаётся.
 export function hasOwnerRights(role: ProjectRole): boolean {
   return role === 'owner' || role === 'lead';
+}
+
+// Гость общего проекта (db/182) — участник подключённого пространства, а не основного.
+// Он ведёт задачи (создаёт, обсуждает, двигает, передаёт воркеру), но проект целиком
+// остаётся за основным пространством: настройки, секреты, база знаний, публикация,
+// диспетчер, мониторинг, состав участников. Роль гостя не выше editor (capGuestRole).
+const GUEST_ACTIONS: ReadonlySet<ProjectAction> = new Set<ProjectAction>([
+  'read_project',
+  'create_task',
+  'update_task',
+  'delete_task',
+  'move_task',
+  'create_comment',
+  'update_own_comment',
+  'delete_own_comment',
+  'delete_any_comment',
+  'link_commit',
+  'assign_task',
+  'manage_attachments',
+  'delegate_task_to_agent',
+  'cancel_agent_job',
+]);
+
+export function capGuestRole(role: ProjectRole): ProjectRole {
+  return role === 'viewer' ? 'viewer' : 'editor';
+}
+
+// Проверка действия по членству: роль + ограничения гостя общего проекта.
+export function canMember(
+  membership: { readonly role: ProjectRole; readonly guest?: boolean },
+  action: ProjectAction,
+): boolean {
+  if (membership.guest && !GUEST_ACTIONS.has(action)) return false;
+  return can(membership.role, action);
 }
 
 export function requiredRoleFor(action: ProjectAction): ProjectRole {

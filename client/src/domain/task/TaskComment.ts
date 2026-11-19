@@ -26,6 +26,17 @@ export type NotifyAudience = {
   readonly userIds?: readonly string[];
 };
 
+// Кого автор может уведомить о комментарии: все, кто может открыть задачу, кроме автора.
+// isDefault — выбран в композере по умолчанию (руководитель, см. сервер
+// defaultNotifyRecipients); isManager — руководитель или владелец пространства.
+export type CommentNotifyCandidate = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly avatarUrl: string | null;
+  readonly isDefault: boolean;
+  readonly isManager: boolean;
+};
+
 export type TaskComment = {
   readonly id: string;
   readonly taskId: string;

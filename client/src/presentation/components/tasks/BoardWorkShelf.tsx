@@ -4,6 +4,7 @@ import { SortableContext } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
 import { ManualIcon } from './inbox/InboxChrome';
+import { CARD_STACK_GAP_CLASS } from './ColumnPreview';
 import { Check } from 'lucide-react';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
@@ -18,7 +19,7 @@ type Props = {
   // Какую карточку подсветить вместе с полкой.
   flashTaskId: string | null;
   // Подпись полки. Полка ЗАМЕНЯЕТ собой колонку 'manual', поэтому и называться должна
-  // так же, как эта колонка названа в настройках доски (дефолт — «Вручную»). Раньше здесь
+  // так же, как эта колонка названа в настройках доски (дефолт — «В работе»). Раньше здесь
   // был хардкод «В работе», и одно и то же слово означало разное на доске (колонка manual)
   // и в дайджестах/TG/EOD (статус in_progress).
   label: string;
@@ -27,9 +28,9 @@ type Props = {
   className?: string;
 };
 
-// Полка «Вручную» на доске проекта — та же зона, что в колонке «Сейчас» «Входящих», и тот же
+// Полка «В работе» на доске проекта — та же зона, что в колонке «Сейчас» «Входящих», и тот же
 // статус 'manual': нейтральная серая панель с янтарной меткой (дизайн C4 — цвет в метке, а
-// не в заливке). На доске она ЗАМЕНЯЕТ колонку «Вручную»: одно место для «делаю руками»,
+// не в заливке). На доске она ЗАМЕНЯЕТ колонку «В работе»: одно место для «делаю руками»,
 // без дублирования карточек в двух местах сразу.
 //
 // Дроп обрабатывает общий handleDragEnd доски: id и data совпадают с колонкой
@@ -86,7 +87,7 @@ export function BoardWorkShelf({
           </div>
         ) : (
           <SortableContext items={tasks.map((t) => t.id)}>
-            <div className="flex flex-wrap gap-[5px]">
+            <div className={cn('flex flex-wrap', CARD_STACK_GAP_CLASS)}>
               {tasks.map((t) => (
                 <ShelfCard
                   key={t.id}

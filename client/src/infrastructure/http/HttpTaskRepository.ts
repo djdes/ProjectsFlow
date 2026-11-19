@@ -1,3 +1,4 @@
+import type { DispatcherHeartbeat } from '@/domain/live/QueueLiveness';
 import type { Task } from '@/domain/task/Task';
 import type { TaskCommit } from '@/domain/task/TaskCommit';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
@@ -11,6 +12,7 @@ import type { PlanId } from '@/domain/usage/Usage';
 import type {
   CommentNotification,
   CommentNotifications,
+  CommentNotifyCandidate,
   NotifyAudience,
   TaskComment,
   CommentAcknowledgement,
@@ -37,6 +39,7 @@ export type TaskDto = Omit<
   | 'createdAt'
   | 'updatedAt'
   | 'ralphMode'
+  | 'runMode'
   | 'ralphCancelRequestedAt'
   | 'ralphCancelRequestedBy'
   | 'ralphCancelRequestedByDisplayName'
@@ -46,6 +49,7 @@ export type TaskDto = Omit<
   | 'parentTaskId'
   | 'priority'
   | 'taskType'
+  | 'recurrence'
   | 'statusBeforeDone'
   | 'icon'
   | 'cover'
@@ -63,6 +67,8 @@ export type TaskDto = Omit<
   statusBeforeDone?: import('@/domain/task/Task').TaskStatus | null;
   // Optional на проводе — старый backend без миграции 035 не присылает.
   ralphMode?: import('@/domain/task/Task').RalphMode;
+  // Optional — старый backend без db/188 не присылает.
+  runMode?: import('@/domain/task/Task').RunMode;
   // Optional — старый backend без 037 не отдаёт эти поля.
   ralphCancelRequestedAt?: string | null;
   ralphCancelRequestedBy?: string | null;
@@ -76,6 +82,8 @@ export type TaskDto = Omit<
   priority?: import('@/domain/task/Task').TaskPriority | null;
   // Optional — старый backend без db/153 не присылает.
   taskType?: import('@/domain/task/Task').TaskType | null;
+  // Optional — старый backend без db/185 не присылает.
+  recurrence?: import('@/domain/task/TaskRecurrence').TaskRecurrence | null;
 };
 
 type CommitDto = Omit<TaskCommit, 'committedAt' | 'linkedAt'> & {
@@ -118,6 +126,7 @@ export function fromDto(dto: TaskDto): Task {
     statusBeforeDone: dto.statusBeforeDone ?? null,
     // Graceful default — backend без 035 продолжает работать (mode = текущее поведение).
     ralphMode: dto.ralphMode ?? 'normal',
+    runMode: dto.runMode === 'full' ? 'full' : 'quick',
     ralphCancelRequestedAt: dto.ralphCancelRequestedAt
       ? new Date(dto.ralphCancelRequestedAt)
       : null,
@@ -128,6 +137,8 @@ export function fromDto(dto: TaskDto): Task {
     parentTaskId: dto.parentTaskId ?? null,
     priority: dto.priority ?? null,
     taskType: dto.taskType ?? null,
+    recurrence: dto.recurrence ?? null,
+    groupOrigin: dto.groupOrigin ?? null,
   };
 }
 
@@ -251,6 +262,23 @@ export class HttpTaskRepository implements TaskRepository {
   async get(projectId: string, taskId: string): Promise<Task> {
     const { task } = await this.client.get<{ task: TaskDto }>(`/projects/${projectId}/tasks/${taskId}`);
     return { ...fromDto(task), canEdit: task.canEdit };
+  }
+  async getDispatcherHeartbeat(projectId: string, taskId: string): Promise<DispatcherHeartbeat> {
+    const body = await this.client.get<{ dispatcherAssigned?: boolean; lastSeenAt?: string | null; trackedSince?: string; serverNow?: string }>(
+      `/projects/${projectId}/tasks/${taskId}/dispatcher-heartbeat`,
+    );
+    // Часы браузера и сервера расходятся: переводим метки в локальное время по serverNow.
+    const skew = body.serverNow ? Date.now() - new Date(body.serverNow).getTime() : 0;
+    const local = (iso: string | null | undefined): Date | null => {
+      if (!iso) return null;
+      const at = new Date(iso).getTime();
+      return Number.isFinite(at) ? new Date(at + (Number.isFinite(skew) ? skew : 0)) : null;
+    };
+    return {
+      dispatcherAssigned: body.dispatcherAssigned !== false,
+      lastSeenAt: local(body.lastSeenAt),
+      trackedSince: local(body.trackedSince) ?? new Date(0),
+    };
   }
   async list(projectId: string): Promise<Task[]> {
     const { tasks } = await this.client.get<{ tasks: TaskDto[] }>(`/projects/${projectId}/tasks`);
@@ -399,17 +427,24 @@ export class HttpTaskRepository implements TaskRepository {
     taskId: string,
     body: string,
     notify?: NotifyAudience,
-    reply?: { replyToCommentId?: string | null; quotedText?: string | null },
+    options?: { replyToCommentId?: string | null; quotedText?: string | null; attachmentCount?: number },
   ): Promise<TaskComment> {
     const payload: Record<string, unknown> = { body };
     if (notify) payload['notify'] = notify;
-    if (reply?.replyToCommentId) payload['replyToCommentId'] = reply.replyToCommentId;
-    if (reply?.quotedText) payload['quotedText'] = reply.quotedText;
+    if (options?.replyToCommentId) payload['replyToCommentId'] = options.replyToCommentId;
+    if (options?.quotedText) payload['quotedText'] = options.quotedText;
+    if (options?.attachmentCount) payload['attachmentCount'] = options.attachmentCount;
     const { comment } = await this.client.post<{ comment: CommentDto }>(
       `/projects/${projectId}/tasks/${taskId}/comments`,
       payload,
     );
     return commentFromDto(comment);
+  }
+  async listCommentNotifyCandidates(projectId: string, taskId: string): Promise<CommentNotifyCandidate[]> {
+    const { candidates } = await this.client.get<{ candidates: CommentNotifyCandidate[] }>(
+      `/projects/${projectId}/tasks/${taskId}/comment-notify-candidates`,
+    );
+    return candidates;
   }
   async listCommentNotifications(
     projectId: string,

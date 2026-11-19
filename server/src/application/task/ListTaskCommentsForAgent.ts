@@ -4,6 +4,7 @@ import type { TaskComment } from '../../domain/task/TaskComment.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
+import { isTaskHiddenByRules } from './taskAuthorization.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type {
   ListTaskCommentsFilters,
@@ -42,9 +43,11 @@ export class ListTaskCommentsForAgent {
     ownerUserId: string,
     taskId: string,
   ): Promise<void> {
-    await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
+    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'read_project');
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
+    // Общий проект (db/182): скрытой правилами задачи для этого человека нет.
+    if (await isTaskHiddenByRules(this.deps, project, task, ownerUserId)) throw new TaskNotFoundError(taskId);
   }
 
   async execute(

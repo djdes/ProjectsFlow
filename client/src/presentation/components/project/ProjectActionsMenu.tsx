@@ -19,6 +19,7 @@ import {
   Trash2,
   Wallet,
   type LucideIcon,
+  Network,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ import { STATUS_LABEL } from '@/presentation/components/tasks/statusLabels';
 import { PRIORITY_META } from '@/domain/task/priorityMeta';
 import { useContainer } from '@/infrastructure/di/container';
 import { ProjectVersionsDialog } from './ProjectVersionsDialog';
+import { ProjectWorkspaceAccessDialog } from './ProjectWorkspaceAccessDialog';
 import { actionErrorMessage } from '@/lib/actionFeedback';
 import { trackProjectAction } from '@/lib/productAnalytics';
 import { hasOwnerRights } from '@/domain/project/ProjectMembership';
@@ -91,10 +93,13 @@ export function ProjectActionsMenu({
   const bannersHidden = useProjectBannersHidden();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  // «Доступ пространств» (db/182): проект в нескольких пространствах.
+  const [workspaceAccessOpen, setWorkspaceAccessOpen] = useState(false);
   const [busyAction, setBusyAction] = useState<'archive' | 'delete' | 'export' | null>(null);
   const projectId = project.id;
   const isOwner = hasOwnerRights(project.role);
-  const canEdit = isOwner || project.role === 'editor';
+  // Гость общего проекта (db/182) ведёт задачи, но не настраивает проект.
+  const canEdit = (isOwner || project.role === 'editor') && !project.guest;
   // Зеркало условия рендера в TasksPage: онбординг GitHub появляется только у
   // не-inbox проектов и только при праве редактирования.
   const showGithubBanner = canEdit && !project.isInbox;
@@ -188,7 +193,10 @@ export function ProjectActionsMenu({
         section: 0,
       });
     list.push({ key: 'link', label: 'Скопировать ссылку', icon: LinkIcon, onSelect: copyLink, section: 0 });
-    if (financeVisible)
+    // Гость общего проекта (db/182) видит задачи, а не проект: без финансов, автоматизации,
+    // базы знаний и мониторинга (сервер их гостю не отдаёт).
+    const guest = project.guest === true;
+    if (financeVisible && !guest)
       list.push({
         key: 'finance',
         label: 'Финансы',
@@ -196,23 +204,24 @@ export function ProjectActionsMenu({
         onSelect: () => navigate(`/projects/${projectId}/finance`),
         section: 1,
       });
-    list.push(
-      {
-        key: 'automation',
-        label: 'Автоматизация',
-        icon: Bot,
-        onSelect: onOpenAutomation,
-        section: 1,
-      },
-      {
-        key: 'kb',
-        label: 'База знаний',
-        icon: BookOpen,
-        onSelect: () => navigate(`/projects/${projectId}/kb`),
-        section: 1,
-      },
-    );
-    if (monitoringVisible)
+    if (!guest)
+      list.push(
+        {
+          key: 'automation',
+          label: 'Автоматизация',
+          icon: Bot,
+          onSelect: onOpenAutomation,
+          section: 1,
+        },
+        {
+          key: 'kb',
+          label: 'База знаний',
+          icon: BookOpen,
+          onSelect: () => navigate(`/projects/${projectId}/kb`),
+          section: 1,
+        },
+      );
+    if (monitoringVisible && !guest)
       list.push({
         key: 'monitoring',
         label: 'Мониторинг',
@@ -235,6 +244,14 @@ export function ProjectActionsMenu({
       onSelect: () => navigate(`/projects/${projectId}/overview`),
       section: 1,
     });
+    if (isOwner && !project.isInbox)
+      list.push({
+        key: 'workspace-access',
+        label: 'Доступ пространств…',
+        icon: Network,
+        onSelect: () => setWorkspaceAccessOpen(true),
+        section: 1,
+      });
     list.push({
       key: 'export',
       label: 'Экспорт (CSV)',
@@ -379,6 +396,15 @@ export function ProjectActionsMenu({
           </div>
         </PopoverContent>
       </Popover>
+
+      {workspaceAccessOpen && (
+        <ProjectWorkspaceAccessDialog
+          open={workspaceAccessOpen}
+          onOpenChange={setWorkspaceAccessOpen}
+          projectId={projectId}
+          projectName={project.name}
+        />
+      )}
 
       <ProjectVersionsDialog
         projectId={projectId}

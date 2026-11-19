@@ -75,3 +75,33 @@ test('board capabilities lock colleague tasks while keeping assigned and owner c
   assert.deepEqual((await list.execute('p', 'editor')).map((task) => task.canEdit), [true, false]);
   assert.deepEqual((await list.execute('p', 'owner')).map((task) => task.canEdit), [true, true]);
 });
+
+// Общий проект (db/182): задачу из подключённого пространства ведёт и принимает его
+// руководитель, хотя в проекте он гость с ролью не выше editor.
+function sharedDeps(origin: string | null): TaskAccessDeps {
+  const task = { id: 't', projectId: 'p', createdBy: 'office-worker', assignee: { userId: 'office-worker' }, originWorkspaceId: origin };
+  return {
+    projects: { getById: async () => ({ id: 'p', ownerId: 'owner', isInbox: false }) } as never,
+    tasks: { getById: async () => task, getByIdIncludingDeleted: async () => task } as never,
+    members: {
+      findForProject: async (_id: string, userId: string) =>
+        userId === 'office-lead' || userId === 'office-editor' ? { role: 'editor', guest: true } : { role: 'editor' },
+      canSeeTask: async () => true,
+      listApproverUserIdsForProject: async (_id: string, originWorkspaceId?: string | null) =>
+        originWorkspaceId === 'office' ? ['home-lead', 'office-lead'] : ['home-lead'],
+    } as never,
+  };
+}
+
+test('a lead of the workspace the task came from manages it as a guest; other guests do not', async () => {
+  await requireTaskModifyAccess(sharedDeps('office'), 'p', 't', 'office-lead', 'move_task');
+  await assert.rejects(
+    () => requireTaskModifyAccess(sharedDeps('office'), 'p', 't', 'office-editor', 'move_task'),
+    InsufficientProjectRoleError,
+  );
+  // Задача основного пространства — не его: руководитель «Офиса» её не ведёт.
+  await assert.rejects(
+    () => requireTaskModifyAccess(sharedDeps(null), 'p', 't', 'office-lead', 'move_task'),
+    InsufficientProjectRoleError,
+  );
+});

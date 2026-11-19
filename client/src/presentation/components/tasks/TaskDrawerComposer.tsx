@@ -20,6 +20,7 @@ import { useContainer } from '@/infrastructure/di/container';
 import { useAwaitingReply } from '@/presentation/hooks/AwaitingReplyProvider';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
+import { useCommentNotifyCandidates } from '@/presentation/hooks/useCommentNotifyCandidates';
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
@@ -63,7 +64,8 @@ type Props = {
   onCommentCreated: (created: TaskComment) => void;
   onTaskChanged: () => void;
   defaultTarget?: ComposerTarget;
-  onWorkerQueued?: () => void;
+  // Сообщает подтверждённую сервером задачу в статусе «Воркер».
+  onWorkerQueued?: (updated: Task) => void;
   // Ответ/цитата (db/080): на какой коммент отвечаем + опц. фрагмент. Плашка над полем.
   replyDraft?: ReplyDraft | null;
   onClearReply?: () => void;
@@ -108,7 +110,13 @@ function TaskDrawerComposerForm({
   const getSnapshot = useCallback(() => readCommentDraft(draftKey), [draftKey]);
   const draft = useSyncExternalStore(subscribe, getSnapshot);
   const { body, files: pending, reply: replyDraft, sending: submitting } = draft;
-  const defaultAudience = defaultCommentAudience(task.assignee?.userId ?? null, currentUser?.id ?? null);
+  // Кого можно уведомить и кто по умолчанию (руководитель) — решает сервер.
+  const notifyCandidates = useCommentNotifyCandidates(task.projectId, task.id);
+  const defaultAudience = defaultCommentAudience(
+    notifyCandidates.candidates,
+    task.assignee?.userId ?? null,
+    currentUser?.id ?? null,
+  );
   const notify = draft.notify ?? defaultAudience;
   const setBody = (value: string): void => updateCommentDraft(draftKey, (current) => ({ ...current, body: value }));
   const setNotify = (value: NotifyAudience): void => updateCommentDraft(draftKey, (current) => ({ ...current, notify: value }));
@@ -230,13 +238,19 @@ function TaskDrawerComposerForm({
     const sent = beginCommentSend(draftKey);
     if (!sent) return;
     let created: TaskComment;
+    const text = sent.body.trim();
     try {
       created = await taskRepository.createComment(
         task.projectId,
         task.id,
-        effectiveTarget === 'worker' ? workerSessionPrompt(sent.body.trim() || ' ', sessionMode) : sent.body.trim() || ' ',
+        effectiveTarget === 'worker' ? workerSessionPrompt(text, sessionMode) : text,
         sent.notify ?? defaultAudience,
-        sent.reply ? { replyToCommentId: sent.reply.commentId, quotedText: sent.reply.quotedText } : undefined,
+        {
+          replyToCommentId: sent.reply?.commentId ?? null,
+          quotedText: sent.reply?.quotedText ?? null,
+          // Текст может быть пустым: комментарий из одних вложений.
+          attachmentCount: sent.files.length,
+        },
       );
     } catch (error) {
       toast.error(`Не удалось отправить: ${(error as Error).message}`);
@@ -259,6 +273,12 @@ function TaskDrawerComposerForm({
           toast.error(`Не удалось загрузить ${file.file.name}: ${(error as Error).message}`);
         }
       }
+      // Комментарий без текста держался на вложениях. Не загрузилось ни одно — убираем
+      // пустой комментарий; файлы остаются в черновике для повторной отправки.
+      if (text.length === 0 && sent.files.length > 0 && uploaded.length === 0) {
+        await taskRepository.deleteComment(task.projectId, task.id, created.id).catch(() => undefined);
+        return;
+      }
       if (mountedRef.current) {
         setPreview(null);
         onCommentCreated({ ...created, attachments: uploaded });
@@ -269,16 +289,17 @@ function TaskDrawerComposerForm({
       if (moveTo !== null) {
         const tail = moveTo === 'backlog' ? backlogTail : todoTail;
         try {
-          await taskRepository.move(task.projectId, task.id, {
+          const moved = await taskRepository.move(task.projectId, task.id, {
             targetStatus: moveTo, beforeTaskId: tail?.id ?? null, afterTaskId: null,
           });
-          if (moveTo === 'todo') onWorkerQueued?.();
+          if (moved.status !== moveTo) throw new Error(`сервер оставил статус «${moved.status}»`);
+          if (moveTo === 'todo') onWorkerQueued?.(moved);
           toast.success(moveTo === 'todo' ? 'Задача в очереди воркера' : 'Задача в черновиках');
         } catch (error) {
           toast.error(`Комментарий отправлен, но не удалось изменить статус: ${(error as Error).message}`);
         }
       }
-      if (moveTo === null && effectiveTarget === 'worker' && task.status === 'todo') onWorkerQueued?.();
+      if (moveTo === null && effectiveTarget === 'worker' && task.status === 'todo') onWorkerQueued?.(task);
       if (mountedRef.current) onTaskChanged();
     } finally {
       if (mountedRef.current) refocusAfterSendRef.current = true;
@@ -293,7 +314,7 @@ function TaskDrawerComposerForm({
   // для position:fixed и зажимал бы плавающее меню форматирования внутри overflow-hidden
   // карточки композера.
   return (
-    <div ref={rootRef} className="bg-background/95 px-3 pbe-3 pbs-2">
+    <div ref={rootRef} data-pf-comment-composer className="bg-background/95 px-3 pbe-3 pbs-2">
       <div className="overflow-clip rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15">
         {replyDraft && (
           <div className="flex items-center gap-1.5 border-be bg-primary/[0.06] px-3 py-1.5 text-xs text-muted-foreground">
@@ -413,10 +434,8 @@ function TaskDrawerComposerForm({
               <Paperclip className="size-4 motion-safe:transition-transform duration-200 ease-out group-hover/at:-rotate-12 group-hover/at:scale-110" />
             </Button>
             <NotifyAudienceControl
-              projectId={task.projectId}
-              excludeUserId={currentUser?.id ?? null}
-              members={members}
-              assignee={task.assignee}
+              candidates={notifyCandidates.candidates}
+              failed={notifyCandidates.failed}
               defaultAudience={defaultAudience}
               value={notify}
               onChange={setNotify}
@@ -436,7 +455,7 @@ function TaskDrawerComposerForm({
                 disabled={!canSubmit}
               />
             ) : (
-              // «Вручную» и кастомные колонки не двигаются от комментария — показываем
+              // «В работе» и кастомные колонки не двигаются от комментария — показываем
               // обычную кнопку отправки, без подписи цели, которая обещала бы перенос.
               <SendTargetButton
                 size="sm"

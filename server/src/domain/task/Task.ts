@@ -1,5 +1,6 @@
 import type { TaskAssignee } from './TaskAssignee.js';
 import type { TaskCreator } from './TaskCreator.js';
+import type { TaskRecurrence } from './TaskRecurrence.js';
 
 // 'awaiting_clarification' — активная работа на паузе до действия человека
 // (ответ на ralph-question, разбор после maxAttempts retry, переформулировка задачи,
@@ -52,6 +53,13 @@ export type RalphMode = 'normal' | 'silent' | 'grillme';
 
 export const RALPH_MODES: readonly RalphMode[] = ['normal', 'silent', 'grillme'];
 
+// Режим запуска воркера по задаче (spec 2026-11-17 §5, db/188). Выбирает человек.
+//   'quick' — «Обычное изменение»: исполнитель без ревьюера (дефолт, дешевле и быстрее).
+//   'full'  — «Полный прогон»: проверки, ревьюер, эскалация, доставка (токенов в 2–3 раза больше).
+export type RunMode = 'quick' | 'full';
+
+export const RUN_MODES: readonly RunMode[] = ['quick', 'full'];
+
 // Приоритет в стиле Todoist: 1=urgent (red), 2=high (orange), 3=medium (blue),
 // 4=low (slate). null = без приоритета (без подсветки). См. db/041.
 export type TaskPriority = 1 | 2 | 3 | 4;
@@ -95,6 +103,7 @@ export type Task = {
   readonly statusBeforeDone: TaskStatus | null;
   readonly position: number;
   readonly ralphMode: RalphMode;
+  readonly runMode: RunMode;
   // Pull-based cancel: момент когда юзер запросил отмену Ralph-работы (NULL = нет
   // запроса). См. db/037, spec C:/www/ralph/prompts/task-ralph-cancel.md.
   readonly ralphCancelRequestedAt: Date | null;
@@ -116,6 +125,19 @@ export type Task = {
   readonly priority: TaskPriority | null;
   // Тип задачи: 'feature' | 'bug'. null = не определён. См. db/153.
   readonly taskType: TaskType | null;
+  // Пространство, в котором задачу создали (общий проект, db/182). null = основное
+  // пространство проекта. Optional — старые fake-репозитории его не заполняют.
+  readonly originWorkspaceId?: string | null;
+  // Рабочая Telegram-группа, из которой поставили задачу (db/190). null — не из группы.
+  // Optional — старые fake-репозитории его не заполняют.
+  readonly groupOrigin?: TaskGroupOrigin | null;
+  // Правило повтора (db/185). null = не повторяется. При переходе в 'done' сервер ставит
+  // следующий повтор (SpawnNextRecurringTask). Optional — старые fake-репозитории его не
+  // заполняют; Drizzle-репозиторий отдаёт всегда.
+  readonly recurrence?: TaskRecurrence | null;
+  // Уже поставленный следующий повтор (db/185) — серверная пометка идемпотентности,
+  // клиенту не отдаётся. null = ещё не ставили.
+  readonly recurrenceNextTaskId?: string | null;
   // Мягкое удаление (db/134). null = живая задача, Date = лежит в корзине.
   // Optional, а не обязательное: обычные выборки задач отдают только живые задачи,
   // поэтому подавляющее большинство мест не должно думать про это поле —
@@ -124,4 +146,13 @@ export type Task = {
   readonly deletedBy?: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+};
+
+// Откуда пришла задача: рабочая Telegram-группа (db/190). Снимки названия и имени автора —
+// на момент постановки; время постановки — createdAt задачи.
+export type TaskGroupOrigin = {
+  readonly chatId: number;
+  readonly title: string | null;
+  readonly authorUserId: string | null;
+  readonly authorName: string | null;
 };

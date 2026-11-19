@@ -37,9 +37,9 @@ export class DispatchTaskChangeNotifications {
     if (!project) return;
     const moved = previous && previous.projectId !== task.projectId;
     const previousProject = moved ? await this.deps.projects.getById(previous.projectId) : project;
-    const approvers = await this.deps.members.listApproverUserIdsForProject(project.id);
+    const approvers = await this.deps.members.listApproverUserIdsForProject(project.id, task.originWorkspaceId ?? null);
     const previousApprovers = moved && previousProject
-      ? await this.deps.members.listApproverUserIdsForProject(previousProject.id) : [];
+      ? await this.deps.members.listApproverUserIdsForProject(previousProject.id, previous.originWorkspaceId ?? null) : [];
     const actor = actorUserId ? await this.deps.users.getById(actorUserId) : null;
     const actorDisplayName = actor?.displayName ?? 'Система';
     const message = taskChangeMessage(change, projectDisplayName(project), previousProject ? projectDisplayName(previousProject) : undefined);

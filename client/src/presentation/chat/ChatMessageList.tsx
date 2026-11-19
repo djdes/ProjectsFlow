@@ -15,7 +15,9 @@ type Props = {
   readonly onEdit: (m: ChatMessage) => void;
   readonly onDelete: (m: ChatMessage) => void;
   readonly onToggleReaction: (messageId: string, emoji: string, reactedByMe: boolean) => void;
-  readonly onReachedBottom: () => void;
+  // newestSeq — последнее сообщение ИЗ ЭТОГО рендера: у владельца ленты ref с сообщениями
+  // обновляется в useEffect, т.е. ПОСЛЕ нашего useLayoutEffect, и на первой загрузке он ещё пуст.
+  readonly onReachedBottom: (newestSeq?: number) => void;
   readonly selectedIds: ReadonlySet<string>;
   readonly onSelectionChange: (ids: ReadonlySet<string>) => void;
 };
@@ -52,7 +54,7 @@ export function ChatMessageList(props: Props): React.ReactElement {
     el.scrollTo({ top: el.scrollHeight, behavior });
     setShowPill(false);
     setNewCount(0);
-    props.onReachedBottom();
+    props.onReachedBottom(props.messages.at(-1)?.seq);
   }, [props]);
 
   // Перед обновлением DOM запоминаем метрики (через onScroll держим их свежими).
@@ -66,7 +68,7 @@ export function ChatMessageList(props: Props): React.ReactElement {
     if (atBottom && showPill) {
       setShowPill(false);
       setNewCount(0);
-      props.onReachedBottom();
+      props.onReachedBottom(messages.at(-1)?.seq);
     }
     if (el.scrollTop < TOP_THRESHOLD && props.hasMoreOlder && !props.loadingOlder) {
       props.loadOlder();
@@ -88,7 +90,7 @@ export function ChatMessageList(props: Props): React.ReactElement {
 
     if (firstLoad) {
       el.scrollTop = el.scrollHeight;
-      props.onReachedBottom();
+      props.onReachedBottom(last ?? undefined);
     } else if (isPrepend) {
       // Компенсируем прирост высоты сверху — вид не «прыгает».
       el.scrollTop = el.scrollHeight - beforeRef.current.scrollHeight + el.scrollTop;
@@ -96,7 +98,7 @@ export function ChatMessageList(props: Props): React.ReactElement {
       const ownNew = messages.at(-1)?.authorUserId === currentUserId;
       if (beforeRef.current.atBottom || ownNew) {
         el.scrollTop = el.scrollHeight;
-        props.onReachedBottom();
+        props.onReachedBottom(last ?? undefined);
       } else {
         setShowPill(true);
         setNewCount((n) => n + 1);

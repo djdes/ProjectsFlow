@@ -2,6 +2,7 @@ import { TaskCommitNotFoundError, TaskNotFoundError } from '../../domain/task/er
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
 import type { ProjectRepository } from '../project/ProjectRepository.js';
 import { requireProjectAccess } from '../project/projectAccess.js';
+import { isTaskHiddenByRules } from './taskAuthorization.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskVersionRecorder } from './TaskVersionRecorder.js';
@@ -18,10 +19,12 @@ export class UnlinkCommit {
   constructor(private readonly deps: Deps) {}
 
   async execute(projectId: string, ownerUserId: string, taskId: string, sha: string): Promise<void> {
-    await requireProjectAccess(this.deps, projectId, ownerUserId, 'link_commit');
+    const { project } = await requireProjectAccess(this.deps, projectId, ownerUserId, 'link_commit');
 
     const task = await this.deps.tasks.getById(taskId);
     if (!task || task.projectId !== projectId) throw new TaskNotFoundError(taskId);
+    // Общий проект (db/182): скрытой правилами задачи для этого человека нет.
+    if (await isTaskHiddenByRules(this.deps, project, task, ownerUserId)) throw new TaskNotFoundError(taskId);
 
     const ok = await this.deps.taskCommits.unlink(taskId, sha);
     if (!ok) throw new TaskCommitNotFoundError(sha);

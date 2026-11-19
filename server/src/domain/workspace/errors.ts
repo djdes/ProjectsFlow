@@ -129,3 +129,12 @@ export class WorkerDisabledError extends Error {
     this.name = 'WorkerDisabledError';
   }
 }
+
+// Руководитель удалил человека из пространства: вернуться сам через рабочую Telegram-группу
+// он не может — только по приглашению руководителя (db/181).
+export class WorkspaceRejoinBlockedError extends Error {
+  constructor() {
+    super('Вас удалили из этого пространства. Попросите руководителя пригласить вас снова.');
+    this.name = 'WorkspaceRejoinBlockedError';
+  }
+}

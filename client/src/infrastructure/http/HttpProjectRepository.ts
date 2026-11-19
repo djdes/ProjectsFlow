@@ -1,3 +1,4 @@
+import type { ProjectSharing, SaveProjectSharingInput } from '@/domain/project/ProjectSharing';
 import {
   DEFAULT_PUBLIC_APPEARANCE,
   type Project,
@@ -88,9 +89,14 @@ type ProjectDto = {
   dispatcherUserId?: string | null;
   // Мультизадачный воркер. На старых list-ответах может отсутствовать — дефолтим false.
   multiTaskWorker?: boolean;
+  aliases?: string[] | null;
+  shortDescription?: string | null;
+  groupFullRunDefault?: boolean;
   // Только на list-эндпоинте; на get/create/update сервер не отдаёт. Дефолтим false/0.
   isFavorite?: boolean;
   favoriteSortOrder?: number;
+  sharedWorkspaces?: Array<{ id: string; name: string; icon: string | null }>;
+  guest?: boolean;
   // Notion-style шапка: описание + обложка (`gradient:<id>` или URL) + позиция (%).
   description?: string | null;
   coverUrl?: string | null;
@@ -124,8 +130,13 @@ function fromDto(dto: ProjectDto): Project {
     financeVisibility: dto.financeVisibility ?? "owner",
     dispatcherUserId: dto.dispatcherUserId ?? null,
     multiTaskWorker: dto.multiTaskWorker ?? false,
+    aliases: dto.aliases ?? [],
+    shortDescription: dto.shortDescription ?? null,
+    groupFullRunDefault: dto.groupFullRunDefault ?? false,
     isFavorite: dto.isFavorite ?? false,
     favoriteSortOrder: dto.favoriteSortOrder ?? 0,
+    ...(dto.sharedWorkspaces && dto.sharedWorkspaces.length > 0 ? { sharedWorkspaces: dto.sharedWorkspaces } : {}),
+    ...(dto.guest ? { guest: true } : {}),
     description: dto.description ?? null,
     coverUrl: dto.coverUrl ?? null,
     coverPosition: dto.coverPosition ?? 50,
@@ -301,6 +312,17 @@ export class HttpProjectRepository implements ProjectRepository {
     return this.client.get<ProjectWorkerOverview>(
       `/projects/${projectId}/worker-overview`,
     );
+  }
+
+  async setGroupHints(
+    projectId: string,
+    hints: { aliases: readonly string[]; shortDescription: string | null; groupFullRunDefault?: boolean },
+  ): Promise<Project> {
+    const { project } = await this.client.put<{ project: ProjectDto }>(
+      `/projects/${projectId}/group-hints`,
+      hints,
+    );
+    return fromDto(project);
   }
 
   async setMultiTaskWorker(
@@ -502,6 +524,14 @@ export class HttpProjectRepository implements ProjectRepository {
       `/projects/join-requests/${requestId}/resolve`,
       { accept },
     );
+  }
+
+  async getWorkspaceAccess(projectId: string): Promise<ProjectSharing> {
+    return httpClient.get<ProjectSharing>(`/projects/${projectId}/workspace-access`);
+  }
+
+  async saveWorkspaceAccess(projectId: string, input: SaveProjectSharingInput): Promise<ProjectSharing> {
+    return httpClient.put<ProjectSharing>(`/projects/${projectId}/workspace-access`, input);
   }
 
   async listSharedMembers(): Promise<SharedMember[]> {
