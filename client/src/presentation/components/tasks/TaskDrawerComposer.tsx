@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CornerDownRight, FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
@@ -123,6 +123,15 @@ function TaskDrawerComposerForm({
   useEffect(() => {
     if (incomingReply) updateCommentDraft(draftKey, (current) => ({ ...current, reply: incomingReply }));
   }, [draftKey, incomingReply]);
+  // «Ответить» сразу ставит каретку в поле: иначе после клика приходилось ещё раз тянуться
+  // к композеру. Layout-эффект — в том же жесте, что и клик (iOS поднимает клавиатуру
+  // только на фокус внутри жеста пользователя).
+  const lastReplyRef = useRef(incomingReply);
+  useLayoutEffect(() => {
+    if (!incomingReply || incomingReply === lastReplyRef.current) return;
+    lastReplyRef.current = incomingReply;
+    editorRef.current?.focusEnd();
+  }, [incomingReply]);
   const clearReply = (): void => {
     updateCommentDraft(draftKey, (current) => ({ ...current, reply: null }));
     onClearReply?.();
@@ -315,10 +324,16 @@ function TaskDrawerComposerForm({
   // карточки композера.
   return (
     <div ref={rootRef} data-pf-comment-composer className="bg-background/95 px-3 pbe-3 pbs-2">
-      <div className="overflow-clip rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow] duration-150 focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15">
+      <div
+        data-replying={replyDraft ? '' : undefined}
+        className="pf-comment-composer-card overflow-clip rounded-2xl border border-input bg-background"
+      >
         {replyDraft && (
-          <div className="flex items-center gap-1.5 border-be bg-primary/[0.06] px-3 py-1.5 text-xs text-muted-foreground">
-            <CornerDownRight className="size-3 shrink-0 text-primary/70" />
+          <div
+            key={replyDraft.commentId}
+            className="pf-comment-reply-strip flex items-center gap-1.5 border-be bg-primary/[0.06] py-1.5 pe-2 ps-3 text-xs text-muted-foreground"
+          >
+            <CornerDownRight className="size-3.5 shrink-0 text-primary" />
             <button
               type="button"
               onClick={() => onNavigateToComment?.(replyDraft.commentId, replyDraft.quotedText)}
@@ -333,11 +348,11 @@ function TaskDrawerComposerForm({
             <button
               type="button"
               onClick={clearReply}
-              className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label="Отменить ответ"
               title="Отменить ответ"
             >
-              <X className="size-3" />
+              <X className="size-3.5" />
             </button>
           </div>
         )}
@@ -346,7 +361,7 @@ function TaskDrawerComposerForm({
             {pending.map((pf) => (
               <span
                 key={pf.id}
-                className="inline-flex items-center gap-1.5 rounded-md border bg-background py-0.5 ps-1.5 pe-1 text-2xs"
+                className="pf-comment-chip inline-flex items-center gap-1.5 rounded-md border bg-background py-0.5 ps-1.5 pe-1 text-2xs"
                 title={pf.file.name}
               >
                 {/* Картинку можно рассмотреть ДО отправки — клик открывает лайтбокс на
@@ -419,7 +434,7 @@ function TaskDrawerComposerForm({
 
         {/* nowrap: кнопка отправки НЕ переносится на отдельную строку на узких экранах —
             левая группа (скрепка + «кому уведомить») сжимается, send всегда справа. */}
-        <div className="flex items-center gap-2 px-2 pbe-2 pbs-0.5">
+        <div className="flex items-center gap-2 pbe-1.5 pbs-0.5 pe-1.5 ps-2">
           <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
             <Button
               type="button"
@@ -446,7 +461,7 @@ function TaskDrawerComposerForm({
           <div className="shrink-0">
             {task.canEdit !== false && canChooseSendTarget(task.status) ? (
               <SendTargetButton
-                size="sm"
+                size="lg"
                 options={workerEnabled ? DRAWER_TARGETS : DRAWER_TARGETS_NO_WORKER}
                 value={effectiveTarget}
                 onChange={setTarget}
@@ -458,7 +473,7 @@ function TaskDrawerComposerForm({
               // «В работе» и кастомные колонки не двигаются от комментария — показываем
               // обычную кнопку отправки, без подписи цели, которая обещала бы перенос.
               <SendTargetButton
-                size="sm"
+                size="lg"
                 onSend={() => void submit()}
                 submitting={submitting}
                 disabled={!canSubmit}

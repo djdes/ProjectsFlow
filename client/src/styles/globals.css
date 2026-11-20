@@ -1137,6 +1137,52 @@ html[data-pf-modality='pointer'] :focus-visible {
     grid-area: 1 / 1;
   }
 
+  /* Поле комментария: подсказка «Комментарий…» уходит, как только в поле каретка. Она
+     только мешала: на iOS каретка вставала строкой ниже подсказки. */
+  .ProseMirror[data-pf-variant='comment']:focus p.is-editor-empty:first-child::before {
+    display: none;
+  }
+
+  /* Карточка композера комментария. Фокус — заметная рамка цвета primary и мягкий ореол
+     вокруг, чтобы сразу было видно, куда идёт ввод; режим ответа держит рамку тонированной. */
+  .pf-comment-composer-card {
+    box-shadow: 0 1px 2px oklch(0% 0 none / 0.05);
+    transition:
+      border-color 200ms var(--pf-ease),
+      box-shadow 240ms var(--pf-ease);
+  }
+  .pf-comment-composer-card[data-replying] {
+    border-color: oklch(var(--primary) / 0.35);
+  }
+  .pf-comment-composer-card:focus-within {
+    border-color: oklch(var(--primary) / 0.6);
+    box-shadow:
+      0 0 0 3px oklch(var(--primary) / 0.12),
+      0 10px 28px -14px oklch(var(--primary) / 0.45);
+  }
+
+  /* Плашка «В ответ …» и чипы вложений выезжают, а не возникают рывком. */
+  @media (prefers-reduced-motion: no-preference) {
+    .pf-comment-reply-strip {
+      animation: pf-comment-reply-in 260ms var(--pf-ease) both;
+    }
+    .pf-comment-chip {
+      animation: pf-comment-chip-in 200ms var(--pf-ease) both;
+    }
+  }
+  @keyframes pf-comment-reply-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+  @keyframes pf-comment-chip-in {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+  }
+
   /* Ведущий горизонтальный разделитель (`---` первой строкой — напр. frontmatter
      авто-задач) не показываем: выглядит как лишняя «линия сверху». Контент не меняется,
      скрыт только визуально; разделители внутри текста остаются. */

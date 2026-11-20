@@ -23,8 +23,8 @@ type Props<V extends string> = {
   readonly submitting?: boolean;
   // true — отправлять нечего (пустой ввод). Гасит отправку; выбор цели остаётся доступен.
   readonly disabled?: boolean;
-  // Высота контрола: 'sm' (32px, дравер) / 'md' (36px, floating-композер).
-  readonly size?: 'sm' | 'md';
+  // Высота контрола: 'sm' (32px) / 'md' (36px, floating-композер) / 'lg' (40px, комментарии).
+  readonly size?: 'sm' | 'md' | 'lg';
   // Мелкая метка текущей цели слева от кнопки. По умолчанию показываем (если есть выбор).
   readonly showLabel?: boolean;
 };
@@ -49,9 +49,10 @@ export function SendTargetButton<V extends string>({
 }: Props<V>): React.ReactElement {
   const hasChoice = options.length >= 2 && value !== undefined && onChange !== undefined;
   const current = hasChoice ? (options.find((o) => o.value === value) ?? options[0]) : null;
-  const dim = size === 'sm' ? 'size-8' : 'size-9';
+  const dim = size === 'sm' ? 'size-8' : size === 'lg' ? 'size-10' : 'size-9';
   // Каретка — той же высоты, что и кнопка, но уже по ширине (тихий вторичный контрол).
-  const caretDim = size === 'sm' ? 'h-8 w-6' : 'h-9 w-7';
+  const caretDim = size === 'sm' ? 'h-8 w-6' : size === 'lg' ? 'h-10 w-7' : 'h-9 w-7';
+  const iconDim = size === 'lg' ? 'size-[1.125rem]' : 'size-4';
 
   const sendButton = (
     <button
@@ -62,10 +63,15 @@ export function SendTargetButton<V extends string>({
       aria-label={current ? `Отправить — ${current.label}` : 'Отправить'}
       className={cn(
         dim,
-        'grid shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-offset-background transition-[color,background-color,border-color,box-shadow] duration-150 hover:bg-primary/90 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97] disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none disabled:active:scale-100',
+        // Появление текста «зажигает» кнопку: цвет и тень плавно, масштаб — только без reduce.
+        'group/send grid shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-offset-background transition-[color,background-color,border-color,box-shadow] duration-200 ease-[var(--pf-ease)] hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.94] motion-safe:transition-[color,background-color,border-color,box-shadow,transform] disabled:pointer-events-none disabled:scale-95 disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none',
       )}
     >
-      {submitting ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Send className="size-4" />}
+      {submitting ? (
+        <Loader2 className={cn(iconDim, 'motion-safe:animate-spin')} />
+      ) : (
+        <Send className={cn(iconDim, '-translate-x-px translate-y-px motion-safe:transition-transform duration-200 ease-[var(--pf-ease)] group-hover/send:-translate-y-px group-hover/send:translate-x-px')} />
+      )}
     </button>
   );
 
