@@ -30,6 +30,8 @@
     "test:smoke": "node e2e/smoke/run.mjs",
     "start": "node server/dist/index.js",
     "db:migrate": "node --env-file-if-exists=.env --env-file-if-exists=.env-local scripts/migrate.mjs",
+    "promo-cache:refresh": "node --env-file-if-exists=.env --env-file-if-exists=.env-local scripts/refresh-promo-cache.mjs",
+    "promo-cache:status": "node scripts/refresh-promo-cache.mjs --status",
     "db:seed-admin": "node --env-file-if-exists=.env --env-file-if-exists=.env-local scripts/seed-admin.mjs",
     "verify:project-views": "node scripts/verify-project-page-views.mjs",
     "deploy": "node scripts/deploy.mjs"

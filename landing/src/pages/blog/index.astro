@@ -71,9 +71,17 @@ const appBase = (import.meta.env.PUBLIC_APP_ORIGIN ?? '').replace(/\/$/, '');
           </a>
           <a
             href={`${appBase}/login`}
+            data-auth-anon=""
             class="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-white text-[#12061c] font-extrabold text-xs hover:bg-rose-50 transition-all shadow-md"
           >
             <span>1 час Прайма бесплатно</span>
+          </a>
+          <a
+            href={`${appBase}/projects`}
+            data-auth-authed=""
+            class="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-white text-[#12061c] font-extrabold text-xs hover:bg-rose-50 transition-all shadow-md"
+          >
+            <span>В проекты</span>
           </a>
         </div>
       </div>
@@ -132,7 +140,7 @@ const appBase = (import.meta.env.PUBLIC_APP_ORIGIN ?? '').replace(/\/$/, '');
                       {c.topic}
                     </span>
                     <span>
-                      {c.dateLabel} · {c.minutes} мин
+                      <time datetime={c.date.toISOString()}>{c.dateLabel}</time> · {c.minutes} мин
                     </span>
                   </div>
                   <h2 class="font-display font-black text-lg sm:text-xl text-white group-hover:text-rose-200 transition-colors leading-snug">

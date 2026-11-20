@@ -1,4 +1,17 @@
 User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 Allow: /
+Allow: /blog/
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /api/public/boards/
+Disallow: /api/
+Disallow: /admin
+Disallow: /projects
+Disallow: /workspaces
+Disallow: /inbox
+Disallow: /all-tasks
+Disallow: /monitoring
+Disallow: /profile
 
 Sitemap: https://projectsflow.ru/sitemap.xml

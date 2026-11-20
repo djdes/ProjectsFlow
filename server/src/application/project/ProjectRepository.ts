@@ -65,6 +65,8 @@ export interface ProjectRepository {
   // Публичная ссылка доски (Publish to web, db/096).
   // Lookup по public_slug для анонимного роута. null если такого slug нет.
   getBySlug(slug: string): Promise<Project | null>;
+  // Все опубликованные проекты (is_public=1) для прогрева дискового JSON-кэша досок.
+  listPublished?(): Promise<Project[]>;
   // Lookup по site_slug (db/100) — для host-роутинга заглушки сайта. null если нет.
   findBySiteSlug(slug: string): Promise<Project | null>;
   // Опубликовать: проставить public_slug + is_public=1 + published_at (только если ещё NULL,

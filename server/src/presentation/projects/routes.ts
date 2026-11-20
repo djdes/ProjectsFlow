@@ -10,6 +10,7 @@ import type { PublishProject } from '../../application/project/PublishProject.js
 import type { UnpublishProject } from '../../application/project/UnpublishProject.js';
 import type { SetPublicIndexing } from '../../application/project/SetPublicIndexing.js';
 import type { SetPublicAppearance } from '../../application/project/SetPublicAppearance.js';
+import type { PublicBoardSnapshotCache } from '../../application/project/PublicBoardSnapshotCache.js';
 import type { EnsureProjectAppRepo } from '../../application/project/EnsureProjectAppRepo.js';
 import type { CreateProjectRepo } from '../../application/project/CreateProjectRepo.js';
 import type { ImportProjectRepo } from '../../application/project/ImportProjectRepo.js';
@@ -95,6 +96,7 @@ type Deps = {
   readonly unpublishProject: UnpublishProject;
   readonly setPublicIndexing: SetPublicIndexing;
   readonly setPublicAppearance: SetPublicAppearance;
+  readonly publicBoardCache?: PublicBoardSnapshotCache;
   readonly ensureAppRepo: EnsureProjectAppRepo;
   readonly createProjectRepo: CreateProjectRepo;
   readonly importProjectRepo: ImportProjectRepo;
@@ -389,6 +391,7 @@ export function projectsRouter(deps: Deps): Router {
       const id = req.params.id;
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const { slug } = await deps.publishProject.execute({ id, ownerId: req.user!.id });
+      await deps.publicBoardCache?.refreshProject(id).catch(() => {});
       deps.notifyProjectChanged(id);
       res.json({ slug, url: publicBoardUrl(deps.appUrl, slug) });
     } catch (e) {
@@ -401,6 +404,7 @@ export function projectsRouter(deps: Deps): Router {
       const id = req.params.id;
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       await deps.unpublishProject.execute({ id, ownerId: req.user!.id });
+      await deps.publicBoardCache?.refreshProject(id).catch(() => {});
       deps.notifyProjectChanged(id);
       res.status(204).end();
     } catch (e) {
@@ -414,6 +418,7 @@ export function projectsRouter(deps: Deps): Router {
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const { indexing } = setPublicIndexingSchema.parse(req.body);
       await deps.setPublicIndexing.execute({ id, ownerId: req.user!.id, indexing });
+      await deps.publicBoardCache?.refreshProject(id).catch(() => {});
       deps.notifyProjectChanged(id);
       res.status(204).end();
     } catch (e) {
@@ -427,6 +432,7 @@ export function projectsRouter(deps: Deps): Router {
       if (typeof id !== 'string') throw new ProjectNotFoundError();
       const { appearance } = setPublicAppearanceSchema.parse(req.body);
       await deps.setPublicAppearance.execute({ id, userId: req.user!.id, appearance });
+      await deps.publicBoardCache?.refreshProject(id).catch(() => {});
       deps.notifyProjectChanged(id);
       res.status(204).end();
     } catch (e) {

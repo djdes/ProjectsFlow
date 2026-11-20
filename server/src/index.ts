@@ -116,6 +116,7 @@ import { ClonePublicBoard } from './application/project/ClonePublicBoard.js';
 import { GetPublicTaskDetail } from './application/project/GetPublicTaskDetail.js';
 import { GetPublicTaskAccess } from './application/project/GetPublicTaskAccess.js';
 import { GetPublicAttachment } from './application/project/GetPublicAttachment.js';
+import { FilePublicBoardSnapshotCache } from './infrastructure/promo-cache/FilePublicBoardSnapshotCache.js';
 import { FileSystemSiteArtifactStorage } from './infrastructure/storage/FileSystemSiteArtifactStorage.js';
 import { DrizzleAppBackendRepository } from './infrastructure/repositories/DrizzleAppBackendRepository.js';
 import { DrizzleAppAdminAuditRepository } from './infrastructure/repositories/DrizzleAppAdminAuditRepository.js';
@@ -723,11 +724,17 @@ const projectEventBroadcaster: ProjectEventBroadcaster = new ProjectEventBroadca
     return task ? taskVisibility.filterAudience(task, userIds) : [...userIds];
   },
 });
+// Дисковый JSON-кэш публичных досок (0 SELECT при выдаче /api/public/boards/* и /p/:slug.md).
+// Ссылка объявляется до notify*, сам инстанс создаётся сразу после taskRepo/taskCommentRepo.
+let publicBoardSnapshotCache: FilePublicBoardSnapshotCache | null = null;
+
 // Best-effort: ошибка резолва участников не должна влиять на основной запрос.
 const notifyTaskChanged = (projectId: string, extraUserIds: readonly string[] = []): void => {
+  publicBoardSnapshotCache?.scheduleRefreshProject(projectId);
   void projectEventBroadcaster.broadcast(projectId, 'task_changed', extraUserIds).catch(() => {});
 };
 const notifyProjectChanged = (projectId: string): void => {
+  publicBoardSnapshotCache?.scheduleRefreshProject(projectId);
   void projectEventBroadcaster.broadcast(projectId, 'project_changed').catch(() => {});
 };
 // SSE comment_added — для Ralph-диспетчера (мгновенная реакция вместо polling'а).
@@ -739,6 +746,7 @@ const notifyCommentAdded = (
   actorKind?: 'user' | 'agent' | 'system',
   agentName?: string | null,
 ): void => {
+  publicBoardSnapshotCache?.scheduleRefreshProject(projectId);
   void projectEventBroadcaster
     .broadcastCommentAdded(projectId, taskId, commentId, ownerUserId, actorKind, agentName)
     .catch(() => {});
@@ -751,6 +759,7 @@ const notifyStatusChanged = (
   newStatus: string,
   actorUserId: string,
 ): void => {
+  publicBoardSnapshotCache?.scheduleRefreshProject(projectId);
   void projectEventBroadcaster
     .broadcastStatusChanged(projectId, taskId, oldStatus, newStatus, actorUserId)
     .catch(() => {});
@@ -2513,6 +2522,16 @@ const aiActionBatchService = new AiActionBatchService({
   },
 });
 
+publicBoardSnapshotCache = new FilePublicBoardSnapshotCache({
+  projects: projectRepo,
+  tasks: taskRepo,
+  comments: taskCommentRepo,
+  users: userRepo,
+});
+void publicBoardSnapshotCache.refreshAll().catch((err) => {
+  console.warn('[promo-cache] initial warm failed:', (err as Error)?.message ?? err);
+});
+
 const deploymentAuditRuns = new Set<string>();
 const { app, devProxyUpgrade } = createApp({
   deployment: new GetDeploymentStatus({
@@ -2627,6 +2646,7 @@ const { app, devProxyUpgrade } = createApp({
     unpublishProject: new UnpublishProject({ projects: projectRepo, members: projectMemberRepo }),
     setPublicIndexing: new SetPublicIndexing({ projects: projectRepo, members: projectMemberRepo }),
     setPublicAppearance: new SetPublicAppearance({ projects: projectRepo, members: projectMemberRepo }),
+    publicBoardCache: publicBoardSnapshotCache,
     ensureAppRepo: new EnsureProjectAppRepo({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -3045,6 +3065,7 @@ const { app, devProxyUpgrade } = createApp({
     }),
     projects: projectRepo,
     coverStorage: attachmentStorage,
+    snapshotCache: publicBoardSnapshotCache,
   },
   // Задеплоенные статические сайты проектов (self-serve воркер-раннер, db/098).
   site: {

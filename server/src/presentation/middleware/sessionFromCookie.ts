@@ -1,9 +1,12 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { GetCurrentUser } from '../../application/auth/GetCurrentUser.js';
 import { config } from '../config.js';
+import { shouldSkipSessionLookup } from '../public/promoDelivery.js';
 
 export function sessionFromCookie(getCurrentUser: GetCurrentUser) {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+    if (shouldSkipSessionLookup(req)) return next();
+
     const sessionId = req.cookies?.[config.session.cookieName] as string | undefined;
     if (!sessionId) return next();
 

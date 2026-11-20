@@ -3,6 +3,7 @@ import type { GetPublicBoard } from '../../application/project/GetPublicBoard.js
 import type { GetPublicTaskDetail } from '../../application/project/GetPublicTaskDetail.js';
 import type { GetPublicTaskAccess } from '../../application/project/GetPublicTaskAccess.js';
 import type { GetPublicAttachment } from '../../application/project/GetPublicAttachment.js';
+import type { PublicBoardSnapshotCache } from '../../application/project/PublicBoardSnapshotCache.js';
 import {
   ClonePublicBoard,
   ClonePublicBoardNotFoundError,
@@ -20,6 +21,7 @@ type Deps = {
   readonly clonePublicBoard: ClonePublicBoard;
   readonly projects: ProjectRepository;
   readonly coverStorage: AttachmentStorage;
+  readonly snapshotCache?: PublicBoardSnapshotCache;
 };
 
 const COVER_MIME: Record<string, string> = {
@@ -31,8 +33,8 @@ const COVER_MIME: Record<string, string> = {
 };
 
 // Анонимный (БЕЗ requireAuth) роутер публичной доски. Смонтирован на /api/public/boards.
-// Доступ гейтится не membership'ом, а флагом is_public по slug (см. GetPublicBoard). Всегда
-// 404, если доска не найдена/не опубликована — не палим существование приватных проектов.
+// При наличии `snapshotCache` чтение доски, карточек задач и метаданных обложки идёт из
+// дисковых JSON-снимков (0 SELECT к БД на прогретом кэше, включая 404 для чужих/снятых slug).
 export function publicBoardRouter(deps: Deps): Router {
   const router = Router();
 
@@ -44,7 +46,9 @@ export function publicBoardRouter(deps: Deps): Router {
         res.status(404).json({ error: 'not_found' });
         return;
       }
-      const board = await deps.getPublicBoard.execute(slug);
+      const board = deps.snapshotCache
+        ? await deps.snapshotCache.getBoard(slug)
+        : await deps.getPublicBoard.execute(slug);
       if (!board) {
         res.status(404).json({ error: 'not_found' });
         return;
@@ -56,7 +60,7 @@ export function publicBoardRouter(deps: Deps): Router {
   });
 
   // Обложка-картинка опубликованной доски (аналог authed /api/projects/:id/cover/:file, но
-  // гейт — «проект публичен по slug», а не membership). Ключ в хранилище берём из project.coverUrl.
+  // гейт — «проект публичен по slug», а не membership). Ключ в хранилище берём из JSON-индекса.
   router.get('/:slug/cover', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const slug = req.params.slug;
@@ -64,6 +68,24 @@ export function publicBoardRouter(deps: Deps): Router {
         res.status(404).end();
         return;
       }
+      if (deps.snapshotCache) {
+        const meta = await deps.snapshotCache.getCoverMeta(slug);
+        if (!meta) {
+          res.status(404).end();
+          return;
+        }
+        const stored = await deps.coverStorage.read(meta.storageKey);
+        if (!stored) {
+          res.status(404).end();
+          return;
+        }
+        res.setHeader('Content-Type', meta.mimeType);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.send(stored.data);
+        return;
+      }
+
       const project = await deps.projects.getBySlug(slug);
       if (!project || !project.isPublic || !project.coverUrl) {
         res.status(404).end();
@@ -103,7 +125,9 @@ export function publicBoardRouter(deps: Deps): Router {
         res.status(404).json({ error: 'not_found' });
         return;
       }
-      const detail = await deps.getPublicTaskDetail.execute(slug, taskId);
+      const detail = deps.snapshotCache
+        ? await deps.snapshotCache.getTaskDetail(slug, taskId)
+        : await deps.getPublicTaskDetail.execute(slug, taskId);
       if (!detail) {
         res.status(404).json({ error: 'not_found' });
         return;

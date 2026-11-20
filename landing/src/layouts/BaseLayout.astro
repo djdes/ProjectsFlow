@@ -9,6 +9,8 @@ interface Props {
   description?: string;
   /** Структурированные данные schema.org (один объект или массив) — уйдут в <head>. */
   jsonLd?: object | readonly object[];
+  /** Канонический путь к .md-двойнику страницы для ИИ-агентов. */
+  markdownPath?: string;
 }
 
 const SITE = 'https://projectsflow.ru/';
@@ -18,9 +20,14 @@ const {
     'Платформа для тех, кто строит с AI: ты описываешь идею — она доводит проект до готового ' +
     'результата сама. Без настройки и технической возни. Прозрачные расходы, старт бесплатно.',
   jsonLd,
+  markdownPath,
 } = Astro.props;
 const ogImage = new URL('/og.png', SITE).href;
 const canonical = new URL(Astro.url.pathname, SITE).href;
+
+const cleanPath = Astro.url.pathname.replace(/\/+$/, '');
+const defaultMdPath = !cleanPath ? '/index.md' : `${cleanPath}.md`;
+const markdownHref = new URL(markdownPath ?? defaultMdPath, SITE).href;
 ---
 
 <!doctype html>
@@ -33,6 +40,7 @@ const canonical = new URL(Astro.url.pathname, SITE).href;
     <meta name="color-scheme" content="dark" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonical} />
+    <link rel="alternate" type="text/markdown" href={markdownHref} />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -73,17 +81,5 @@ const canonical = new URL(Astro.url.pathname, SITE).href;
   <body>
     <a href="#main" class="skip-link">К содержимому</a>
     <slot />
-
-    <script>
-      (async () => {
-        try {
-          const res = await fetch('/api/auth/me', { credentials: 'include' });
-          if (!res.ok) return;
-          document.documentElement.dataset.auth = 'authed';
-        } catch {
-          // anonymous
-        }
-      })();
-    </script>
   </body>
 </html>
