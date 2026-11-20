@@ -3065,8 +3065,9 @@ test('не рабочая группа (личка) — пометки «из г
 // --- Смешанная группа (db/193): без исполнителя — воркеру, с исполнителем — человеку ---
 const MIXED_CHAT = -100300;
 const MIXED_PROJECTS = [
-  { id: 'cfg', name: 'C#Config', aliases: ['конфиг'], groupFullRunDefault: true },
-  { id: 'yb', name: 'Yesbeat', workspaceId: 'ws-home' },
+  { id: 'cfg', name: 'C#Config', aliases: ['конфиг'], groupFullRunDefault: true, dispatcherUserId: 'ralph' },
+  { id: 'yb', name: 'Yesbeat', workspaceId: 'ws-home', dispatcherUserId: 'ralph' },
+  { id: 'site', name: 'Витрина', aliases: ['витрина'] },
 ] as any[];
 const mctx = (addedByUserId: string | null, senderName = 'SMM') => ({
   ...gctx('owner-of-group', senderName, 'Скрипты / Сайт YB'), incident: { addedByUserId, mode: 'mixed' as const },
@@ -3074,7 +3075,7 @@ const mctx = (addedByUserId: string | null, senderName = 'SMM') => ({
 function mixedHarness(extra: Record<string, unknown> = {}) {
   return makeHarness({
     projects: MIXED_PROJECTS,
-    groupProjects: { [MIXED_CHAT]: ['cfg', 'yb'] },
+    groupProjects: { [MIXED_CHAT]: ['cfg', 'yb', 'site'] },
     standardGroups: { [MIXED_CHAT]: 'Скрипты / Сайт YB' },
     ...extra,
   } as any);
@@ -3173,7 +3174,7 @@ test('смешанная группа: ИИ не уверен — кнопки �
     const ask = h.sent.at(-1) as any;
     assert.match(ask.text, /Для какого проекта/);
     const buttons = ask.replyMarkup.inline_keyboard.flat();
-    assert.deepEqual(buttons.map((b: any) => b.text), ['C#Config', 'Yesbeat', '✖️ Отменить']);
+    assert.deepEqual(buttons.map((b: any) => b.text), ['C#Config', 'Yesbeat', 'Витрина', '✖️ Отменить']);
     const draft = [...h.drafts.values()][0]!;
     assert.equal(draft.projectId, null);
     assert.equal(draft.autoCreateAt ?? null, null, 'без проекта — не создаём по таймеру');
@@ -3385,4 +3386,27 @@ test('смешанная группа: «Другой проект» — авт�
     assert.equal(h.createTaskCalls.length, 1);
     assert.equal((h.createTaskCalls[0] as any).projectId, 'yb');
     assert.match(h.edits.at(-1)?.text ?? '', /Подтверждено автором/);
+  }));
+
+test('смешанная группа: у проекта нет воркера — автор выбирает исполнителя-человека', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'на витрине поменять баннер', mctx('u1', 'Ирина'), [], {
+      sourceKey: `m:${MIXED_CHAT}:40`, sourceMessageId: 40,
+    });
+    assert.equal(h.createTaskCalls.length, 0);
+    const card = h.sent.at(-1) as any;
+    assert.match(card.text, /нет воркера/);
+    const pick = card.replyMarkup.inline_keyboard.flat().find((b: any) => b.text === '👤 Создатель');
+    assert.ok(pick, 'участники проекта кнопками');
+    await h.service.handleCallback(mixedCq(pick.callback_data, 'stranger', 555));
+    assert.equal(h.createTaskCalls.length, 0);
+    await h.service.handleCallback(mixedCq(pick.callback_data, 'pick'));
+    assert.equal(h.createTaskCalls.length, 1);
+    const call = h.createTaskCalls[0] as any;
+    assert.equal(call.projectId, 'site');
+    assert.equal(call.assigneeUserId, 'u1');
+    assert.notEqual(call.status, 'todo', 'не в очередь воркера');
+    assert.doesNotMatch(call.description, /tg-incident-origin/);
+    assert.match(call.description, /от Ирина из Telegram/);
   }));
