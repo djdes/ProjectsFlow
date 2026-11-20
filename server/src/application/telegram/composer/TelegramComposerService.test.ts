@@ -3104,7 +3104,7 @@ test('смешанная группа: без исполнителя — зад�
     assert.match(ask.text, /задачу выполнит воркер/);
     assert.match(ask.text, /только автор/);
     const keys = ask.replyMarkup.inline_keyboard.flat().map((b: any) => b.text);
-    assert.deepEqual(keys, ['✅ Подтвердить', '✖️ Отменить']);
+    assert.deepEqual(keys, ['✅ Подтвердить', '✖️ Отменить', '🔀 Другой проект']);
     // Чужой участник группы подтвердить не может.
     const draft = [...h.drafts.values()][0] as any;
     await h.service.handleCallback(mixedCq(`wc:${draft.id}:y`, 'stranger', 555));
@@ -3363,4 +3363,26 @@ test('смешанная группа: отменить задачу ворке�
     assert.match(h.edits.at(-1)?.text ?? '', /Отменено автором/);
     await h.service.handleCallback(mixedCq(`wc:${draft.id}:y`, 'late'));
     assert.equal(h.createTaskCalls.length, 0);
+  }));
+
+test('смешанная группа: «Другой проект» — автор выбирает проект кнопкой, это и подтверждение', () =>
+  withIncidentKey(async () => {
+    const h = mixedHarness();
+    await h.service.startFromMessage(999, MIXED_CHAT, 'в конфиге не сохраняется тариф', mctx('u1'), [], {
+      sourceKey: `m:${MIXED_CHAT}:30`, sourceMessageId: 30,
+    });
+    const draft = [...h.drafts.values()][0] as any;
+    assert.equal(draft.projectId, 'cfg');
+    await h.service.handleCallback(mixedCq(`wc:${draft.id}:p`, 'other'));
+    const list = h.edits.at(-1) as any;
+    assert.match(list.text, /Для какого проекта/);
+    const buttons = list.replyMarkup.inline_keyboard.flat();
+    const yb = buttons.find((b: any) => b.text === 'Yesbeat');
+    assert.ok(yb);
+    await h.service.handleCallback(mixedCq(yb.callback_data, 'stranger', 555));
+    assert.equal(h.createTaskCalls.length, 0);
+    await h.service.handleCallback(mixedCq(yb.callback_data, 'pick'));
+    assert.equal(h.createTaskCalls.length, 1);
+    assert.equal((h.createTaskCalls[0] as any).projectId, 'yb');
+    assert.match(h.edits.at(-1)?.text ?? '', /Подтверждено автором/);
   }));
