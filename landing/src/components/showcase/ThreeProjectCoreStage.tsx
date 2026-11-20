@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { ContactShadows, Environment, Float, RoundedBox } from '@react-three/drei';
+import { ContactShadows, Environment, Float, Lightformer, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import {
   STACK_LAYERS,
@@ -481,7 +481,19 @@ export const ThreeProjectCoreStage: React.FC<ThreeProjectCoreStageProps> = ({
           color={activeSpec.accentColor}
         />
 
-        <Environment preset="city" />
+        {/* Отражения для металлических слоёв. Раньше — <Environment preset="city" />:
+            drei скачивал HDRI 1,5 МБ с raw.githubusercontent.com (домен в РФ часто
+            тормозит или недоступен) — на телефоне это треть всего веса главной, и без
+            него отражения пропадали. Теперь окружение рисуется на месте из нескольких
+            светящихся панелей в маленькую карту 256 px: ни одного запроса в сеть. */}
+        <Environment resolution={256} frames={1}>
+          <color attach="background" args={['#1a2233']} />
+          <Lightformer form="rect" intensity={2.6} color="#eef3ff" position={[0, 5, -2]} rotation-x={Math.PI / 2} scale={[12, 4, 1]} />
+          <Lightformer form="rect" intensity={1.6} color="#ffd9a8" position={[-6, 1, 1]} rotation-y={Math.PI / 2} scale={[6, 3, 1]} />
+          <Lightformer form="rect" intensity={1.3} color="#a8c8ff" position={[6, 0.5, -1]} rotation-y={-Math.PI / 2} scale={[6, 2.5, 1]} />
+          <Lightformer form="rect" intensity={0.9} color="#ffffff" position={[0, 1, 6]} scale={[10, 1.5, 1]} />
+          <Lightformer form="rect" intensity={0.35} color="#5d6b80" position={[0, -4, 0]} rotation-x={-Math.PI / 2} scale={[14, 14, 1]} />
+        </Environment>
 
         <ExplodedStackMesh
           activeLayerId={activeLayerId}
