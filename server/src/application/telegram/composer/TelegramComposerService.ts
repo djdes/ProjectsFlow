@@ -939,9 +939,73 @@ export class TelegramComposerService {
       if (messageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId: messageId });
       return;
     }
+    if (!project.dispatcherUserId) {
+      const card = await this.mixedAssigneeCard(draft.id, project);
+      const messageId = await this.sendReturningId(chatId, card.text, card.replyMarkup);
+      if (messageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId: messageId });
+      return;
+    }
     const messageId = await this.sendReturningId(chatId, mixedWorkerConfirmText(project.name),
       mixedConfirmKeyboard(draft.id));
     if (messageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId: messageId });
+  }
+
+  // У проекта нет воркера (dispatcher не назначен): задачу ставим человеку — автор выбирает
+  // исполнителя из участников проекта (wm:<draftId>:<userId>).
+  private async mixedAssigneeCard(draftId: string, project: Project): Promise<Card> {
+    const members = (await this.deps.members.listByProject(project.id).catch(() => []))
+      .filter((m) => !m.guest);
+    const rows: { text: string; callback_data: string }[][] = [];
+    for (let i = 0; i < Math.min(members.length, 20); i += 2) {
+      rows.push(members.slice(i, i + 2).map((m) => ({
+        text: `👤 ${m.user.displayName.slice(0, 30)}`,
+        callback_data: `${MIXED_ASSIGNEE_CALLBACK_PREFIX}${draftId}:${m.userId}`,
+      })));
+    }
+    rows.push([
+      { text: '🔀 Другой проект', callback_data: `${MIXED_CONFIRM_CALLBACK_PREFIX}${draftId}:p` },
+      { text: '✖️ Отменить', callback_data: `${MIXED_CONFIRM_CALLBACK_PREFIX}${draftId}:n` },
+    ]);
+    return {
+      text: `🙋 У проекта <b>${escapeHtml(project.name)}</b> нет воркера — задачу поставлю человеку. ` +
+        'Кто исполнитель? Выбрать может только автор задачи.',
+      replyMarkup: { inline_keyboard: rows },
+    };
+  }
+
+  // wm:<draftId>:<userId> — автор выбрал исполнителя-человека для задачи из смешанной группы
+  // (у проекта нет воркера). Подписанный источник снимаем: это обычная задача человеку.
+  private async onMixedAssignee(cq: TelegramCallbackQuery): Promise<void> {
+    const [draftId, assigneeId] = (cq.data ?? '').slice(MIXED_ASSIGNEE_CALLBACK_PREFIX.length).split(':');
+    const chatId = cq.message?.chat.id;
+    const signingKey = incidentSigningKey();
+    const draft = draftId ? await this.deps.drafts.getById(draftId).catch(() => null) : null;
+    const origin = draft && signingKey ? readIncidentOrigin(draft.taskText ?? '', signingKey) : null;
+    if (!draft || !assigneeId || chatId === undefined || draft.tgChatId !== chatId || draft.status !== 'composing' ||
+        !draft.projectId || origin?.mode !== 'mixed' || origin.chatId !== chatId) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Этот запрос уже обработан.' });
+      return;
+    }
+    if (cq.from.id !== origin.userId) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Выбрать исполнителя может только автор задачи.', showAlert: true });
+      return;
+    }
+    const member = await this.deps.members.findForProject(draft.projectId, assigneeId).catch(() => null);
+    if (!member) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Этого человека больше нет в проекте.', showAlert: true });
+      return;
+    }
+    const plain = stripIntakeOrigin(draft.taskText ?? '').trim();
+    const taskText = `${plain}
+
+— от ${origin.senderName} из Telegram`;
+    const updated = await this.deps.drafts.patchComposing(draft.id, { taskText, assigneeUserId: assigneeId, targetStatus: null });
+    if (!updated) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Этот запрос уже обработан.' });
+      return;
+    }
+    const messageId = cq.message?.message_id ?? draft.tgMessageId ?? undefined;
+    await this.finalize(updated, draft.creatorUserId, chatId, messageId, cq.id);
   }
 
   // wc:<draftId>:<y|n> — подтвердить/отменить задачу воркеру смешанной группы. Только автор
@@ -989,6 +1053,12 @@ export class TelegramComposerService {
       return;
     }
     const project = await this.deps.projects.getById(draft.projectId).catch(() => null);
+    if (project && !project.dispatcherUserId) {
+      const card = await this.mixedAssigneeCard(draft.id, project);
+      if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
     if (messageId) await this.edit(chatId, messageId, mixedWorkerAcceptedText(project?.name ?? 'проект'));
     await this.finalize(draft, draft.creatorUserId, chatId, messageId, cq.id);
   }
@@ -1029,6 +1099,12 @@ export class TelegramComposerService {
       return;
     }
     const messageId = cq.message?.message_id ?? draft.tgMessageId ?? undefined;
+    if (!project.dispatcherUserId) {
+      const card = await this.mixedAssigneeCard(draft.id, project);
+      if (messageId) await this.edit(chatId, messageId, card.text, card.replyMarkup);
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
     if (messageId) await this.edit(chatId, messageId, mixedWorkerAcceptedText(project.name));
     await this.finalize(updated, draft.creatorUserId, chatId, messageId, cq.id);
   }
@@ -1784,6 +1860,7 @@ export class TelegramComposerService {
     if (runMode) return this.onRunModeSel(cq, runMode.taskId, runMode.runMode);
     if (cq.data?.startsWith(MIXED_PROJECT_CALLBACK_PREFIX)) return this.onMixedProjectPick(cq);
     if (cq.data?.startsWith(MIXED_CONFIRM_CALLBACK_PREFIX)) return this.onMixedConfirm(cq);
+    if (cq.data?.startsWith(MIXED_ASSIGNEE_CALLBACK_PREFIX)) return this.onMixedAssignee(cq);
     const cb = parseCallback(cq.data);
     if (!cb) {
       await this.deps.client.answerCallbackQuery(cq.id);
@@ -4701,6 +4778,8 @@ function isSelfAssigneeQuery(query: string): boolean {
 export const MIXED_PROJECT_CALLBACK_PREFIX = 'wp:';
 // Подтвердить/отменить задачу воркеру смешанной группы — wc:<draftId>:<y|n>.
 export const MIXED_CONFIRM_CALLBACK_PREFIX = 'wc:';
+// Исполнитель-человек для задачи из смешанной группы, когда у проекта нет воркера — wm:<draftId>:<userId>.
+export const MIXED_ASSIGNEE_CALLBACK_PREFIX = 'wm:';
 
 export function mixedWorkerConfirmText(projectName: string): string {
   return `🤖 Исполнитель не указан — задачу выполнит воркер в проекте <b>${escapeHtml(projectName)}</b>. ` +
