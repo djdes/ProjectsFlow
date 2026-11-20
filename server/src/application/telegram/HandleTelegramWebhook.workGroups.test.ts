@@ -457,7 +457,7 @@ test('смешанная группа: без исполнителя — в ко
   assert.deepEqual((voice.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, { addedByUserId: 'u-lead', mode: 'mixed' });
 });
 
-test('смешанная группа: с исполнителем — обычный поток группы (онбординг и задача человеку)', async () => {
+test('смешанная группа: с исполнителем — задача человеку; автор без аккаунта ставит её от подключившего группу', async () => {
   const group = { workspaceId: 'ws1', workspaceName: 'YesBeat', mode: 'mixed' as const, addedByUserId: 'u-lead' };
   const member = makeHarness({ workGroup: group, senderUserId: 'u-ivan', member: true });
   await member.h.execute(groupMessage({ text: '@ProjectsFlow_Bot поправить плеер @djdes' }));
@@ -465,8 +465,10 @@ test('смешанная группа: с исполнителем — обыч�
   assert.equal((member.composerCalls[0]!.groupCtx as { incident?: unknown }).incident, undefined);
   const stranger = makeHarness({ workGroup: group, senderUserId: null });
   await stranger.h.execute(groupMessage({ text: '@ProjectsFlow_Bot поправить плеер @djdes' }));
-  assert.equal(stranger.composerCalls.length, 0, 'без аккаунта задачу человеку не поставить');
-  assert.equal(stranger.prompts.length, 1, 'бот предлагает подключиться');
+  assert.equal(stranger.composerCalls.length, 1, 'без аккаунта задача всё равно ставится');
+  assert.equal(stranger.prompts.length, 0, 'подключаться не просим');
+  assert.equal((stranger.composerCalls[0]!.groupCtx as { actAsUserId?: string }).actAsUserId, 'u-lead');
+  assert.equal((member.composerCalls[0]!.groupCtx as { actAsUserId?: string }).actAsUserId, undefined);
 });
 
 test('смешанная группа: на уточнение задачи воркеру отвечает только автор, на уточнение задачи человека — только адресат', async () => {

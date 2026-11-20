@@ -715,12 +715,14 @@ export class HandleTelegramWebhook {
       const workGroup = await this.workGroupFor(chatId);
       // Группа инцидентов (spec 2026-11-17, раздел 3): писать может любой участник, аккаунт не нужен.
       const incident = this.incidentOf(chatId, workGroup, text);
-      if (!this.isCSharpFixerChat(chatId) && !incident && workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, text, sourceKey))) return;
+      const actAsUserId = !incident && workGroup ? await this.mixedActAs(msg, workGroup) : null;
+      if (!this.isCSharpFixerChat(chatId) && !incident && !actAsUserId && workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, text, sourceKey))) return;
       const groupCtx: TelegramGroupContext = {
         ownerUserId: await this.deps.groupOwners.getOwnerUserId(chatId),
         senderName: formatSenderName(msg.from),
         groupTitle: msg.chat.title ?? null,
         ...(incident ? { incident } : {}),
+        ...(actAsUserId ? { actAsUserId } : {}),
       };
       return this.deps.composer.startFromMessage(tgUserId, chatId, text, groupCtx, attachments, {
         sourceKey,
@@ -1456,6 +1458,15 @@ export class HandleTelegramWebhook {
   }
 
   // true — сообщение ушло в подключение (задачу не создаём сейчас).
+  // Смешанная группа: автор без аккаунта (или не участник пространства) может ставить задачи
+  // людям — их создаёт тот, кто подключил группу. null — автор подключён или группа не смешанная.
+  private async mixedActAs(msg: TelegramMessage, workGroup: ResolvedWorkGroup): Promise<string | null> {
+    if (workGroup.mode !== 'mixed' || !workGroup.addedByUserId || !msg.from || this.isCSharpFixerChat(msg.chat.id)) return null;
+    const userId = await this.deps.users.findUserIdByTelegramUserId(msg.from.id);
+    if (userId && (await this.isWorkspaceMember(workGroup.workspaceId, userId))) return null;
+    return workGroup.addedByUserId;
+  }
+
   private async promptOnboardingIfNeeded(
     msg: TelegramMessage,
     workGroup: ResolvedWorkGroup,
