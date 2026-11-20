@@ -2105,7 +2105,8 @@ export class TelegramComposerService {
               : `🛠 Запрос передан CSharpFixer. Проверю скрипт и сообщу результат здесь.${attachmentSuffix}`
             : `✅ Задача создана в <b>${escapeHtml(projName)}</b>.\n${metadata}\n📝 ${markdownToTelegramHtml(excerpt(stripIntakeOrigin(text)))}\n🔗 <a href="${this.taskUrl(targetId, task.id)}">Открыть задачу</a>${attachmentSuffix}${automatic}\n\n↩️ Ответь на это сообщение, чтобы добавить комментарий.`,
           // Проект распознан — предлагаем режим запуска воркера (по умолчанию «обычное»).
-          draft.projectId && !this.isCSharpFixerDraft(draft) && this.deps.updateTask
+          // Только задаче воркеру (колонка todo): у задачи человеку режим воркера ни к чему.
+          draft.projectId && draft.targetStatus === 'todo' && !this.isCSharpFixerDraft(draft) && this.deps.updateTask
             ? runModeKeyboard(task.id)
             : undefined,
         );
@@ -3996,6 +3997,7 @@ export class TelegramComposerService {
     let lastTaskId: string | null = null;
     let lastProjectId: string | null = null;
     let lastFromProject = false;
+    let lastToWorker = false;
     const createdTargets: {
       readonly segmentIndex: number;
       readonly taskId: string;
@@ -4087,6 +4089,7 @@ export class TelegramComposerService {
         lastTaskId = task.id;
         lastProjectId = targetId;
         lastFromProject = Boolean(seg.projectId);
+        lastToWorker = seg.targetStatus === 'todo';
         // У делегированных — чьи это «Входящие»: иначе «→ Входящие» читается как свои.
         const projName = await this.destinationLabel(
           seg.projectId,
@@ -4178,7 +4181,7 @@ export class TelegramComposerService {
         messageId,
         [header, attachmentSummary, '', ...summary, outcome].filter(Boolean).join('\n'),
         // Одна задача в распознанном проекте — предлагаем режим запуска воркера (spec §5).
-        created === 1 && lastFromProject && lastTaskId && this.deps.updateTask
+        created === 1 && lastFromProject && lastToWorker && lastTaskId && this.deps.updateTask
           ? runModeKeyboard(lastTaskId)
           : undefined,
       );
