@@ -714,9 +714,12 @@ export class HandleTelegramWebhook {
       // не участник), получает инструкцию с кнопкой, а текст ждёт подключения.
       const workGroup = await this.workGroupFor(chatId);
       // Группа инцидентов (spec 2026-11-17, раздел 3): писать может любой участник, аккаунт не нужен.
-      const incident = this.incidentOf(chatId, workGroup, text);
-      const actAsUserId = !incident && workGroup ? await this.mixedActAs(msg, workGroup) : null;
-      if (!this.isCSharpFixerChat(chatId) && !incident && !actAsUserId && workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, text, sourceKey))) return;
+      // Смешанная группа: привязанный пользователь из другого пространства ставит задачи как в
+      // обычной группе — в свои проекты, без воркера этой группы и без онбординга.
+      const outsider = workGroup ? await this.mixedLinkedOutsider(msg, workGroup) : false;
+      const incident = outsider ? null : this.incidentOf(chatId, workGroup, text);
+      const actAsUserId = !outsider && !incident && workGroup ? await this.mixedActAs(msg, workGroup) : null;
+      if (!outsider && !this.isCSharpFixerChat(chatId) && !incident && !actAsUserId && workGroup && (await this.promptOnboardingIfNeeded(msg, workGroup, text, sourceKey))) return;
       const groupCtx: TelegramGroupContext = {
         ownerUserId: await this.deps.groupOwners.getOwnerUserId(chatId),
         senderName: formatSenderName(msg.from),
@@ -764,7 +767,9 @@ export class HandleTelegramWebhook {
 
       // Рабочая группа: неподключённому — инструкция, расшифровка ждёт подключения. Сбой здесь
       // не «ошибка расшифровки»: текст уже есть, поэтому пробрасываем — Telegram повторит доставку.
-      if (workGroup && !this.isCSharpFixerChat(msg.chat.id) && !this.incidentOf(msg.chat.id, workGroup, transcript)) {
+      const outsider = workGroup ? await this.mixedLinkedOutsider(msg, workGroup) : false;
+      const voiceIncident = outsider ? null : this.incidentOf(msg.chat.id, workGroup, transcript);
+      if (workGroup && !outsider && !this.isCSharpFixerChat(msg.chat.id) && !voiceIncident) {
         let waiting: boolean;
         try {
           waiting = await this.promptOnboardingIfNeeded(msg, workGroup, transcript, sourceKey);
@@ -791,7 +796,7 @@ export class HandleTelegramWebhook {
         ownerUserId,
         senderName: formatSenderName(msg.from),
         groupTitle: msg.chat.title ?? null,
-        ...(this.incidentOf(msg.chat.id, workGroup, transcript) ? { incident: this.incidentOf(msg.chat.id, workGroup, transcript)! } : {}),
+        ...(voiceIncident ? { incident: voiceIncident } : {}),
       };
       await this.deps.composer.startFromMessage(
         msg.from.id,
@@ -1460,10 +1465,17 @@ export class HandleTelegramWebhook {
   // true — сообщение ушло в подключение (задачу не создаём сейчас).
   // Смешанная группа: автор без аккаунта (или не участник пространства) может ставить задачи
   // людям — их создаёт тот, кто подключил группу. null — автор подключён или группа не смешанная.
+  // Смешанная группа: отправитель привязан к ProjectsFlow, но не участник пространства группы.
+  private async mixedLinkedOutsider(msg: TelegramMessage, workGroup: ResolvedWorkGroup): Promise<boolean> {
+    if (workGroup.mode !== 'mixed' || !msg.from || this.isCSharpFixerChat(msg.chat.id)) return false;
+    const userId = await this.deps.users.findUserIdByTelegramUserId(msg.from.id);
+    return !!userId && !(await this.isWorkspaceMember(workGroup.workspaceId, userId));
+  }
+
   private async mixedActAs(msg: TelegramMessage, workGroup: ResolvedWorkGroup): Promise<string | null> {
     if (workGroup.mode !== 'mixed' || !workGroup.addedByUserId || !msg.from || this.isCSharpFixerChat(msg.chat.id)) return null;
     const userId = await this.deps.users.findUserIdByTelegramUserId(msg.from.id);
-    if (userId && (await this.isWorkspaceMember(workGroup.workspaceId, userId))) return null;
+    if (userId) return null;
     return workGroup.addedByUserId;
   }
 
