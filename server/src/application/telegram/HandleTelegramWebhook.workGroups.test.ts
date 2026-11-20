@@ -506,3 +506,14 @@ test('смешанная группа: на уточнение задачи во
     else process.env.TELEGRAM_ORIGIN_SIGNING_KEY = saved;
   }
 });
+
+test('смешанная группа: привязанный не участник пространства — свои задачи, без воркера и онбординга', async () => {
+  const group = { workspaceId: 'ws1', workspaceName: 'MAG', mode: 'mixed' as const, addedByUserId: 'u-lead' };
+  const sub = makeHarness({ workGroup: group, senderUserId: 'u-sub', member: false });
+  await sub.h.execute(groupMessage({ text: '@ProjectsFlow_Bot +SUB поправить отчёт' }));
+  assert.equal(sub.prompts.length, 0);
+  assert.equal(sub.composerCalls.length, 1);
+  const ctx = sub.composerCalls[0]!.groupCtx as { incident?: unknown; actAsUserId?: string };
+  assert.equal(ctx.incident, undefined, 'не воркеру группы');
+  assert.equal(ctx.actAsUserId, undefined, 'от своего имени');
+});
