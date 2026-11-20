@@ -936,9 +936,15 @@ export class HandleTelegramWebhook {
     // из этой группы); уточнения по задачам людей отвечает их адресат, как обычно.
     const groupMode = chatId < 0 ? (await this.workGroupFor(chatId))?.mode : undefined;
     let incidentGroup = groupMode === 'incident';
-    if (groupMode === 'mixed') {
-      const mixedTask = await this.deps.tasks.getById(mapping.taskId).catch(() => null);
-      incidentGroup = readIncidentOrigin(mixedTask?.description ?? '', incidentSigningKey())?.chatId === chatId;
+    const groupTask = incidentGroup || groupMode === 'mixed'
+      ? await this.deps.tasks.getById(mapping.taskId).catch(() => null)
+      : null;
+    const groupOrigin = groupTask ? readIncidentOrigin(groupTask.description ?? '', incidentSigningKey()) : null;
+    if (groupMode === 'mixed') incidentGroup = groupOrigin?.chatId === chatId;
+    // Задача воркеру из группы: отвечать на уточнения может только автор исходного сообщения.
+    if (incidentGroup && groupOrigin?.chatId === chatId && groupOrigin.userId !== tgUserId) {
+      await this.reply(chatId, '🚫 Ответить на вопрос бота может только автор задачи.');
+      return;
     }
     const senderUserId = incidentGroup ? mapping.recipientUserId : linkedUserId;
     if (!senderUserId || senderUserId !== mapping.recipientUserId) {
@@ -1963,7 +1969,21 @@ export class HandleTelegramWebhook {
       );
       return;
     }
-    const senderUserId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    // Задача воркеру из группы (incident/mixed): комментировать может только автор исходного
+    // сообщения; аккаунта у него может не быть — тогда пишем от того, на кого заведена задача.
+    let workerAuthorUserId: string | null = null;
+    if (map && chatId < 0) {
+      const mapped = await this.deps.tasks.getById(map.taskId).catch(() => null);
+      const origin = mapped ? readIncidentOrigin(mapped.description ?? '', incidentSigningKey()) : null;
+      if (origin && origin.chatId === chatId) {
+        if (origin.userId !== tgUserId) {
+          await this.reply(chatId, '🚫 Комментировать эту задачу может только её автор.');
+          return;
+        }
+        workerAuthorUserId = map.recipientUserId;
+      }
+    }
+    const senderUserId = (await this.deps.users.findUserIdByTelegramUserId(tgUserId)) ?? workerAuthorUserId;
     if (!senderUserId) {
       await this.reply(chatId, '⚠️ Сначала привяжи Telegram через /profile.');
       return;
