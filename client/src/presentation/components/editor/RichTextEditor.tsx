@@ -456,6 +456,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       attributes: {
         class: PROSE_CLASS,
         role: 'textbox',
+        'data-pf-variant': variant,
         'aria-label': variant === 'comment' ? 'Комментарий' : variant === 'title' ? 'Название задачи' : 'Текст задачи',
         'aria-multiline': variant === 'title' ? 'false' : 'true',
       },

@@ -41,16 +41,20 @@
   /* Выезд/уезд шторки и доводка после свайпа — движение: только без reduce. Без него
      шторка появляется и закрывается сразу, а за пальцем всё равно следует. */
   @media (prefers-reduced-motion: no-preference) {
+    /* Кривая шторок iOS: быстрый старт и долгий мягкий «доезд» без пружины —
+       лист не дёргается в конце, как на ease-out с коротким хвостом. */
     [data-pf-mobile-sheet='true'][data-state] {
-      transition: transform 240ms var(--pf-ease);
+      transition: transform 280ms var(--pf-ease-sheet);
     }
     [data-pf-mobile-sheet='true'][data-state='open'] {
       animation-name: pf-sheet-enter;
-      animation-duration: 320ms;
+      animation-duration: 420ms;
+      animation-timing-function: var(--pf-ease-sheet);
     }
     [data-pf-mobile-sheet='true'][data-state='closed'] {
       animation-name: pf-sheet-exit;
-      animation-duration: 200ms;
+      animation-duration: 260ms;
+      animation-timing-function: var(--pf-ease-sheet);
     }
   }
   [data-pf-mobile-sheet='true'][data-pf-sheet-interacted][data-state='open'] {
@@ -103,7 +107,12 @@
     z-index: 50;
     background: oklch(0% 0 none / 0.16);
     pointer-events: auto;
-    animation: pf-content-reveal 220ms var(--pf-ease);
+    animation: pf-backdrop-in 320ms var(--pf-ease-sheet) both;
+  }
+  /* Затемнение уходит вместе с листом. Раньше на закрытии ему доставалась та же анимация
+     появления — фон на миг темнел и пропадал рывком. */
+  [data-pf-mobile-backdrop='true'][data-state='closed'] {
+    animation: pf-backdrop-out 240ms var(--pf-ease-sheet) both;
   }
   /* Тёмная тема: лист того же цвета, что страница, и 16% чёрного на графите не видно —
      край листа терялся, казалось, что меню «врезано» в страницу. Затемняем заметнее. */
@@ -170,3 +179,13 @@
   }
 }
 
+@keyframes pf-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pf-backdrop-out {
+  to {
+    opacity: 0;
+  }
+}
