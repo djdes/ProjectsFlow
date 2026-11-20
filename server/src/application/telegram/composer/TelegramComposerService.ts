@@ -836,7 +836,8 @@ export class TelegramComposerService {
           // без проекта ушла бы во «Входящие».
           await this.deps.drafts.patchComposing(existing.id, {
             attachments: merged.attachments,
-            ...(existing.projectId ? { autoCreateSeconds: 15 } : {}),
+            // Задачу воркеру смешанной группы создаёт только автор кнопкой — без таймера.
+            ...(existing.projectId && !this.mixedWorkerOrigin(existing) ? { autoCreateSeconds: 15 } : {}),
           });
         } else {
           await this.deps.drafts.patch(existing.id, { attachments: merged.attachments });
@@ -929,10 +930,7 @@ export class TelegramComposerService {
     });
     if (draft.id !== id) return;
     if (!project) {
-      const rows = projects.slice(0, 20).map((p) => [{
-        text: p.name.slice(0, 60),
-        callback_data: `${MIXED_PROJECT_CALLBACK_PREFIX}${draft.id}:${p.id}`,
-      }]);
+      const rows = mixedProjectRows(draft.id, projects);
       rows.push([{ text: '✖️ Отменить', callback_data: `${MIXED_CONFIRM_CALLBACK_PREFIX}${draft.id}:n` }]);
       const messageId = await this.sendReturningId(chatId,
         '❓ Исполнитель не указан — задачу выполнит воркер. Для какого проекта эта задача? ' +
@@ -966,6 +964,20 @@ export class TelegramComposerService {
       return;
     }
     const messageId = cq.message?.message_id ?? draft.tgMessageId ?? undefined;
+    if (action === 'p') {
+      const allowed = (await this.deps.groupProjects?.allowedProjectIds(chatId).catch(() => [] as readonly string[])) ?? [];
+      const projects = (await Promise.all(allowed.map((id) => this.deps.projects.getById(id).catch(() => null))))
+        .filter((p): p is Project => !!p && !p.isInbox);
+      const rows = mixedProjectRows(draft.id, projects);
+      rows.push([{ text: '✖️ Отменить', callback_data: `${MIXED_CONFIRM_CALLBACK_PREFIX}${draft.id}:n` }]);
+      if (messageId) {
+        await this.edit(chatId, messageId,
+          '❓ Для какого проекта эта задача? Выбор проекта — это и подтверждение. Нажать может только автор задачи.',
+          { inline_keyboard: rows });
+      }
+      await this.deps.client.answerCallbackQuery(cq.id);
+      return;
+    }
     if (action === 'n') {
       const cancelled = await this.deps.drafts.cancelComposing(draft.id);
       if (cancelled && messageId) await this.edit(chatId, messageId, '✖️ Отменено автором.');
@@ -990,7 +1002,7 @@ export class TelegramComposerService {
     const draft = draftId ? await this.deps.drafts.getById(draftId).catch(() => null) : null;
     const origin = draft && signingKey ? readIncidentOrigin(draft.taskText ?? '', signingKey) : null;
     if (!draft || !projectId || chatId === undefined || !signingKey || draft.tgChatId !== chatId ||
-        draft.status !== 'composing' || draft.projectId || origin?.mode !== 'mixed' || origin.chatId !== chatId) {
+        draft.status !== 'composing' || origin?.mode !== 'mixed' || origin.chatId !== chatId) {
       await this.deps.client.answerCallbackQuery(cq.id, { text: 'Этот запрос уже обработан.' });
       return;
     }
@@ -4691,8 +4703,8 @@ export const MIXED_PROJECT_CALLBACK_PREFIX = 'wp:';
 export const MIXED_CONFIRM_CALLBACK_PREFIX = 'wc:';
 
 export function mixedWorkerConfirmText(projectName: string): string {
-  return `🤖 Исполнитель не указан — задачу выполнит воркер (проект <b>${escapeHtml(projectName)}</b>).
-` +
+  return `🤖 Исполнитель не указан — задачу выполнит воркер в проекте <b>${escapeHtml(projectName)}</b>. ` +
+    'Проект не тот — нажмите «Другой проект».\n' +
     'Подтвердить или отменить может только автор задачи. Отвечать на вопросы бота и комментировать задачу — тоже только автор.';
 }
 
@@ -4700,7 +4712,16 @@ function mixedConfirmKeyboard(draftId: string): InlineKeyboardMarkup {
   return { inline_keyboard: [[
     { text: '✅ Подтвердить', callback_data: `${MIXED_CONFIRM_CALLBACK_PREFIX}${draftId}:y` },
     { text: '✖️ Отменить', callback_data: `${MIXED_CONFIRM_CALLBACK_PREFIX}${draftId}:n` },
+  ], [
+    { text: '🔀 Другой проект', callback_data: `${MIXED_CONFIRM_CALLBACK_PREFIX}${draftId}:p` },
   ]] };
+}
+
+function mixedProjectRows(draftId: string, projects: readonly { readonly id: string; readonly name: string }[]) {
+  return projects.slice(0, 20).map((p) => [{
+    text: p.name.slice(0, 60),
+    callback_data: `${MIXED_PROJECT_CALLBACK_PREFIX}${draftId}:${p.id}`,
+  }]);
 }
 
 // Режим прогона задачи воркеру из группы — флаг проекта «Полный прогон по умолчанию» (db/193).
@@ -4709,5 +4730,5 @@ function groupRunMode(project: { readonly groupFullRunDefault?: boolean } | null
 }
 
 export function mixedWorkerAcceptedText(projectName: string): string {
-  return `🤖 Передал воркеру: <b>${escapeHtml(projectName)}</b>. Сообщу результат здесь.`;
+  return `✅ Подтверждено автором. 🤖 Передал воркеру: <b>${escapeHtml(projectName)}</b>. Сообщу результат здесь.`;
 }
