@@ -212,7 +212,9 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 text-xs font-mono text-white/55 mb-3">
-                    <span>{post.dateFormatted} · {post.minutes} мин</span>
+                    <span>
+                      <time dateTime={post.dateIso}>{post.dateFormatted}</time> · {post.minutes} мин
+                    </span>
                     <span className="px-2.5 py-0.5 rounded-md bg-white/10 text-rose-300">
                       #{post.topic}
                     </span>

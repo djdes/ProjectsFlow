@@ -32,7 +32,9 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
   const [spinTrigger, setSpinTrigger] = useState<number>(0);
   const [activeNav, setActiveNav] = useState<string>('hero');
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
-  const [isAuthed, setIsAuthed] = useState<boolean>(false);
+  const [isAuthed, setIsAuthed] = useState<boolean>(() =>
+    typeof document !== 'undefined' && document.documentElement.dataset.auth === 'authed',
+  );
 
   const activeLayer: StackLayerSpec =
     STACK_LAYERS.find((l) => l.id === activeLayerId) ?? STACK_LAYERS[0]!;
@@ -63,11 +65,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
   }, []);
 
   useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then((res) => {
-        if (res.ok) setIsAuthed(true);
-      })
-      .catch(() => {});
+    setIsAuthed(document.documentElement.dataset.auth === 'authed');
   }, []);
 
   // Scroll-spy: automatically highlight active top navigation tab when scrolling
@@ -285,7 +283,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
       </header>
 
       {/* Main Content */}
-      <main>
+      <main id="main">
         <HeroShowcase
           activeLayer={activeLayer}
           activeTariff={activeTariff}

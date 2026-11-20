@@ -109,6 +109,7 @@ jobs:
             nvm use 22 >/dev/null
             npm ci --omit=dev --no-audit --no-fund
             node --env-file=.env scripts/migrate.mjs
+            node --env-file=.env scripts/refresh-promo-cache.mjs || echo "WARN: promo-cache refresh skipped"
             pm2 startOrReload ecosystem.config.cjs
             pm2 save
           ' _ "$RELEASE_NAME" "$stage" "$DEPLOY_PATH"

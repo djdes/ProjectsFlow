@@ -67,7 +67,18 @@ import type { ProductTelemetryRepository } from '../application/telemetry/Produc
 import type { GetPublicTaskDetail } from '../application/project/GetPublicTaskDetail.js';
 import type { GetPublicTaskAccess } from '../application/project/GetPublicTaskAccess.js';
 import type { GetPublicAttachment } from '../application/project/GetPublicAttachment.js';
+import {
+  renderPublicBoardMarkdown,
+  type PublicBoardSnapshotCache,
+} from '../application/project/PublicBoardSnapshotCache.js';
 import { publicBoardRouter } from './public/routes.js';
+import {
+  buildMergedSitemapXml,
+  prefersMarkdown,
+  resolveLandingMarkdownFile,
+  sendLandingHtmlWithAuth,
+  sendMarkdownFile,
+} from './public/promoDelivery.js';
 import { telemetryRouter } from './telemetry/routes.js';
 import type { SetProjectDispatcher } from '../application/project/SetProjectDispatcher.js';
 import type { SetProjectMultiTaskWorker } from '../application/project/SetProjectMultiTaskWorker.js';
@@ -454,6 +465,7 @@ type AppDeps = {
     readonly unpublishProject: UnpublishProject;
     readonly setPublicIndexing: SetPublicIndexing;
     readonly setPublicAppearance: SetPublicAppearance;
+    readonly publicBoardCache?: PublicBoardSnapshotCache;
     readonly ensureAppRepo: EnsureProjectAppRepo;
     readonly createProjectRepo: CreateProjectRepo;
     readonly importProjectRepo: ImportProjectRepo;
@@ -572,6 +584,7 @@ type AppDeps = {
     // Для отдачи обложки-картинки опубликованной доски анониму (lookup проекта по slug).
     readonly projects: ProjectRepository;
     readonly coverStorage: AttachmentStorage;
+    readonly snapshotCache?: PublicBoardSnapshotCache;
   };
   readonly siteEditor: {
     readonly service: SiteEditorService;
@@ -1541,24 +1554,114 @@ export function createApp(deps: AppDeps): CreatedApp {
       });
     }
   }
-  if (hasLanding) mountBuildAssets(app, '/_astro', resolve(landingDist, '_astro'));
+  if (hasLanding) mountBuildAssets(app, '/_astro', resolve(landingDist, '/_astro'.slice(1)));
   if (!isDev && hasClient) mountBuildAssets(app, '/assets', resolve(clientDist, 'assets'));
-  if (hasLanding) app.use(express.static(landingDist, { index: false }));
-  // SPA static — только в prod (в dev статика приходит из Vite).
-  if (!isDev && hasClient) app.use(express.static(clientDist, { index: false }));
 
   // Главный роутинг: cookie-based для `/`, остальные пути — SPA.
   const isAuthed = (req: Request): boolean => Boolean(req.cookies?.[sessionCookieName]);
 
+  // Динамическая карта сайта: статика Astro + индексируемые публичные доски из JSON-снимка (0 SQL).
+  app.get('/sitemap.xml', (req, res, next) => {
+    void (async () => {
+      const indexed = deps.public.snapshotCache
+        ? await deps.public.snapshotCache.listIndexedBoards().catch(() => [])
+        : [];
+      const proto = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim() || req.protocol || 'https';
+      const host = req.get('host') || 'projectsflow.ru';
+      const xml = await buildMergedSitemapXml(landingDist, indexed, `${proto}://${host}`);
+      if (!xml) {
+        next();
+        return;
+      }
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.status(200).send(xml);
+    })().catch(next);
+  });
+
+  // Markdown-версия опубликованной публичной доски (/p/:slug.md и Accept: text/markdown на /p/:slug).
+  app.get('/p/:slug.md', (req, res, next) => {
+    void (async () => {
+      const slug = req.params.slug;
+      const board = deps.public.snapshotCache
+        ? await deps.public.snapshotCache.getBoard(slug)
+        : await deps.public.getPublicBoard.execute(slug);
+      if (!board) {
+        res.status(404).type('text/markdown; charset=utf-8').send('# Доска не найдена\n');
+        return;
+      }
+      const proto = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim() || req.protocol || 'https';
+      const origin = `${proto}://${req.get('host') || 'projectsflow.ru'}`;
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader('Vary', 'Accept');
+      res.setHeader('X-Robots-Tag', 'noindex, follow');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.status(200).send(renderPublicBoardMarkdown(board, origin));
+    })().catch(next);
+  });
+
+  app.get('/p/:slug', (req, res, next) => {
+    if (!prefersMarkdown(req.headers.accept)) {
+      next();
+      return;
+    }
+    void (async () => {
+      const slug = req.params.slug;
+      const board = deps.public.snapshotCache
+        ? await deps.public.snapshotCache.getBoard(slug)
+        : await deps.public.getPublicBoard.execute(slug);
+      if (!board) {
+        res.status(404).type('text/markdown; charset=utf-8').send('# Доска не найдена\n');
+        return;
+      }
+      const proto = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim() || req.protocol || 'https';
+      const origin = `${proto}://${req.get('host') || 'projectsflow.ru'}`;
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader('Vary', 'Accept');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.status(200).send(renderPublicBoardMarkdown(board, origin));
+    })().catch(next);
+  });
+
+  // Явные .md-двойники промо-страниц и блога (/index.md, /blog.md, /blog/:slug.md) с X-Robots-Tag.
+  if (hasLanding) {
+    app.get('*.md', (req, res, next) => {
+      const mdFile = resolveLandingMarkdownFile(landingDist, req.path);
+      if (!mdFile) {
+        res.status(404).type('text/markdown; charset=utf-8').send('# Страница не найдена\n');
+        return;
+      }
+      void sendMarkdownFile(res, mdFile, { explicitMdTwin: true }).catch(next);
+    });
+  }
+
+  if (hasLanding) app.use(express.static(landingDist, { index: false }));
+  // SPA static — только в prod (в dev статика приходит из Vite).
+  if (!isDev && hasClient) app.use(express.static(clientDist, { index: false }));
+
   // /landing — всегда отдаёт лендинг (даже если юзер залогинен). Полезно для preview
   // и показа лендинга без логаута.
   if (hasLanding) {
-    app.get('/landing', (_req, res) => {
-      res.sendFile(resolve(landingDist, 'index.html'));
+    app.get('/landing', (req, res, next) => {
+      if (prefersMarkdown(req.headers.accept)) {
+        const mdFile = resolveLandingMarkdownFile(landingDist, '/landing');
+        if (mdFile) {
+          void sendMarkdownFile(res, mdFile).catch(next);
+          return;
+        }
+      }
+      void sendLandingHtmlWithAuth(res, resolve(landingDist, 'index.html'), isAuthed(req)).catch(next);
     });
   }
 
   app.get('/', (req, res, next) => {
+    if (prefersMarkdown(req.headers.accept) && hasLanding) {
+      const mdFile = resolveLandingMarkdownFile(landingDist, '/');
+      if (mdFile) {
+        void sendMarkdownFile(res, mdFile).catch(next);
+        return;
+      }
+    }
     if (isAuthed(req)) {
       // Авторизованный — отдаём SPA.
       if (isDev && viteProxy) {
@@ -1572,7 +1675,7 @@ export function createApp(deps: AppDeps): CreatedApp {
     }
     // Не авторизован (или нет client/dist) — лендинг.
     if (hasLanding) {
-      res.sendFile(resolve(landingDist, 'index.html'));
+      void sendLandingHtmlWithAuth(res, resolve(landingDist, 'index.html'), false).catch(next);
       return;
     }
     // Без лендинга и без SPA — fallback в SPA если он есть.
@@ -1589,10 +1692,17 @@ export function createApp(deps: AppDeps): CreatedApp {
     app.get('*', (req, res, next) => {
       const rel = req.path.replace(/^\/+/, '').replace(/\/+$/, '');
       if (!rel) return next();
+      if (prefersMarkdown(req.headers.accept)) {
+        const mdFile = resolveLandingMarkdownFile(landingDist, req.path);
+        if (mdFile) {
+          void sendMarkdownFile(res, mdFile).catch(next);
+          return;
+        }
+      }
       const file = resolve(landingDist, rel, 'index.html');
       // Защита от path-traversal: не выходим за пределы landingDist.
       if (file.startsWith(landingDist + sep) && existsSync(file)) {
-        res.sendFile(file);
+        void sendLandingHtmlWithAuth(res, file, isAuthed(req)).catch(next);
         return;
       }
       next();

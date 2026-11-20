@@ -234,6 +234,14 @@ export class DrizzleProjectRepository implements ProjectRepository {
     return row ? toProject(row) : null;
   }
 
+  async listPublished(): Promise<Project[]> {
+    const rows = await this.db
+      .select()
+      .from(projects)
+      .where(eq(projects.isPublic, true));
+    return rows.map(toProject);
+  }
+
   async findBySiteSlug(slug: string): Promise<Project | null> {
     const rows = await this.db
       .select()
