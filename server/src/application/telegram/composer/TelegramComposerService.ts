@@ -111,6 +111,9 @@ export type TelegramGroupContext = {
   // кто подключил группу, а реальный автор — в подписанном источнике.
   // mode='mixed' — смешанная группа (db/193), сообщение без исполнителя: задача воркеру.
   readonly incident?: { readonly addedByUserId: string | null; readonly mode?: 'incident' | 'mixed' };
+  // Смешанная группа: автор без аккаунта (или не участник) ставит задачу человеку — задача
+  // создаётся от того, кто подключил группу; кнопки черновика может нажимать и сам автор.
+  readonly actAsUserId?: string;
 };
 
 type Deps = {
@@ -686,6 +689,8 @@ function appendNewAttachments(
 export class TelegramComposerService {
   private readonly activeSpinners = new Map<string, () => Promise<void>>();
   private readonly callbackLocks = new Map<string, Promise<void>>();
+  // sourceKey черновика → Telegram id автора без аккаунта (смешанная группа, actAsUserId).
+  private readonly actAsAuthors = new Map<string, number>();
 
   // Разборы с ai_started_at раньше этого момента начаты прошлым процессом (см. resumeOrphanedCompose).
   private readonly bootedAt: Date;
@@ -1072,7 +1077,8 @@ export class TelegramComposerService {
     }
     // Групповое сообщение: каждый привязанный участник работает «как отправитель» (в своё) —
     // продолжаем обычным флоу ниже. Непривязанный → в «Входящие» владельца (или просьба привязать).
-    if (groupCtx) {
+    if (groupCtx?.actAsUserId && options.sourceKey) this.actAsAuthors.set(options.sourceKey, tgUserId);
+    if (groupCtx && !groupCtx.actAsUserId) {
       const route = await this.resolveGroupRouting(tgUserId, groupCtx.ownerUserId);
       if (route === 'owner-inbox') {
         // ownerUserId гарантированно задан, когда route === 'owner-inbox'.
@@ -1090,7 +1096,7 @@ export class TelegramComposerService {
       // route === 'self' → обычный флоу ниже (отправитель точно привязан).
     }
 
-    const userId = await this.deps.users.findUserIdByTelegramUserId(tgUserId);
+    const userId = groupCtx?.actAsUserId ?? await this.deps.users.findUserIdByTelegramUserId(tgUserId);
     if (!userId) {
       await this.send(chatId, this.notLinkedText());
       return;
@@ -1785,7 +1791,10 @@ export class TelegramComposerService {
       await this.deps.client.answerCallbackQuery(cq.id, { text: 'Этот черновик уже обработан.' });
       return;
     }
-    const userId = await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
+    const actAsAuthor = draft.sourceKey ? this.actAsAuthors.get(draft.sourceKey) : undefined;
+    const userId = actAsAuthor === cq.from.id
+      ? draft.creatorUserId
+      : await this.deps.users.findUserIdByTelegramUserId(cq.from.id);
     if (!userId || userId !== draft.creatorUserId) {
       await this.deps.client.answerCallbackQuery(cq.id, { text: 'Это не твой черновик.' });
       return;
