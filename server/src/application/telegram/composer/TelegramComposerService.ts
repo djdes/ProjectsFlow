@@ -914,14 +914,13 @@ export class TelegramComposerService {
       ...(options.replyToMessageId !== undefined ? { replyToMessageId: options.replyToMessageId } : {}),
     }, project?.id ?? PENDING_PROJECT_ID, ctx.signingKey, { mode: 'mixed', runMode: groupRunMode(project) });
     const id = this.deps.shortIdGen();
-    const groupedAlbum = ctx.sourceKey.startsWith('g:');
     const draft = await this.deps.drafts.create({
       id, sourceKey: ctx.sourceKey, creatorUserId: ctx.creatorUserId, tgChatId: chatId,
       taskText: description, projectId: project?.id ?? null, assigneeUserId: ctx.creatorUserId,
       targetStatus: 'todo', attachments: withDefaultAttachmentTargets(attachments),
       ttlSeconds: DRAFT_TTL_SECONDS,
-      // Проект не выбран — без таймера: ждём кнопку, иначе задача ушла бы во «Входящие».
-      autoCreateSeconds: project ? (groupedAlbum ? 15 : 5) : null,
+      // Без таймера: задачу воркеру создаёт только автор — кнопкой «Подтвердить» или выбором проекта.
+      autoCreateSeconds: null,
     });
     if (draft.id !== id) return;
     if (!project) {
@@ -929,21 +928,56 @@ export class TelegramComposerService {
         text: p.name.slice(0, 60),
         callback_data: `${MIXED_PROJECT_CALLBACK_PREFIX}${draft.id}:${p.id}`,
       }]);
+      rows.push([{ text: '✖️ Отменить', callback_data: `${MIXED_CONFIRM_CALLBACK_PREFIX}${draft.id}:n` }]);
       const messageId = await this.sendReturningId(chatId,
-        '❓ Для какого проекта эта задача? Выберите кнопкой — и я передам её воркеру.',
+        '❓ Исполнитель не указан — задачу выполнит воркер. Для какого проекта эта задача? ' +
+        'Выбрать проект или отменить может только автор задачи.',
         { inline_keyboard: rows });
       if (messageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId: messageId });
       return;
     }
-    const messageId = await this.sendReturningId(chatId, mixedWorkerAcceptedText(project.name));
+    const messageId = await this.sendReturningId(chatId, mixedWorkerConfirmText(project.name),
+      mixedConfirmKeyboard(draft.id));
     if (messageId !== null) await this.deps.drafts.patch(draft.id, { tgMessageId: messageId });
-    if (!groupedAlbum) {
-      await this.finalize(draft, ctx.creatorUserId, chatId, messageId ?? undefined, null);
+  }
+
+  // wc:<draftId>:<y|n> — подтвердить/отменить задачу воркеру смешанной группы. Только автор
+  // сообщения (Telegram id из подписанного источника): аккаунта у него может не быть.
+  private async onMixedConfirm(cq: TelegramCallbackQuery): Promise<void> {
+    const [draftId, action] = (cq.data ?? '').slice(MIXED_CONFIRM_CALLBACK_PREFIX.length).split(':');
+    const chatId = cq.message?.chat.id;
+    const signingKey = incidentSigningKey();
+    const draft = draftId ? await this.deps.drafts.getById(draftId).catch(() => null) : null;
+    const origin = draft && signingKey ? readIncidentOrigin(draft.taskText ?? '', signingKey) : null;
+    if (!draft || chatId === undefined || draft.tgChatId !== chatId || draft.status !== 'composing' ||
+        origin?.mode !== 'mixed' || origin.chatId !== chatId) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Этот запрос уже обработан.' });
+      return;
     }
+    if (cq.from.id !== origin.userId) {
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: 'Подтвердить или отменить может только автор задачи.', showAlert: true,
+      });
+      return;
+    }
+    const messageId = cq.message?.message_id ?? draft.tgMessageId ?? undefined;
+    if (action === 'n') {
+      const cancelled = await this.deps.drafts.cancelComposing(draft.id);
+      if (cancelled && messageId) await this.edit(chatId, messageId, '✖️ Отменено автором.');
+      await this.deps.client.answerCallbackQuery(cq.id, { text: cancelled ? 'Отменено' : 'Этот запрос уже обработан.' });
+      return;
+    }
+    if (!draft.projectId) {
+      await this.deps.client.answerCallbackQuery(cq.id, { text: 'Сначала выберите проект.' });
+      return;
+    }
+    const project = await this.deps.projects.getById(draft.projectId).catch(() => null);
+    if (messageId) await this.edit(chatId, messageId, mixedWorkerAcceptedText(project?.name ?? 'проект'));
+    await this.finalize(draft, draft.creatorUserId, chatId, messageId, cq.id);
   }
 
   // wp:<draftId>:<projectId> — выбор проекта для задачи воркеру в смешанной группе. Нажать может
-  // любой участник группы (у автора аккаунта может не быть); проект — только из проектов группы.
+  // только автор сообщения (аккаунта у него может не быть); выбор проекта = подтверждение.
   private async onMixedProjectPick(cq: TelegramCallbackQuery): Promise<void> {
     const [draftId, projectId] = (cq.data ?? '').slice(MIXED_PROJECT_CALLBACK_PREFIX.length).split(':');
     const chatId = cq.message?.chat.id;
@@ -953,6 +987,12 @@ export class TelegramComposerService {
     if (!draft || !projectId || chatId === undefined || !signingKey || draft.tgChatId !== chatId ||
         draft.status !== 'composing' || draft.projectId || origin?.mode !== 'mixed' || origin.chatId !== chatId) {
       await this.deps.client.answerCallbackQuery(cq.id, { text: 'Этот запрос уже обработан.' });
+      return;
+    }
+    if (cq.from.id !== origin.userId) {
+      await this.deps.client.answerCallbackQuery(cq.id, {
+        text: 'Выбрать проект может только автор задачи.', showAlert: true,
+      });
       return;
     }
     const allowed = (await this.deps.groupProjects?.allowedProjectIds(chatId).catch(() => [] as readonly string[])) ?? [];
@@ -1725,6 +1765,7 @@ export class TelegramComposerService {
     const runMode = parseRunModeCallback(cq.data);
     if (runMode) return this.onRunModeSel(cq, runMode.taskId, runMode.runMode);
     if (cq.data?.startsWith(MIXED_PROJECT_CALLBACK_PREFIX)) return this.onMixedProjectPick(cq);
+    if (cq.data?.startsWith(MIXED_CONFIRM_CALLBACK_PREFIX)) return this.onMixedConfirm(cq);
     const cb = parseCallback(cq.data);
     if (!cb) {
       await this.deps.client.answerCallbackQuery(cq.id);
@@ -4634,6 +4675,21 @@ function isSelfAssigneeQuery(query: string): boolean {
 
 // Смешанная группа (db/193): кнопка выбора проекта задачи воркеру — wp:<draftId>:<projectId>.
 export const MIXED_PROJECT_CALLBACK_PREFIX = 'wp:';
+// Подтвердить/отменить задачу воркеру смешанной группы — wc:<draftId>:<y|n>.
+export const MIXED_CONFIRM_CALLBACK_PREFIX = 'wc:';
+
+export function mixedWorkerConfirmText(projectName: string): string {
+  return `🤖 Исполнитель не указан — задачу выполнит воркер (проект <b>${escapeHtml(projectName)}</b>).
+` +
+    'Подтвердить или отменить может только автор задачи. Отвечать на вопросы бота и комментировать задачу — тоже только автор.';
+}
+
+function mixedConfirmKeyboard(draftId: string): InlineKeyboardMarkup {
+  return { inline_keyboard: [[
+    { text: '✅ Подтвердить', callback_data: `${MIXED_CONFIRM_CALLBACK_PREFIX}${draftId}:y` },
+    { text: '✖️ Отменить', callback_data: `${MIXED_CONFIRM_CALLBACK_PREFIX}${draftId}:n` },
+  ]] };
+}
 
 // Режим прогона задачи воркеру из группы — флаг проекта «Полный прогон по умолчанию» (db/193).
 function groupRunMode(project: { readonly groupFullRunDefault?: boolean } | null): 'full' | 'quick' {

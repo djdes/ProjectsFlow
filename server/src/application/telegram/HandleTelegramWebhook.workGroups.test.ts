@@ -469,7 +469,7 @@ test('смешанная группа: с исполнителем — обыч�
   assert.equal(stranger.prompts.length, 1, 'бот предлагает подключиться');
 });
 
-test('смешанная группа: на уточнение задачи воркеру отвечает любой участник, на уточнение задачи человека — только адресат', async () => {
+test('смешанная группа: на уточнение задачи воркеру отвечает только автор, на уточнение задачи человека — только адресат', async () => {
   const saved = process.env.TELEGRAM_ORIGIN_SIGNING_KEY;
   const key = 'mixed-signing-key-not-a-secret-123456789';
   process.env.TELEGRAM_ORIGIN_SIGNING_KEY = key;
@@ -487,6 +487,12 @@ test('смешанная группа: на уточнение задачи во
     assert.equal(worker.comments[0]!.ownerUserId, 'u-lead');
     assert.match(worker.comments[0]!.body, /через группу Telegram/);
     assert.match(worker.sent.at(-1)!.text, /Спасибо, ответ получен/);
+
+    const strangerReply = groupMessage({ from: { id: 888, first_name: 'Чужой' }, text: 'Не знаю', reply_to_message: { message_id: 50, from: { id: 1, is_bot: true, username: 'ProjectsFlow_Bot' } } });
+    const stranger = makeHarness({ workGroup: group, senderUserId: null, clarification: { task: workerTask, recipientUserId: 'u-lead' } });
+    await stranger.h.execute(strangerReply);
+    assert.equal(stranger.comments.length, 0);
+    assert.match(stranger.sent.at(-1)!.text, /только автор задачи/);
 
     const personTask = { id: 't2', projectId: 'p1', description: 'Поправить плеер' };
     const person = makeHarness({ workGroup: group, senderUserId: 'u-ivan', clarification: { task: personTask, recipientUserId: 'u-denis' } });
