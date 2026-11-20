@@ -1409,6 +1409,7 @@ const reportTelegramWorkerResult = new ReportTelegramWorkerResult({
   }),
   tasks: taskRepo,
   commits: taskCommitRepo,
+  comments: taskCommentRepo,
   projects: projectRepo,
   members: projectMemberRepo,
   client: telegramClient,

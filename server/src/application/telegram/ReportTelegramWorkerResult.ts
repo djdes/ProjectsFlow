@@ -3,6 +3,7 @@ import type { ProjectMemberRepository } from '../project/ProjectMemberRepository
 import { requireDispatcherAccess } from '../project/projectAccess.js';
 import type { TaskRepository } from '../task/TaskRepository.js';
 import type { TaskCommitRepository } from '../task/TaskCommitRepository.js';
+import type { TaskCommentRepository } from '../task/TaskCommentRepository.js';
 import type { TelegramClient } from './TelegramClient.js';
 import type { TelegramTaskOriginRepository } from './TelegramTaskOriginRepository.js';
 import type { Task } from '../../domain/task/Task.js';
@@ -18,6 +19,8 @@ type Deps = {
   readonly destinations?: { resolve(task: Task): Promise<WorkerResultDestination | null> };
   readonly tasks: Pick<TaskRepository, 'getById'>;
   readonly commits: Pick<TaskCommitRepository, 'listByTask'>;
+  // Комментарии воркера этого прогона: по ним видно, выкачено ли в прод (строка «Уже в проде»).
+  readonly comments?: Pick<TaskCommentRepository, 'listByTask'>;
   readonly projects: ProjectRepository;
   readonly members: ProjectMemberRepository;
   readonly client: Pick<TelegramClient, 'sendMessage'>;
@@ -119,10 +122,12 @@ export class ReportTelegramWorkerResult {
       const title = compact(description.split('\n')[0] ?? description, 140);
       if (await this.isIncident(origin.chatId) || (await this.isMixedWorkerTask(origin.chatId, task))) {
         // Автор жалобы — не разработчик: ни коммитов, ни упоминаний, только итог по-человечески.
-        const text = task.status === 'pending_approval'
+        const base = task.status === 'pending_approval'
           ? `✅ Исправление по вашему обращению готово и ждёт проверки ответственным: ${escapeTelegramHtml(title)}`
           : `✅ Готово — проблему исправили: ${escapeTelegramHtml(title)}\nЕсли что-то всё ещё не так, ответьте на это сообщение.`;
-        await this.send(origin, token, now, task.id, text);
+        const prod = await this.prodLine(task.id, completion.startedAt);
+        await this.send(origin, token, now, task.id, prod ? `${base}
+${prod}` : base);
         return;
       }
       const commits = await this.deps.commits.listByTask(task.id);
@@ -149,6 +154,17 @@ export class ReportTelegramWorkerResult {
       await this.deps.outbox.retry(origin.id, token, new Date(now.getTime() + RETRY_MS));
       console.warn('[telegram-worker-result] retry', origin.taskId, error);
     }
+  }
+
+  // Воркер сообщает о выкате в своих комментариях прогона (worker-prompt шаг 6г/7в):
+  // «⚠️🚀 ДЕПЛОЙ …» — прод не обновлён; «прод обновлён» / «деплой ОК» — уже в проде.
+  // Нет ни того, ни другого (сборки без деплоя, snapshot) — про прод ничего не пишем.
+  private async prodLine(taskId: string, since: Date): Promise<string | null> {
+    if (!this.deps.comments) return null;
+    const comments = await this.deps.comments.listByTask(taskId).catch(() => []);
+    return prodStatusLine(comments
+      .filter((c) => c.actorKind !== 'user' && c.createdAt.getTime() >= since.getTime())
+      .map((c) => c.body));
   }
 
   private async isMixedWorkerTask(chatId: number, task: Task): Promise<boolean> {
@@ -180,4 +196,14 @@ export class ReportTelegramWorkerResult {
       await this.deps.outbox.retry(origin.id, token, new Date(now.getTime() + delay));
     }
   }
+}
+
+export function prodStatusLine(workerCommentBodies: readonly string[]): string | null {
+  if (workerCommentBodies.some((b) => /ДЕПЛОЙ (?:В GITHUB ACTIONS )?(?:УПАЛ|НЕ ПРОШЁЛ)|ПРОД НЕ ОБНОВЛЁН|прод НЕ обновл/i.test(b))) {
+    return '⚠️ В прод пока не выкачено — сообщим отдельно.';
+  }
+  if (workerCommentBodies.some((b) => /прод(?:е)? обновл[её]н|деплой ОК|выкачено в прод|установлено в прод/i.test(b))) {
+    return '🚀 Уже в проде.';
+  }
+  return null;
 }
