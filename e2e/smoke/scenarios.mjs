@@ -1339,6 +1339,51 @@ export const scenarios = [
   },
 
   {
+    id: 'visual-rules',
+    title: 'Вид: мало цветов рамок, шапка и нижняя навигация без линий',
+    matrix: [['phone', 'light'], ['phone', 'dark']],
+    async run(t) {
+      const { page } = t;
+      // Distinct visible border colours on the page: one line per theme plus a few meaning
+      // colours (accent, status, drop zone). Growth past this means borders went «dirty» again.
+      const borderColors = () => page.evaluate(() => {
+        const colors = new Set();
+        for (const el of document.querySelectorAll('body *')) {
+          const box = el.getBoundingClientRect();
+          if (!box.width || !box.height) continue;
+          const cs = getComputedStyle(el);
+          if (cs.visibility === 'hidden') continue;
+          for (const side of ['Top', 'Right', 'Bottom', 'Left']) {
+            if (parseFloat(cs[`border${side}Width`]) === 0 || cs[`border${side}Style`] === 'none') continue;
+            const color = cs[`border${side}Color`];
+            if (/\/ 0\)$|transparent|rgba\(0, 0, 0, 0\)/.test(color)) continue;
+            colors.add(color);
+          }
+        }
+        return [...colors];
+      });
+      const pages = [
+        ['Входящие', '/', () => page.locator(NOW)],
+        ['доска', `/projects/${BOARD_PROJECT_ID}`, () => page.locator(card('t-home'))],
+        ['задача', `/projects/${BOARD_PROJECT_ID}/tasks/t-home`, () => page.locator('[data-pf-comment-composer]:visible')],
+        ['профиль', '/profile', () => page.getByRole('heading', { name: 'Профиль' })],
+      ];
+      for (const [name, path, ready] of pages) {
+        await t.goto(path, { ready });
+        await t.check(`${name}: не больше 6 цветов рамок`, async () => {
+          const colors = await borderColors();
+          t.assert(colors.length <= 6, `цветов рамок ${colors.length}: ${colors.join(', ')}`);
+        });
+      }
+      await t.check('шапка и нижняя навигация без линий', async () => {
+        const header = await page.locator('[data-pf-mobile-app-header]').evaluate((el) => getComputedStyle(el).borderBottomWidth);
+        const nav = await page.locator('[data-pf-bottom-nav]').evaluate((el) => getComputedStyle(el).borderTopWidth);
+        t.assert(header === '0px' && nav === '0px', `линия у шапки ${header}, у навигации ${nav}`);
+      });
+    },
+  },
+
+  {
     id: 'offline-reads',
     title: 'Без сети: доска открывается из последней сохранённой копии',
     matrix: [['phone', 'light']],

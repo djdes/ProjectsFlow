@@ -6,6 +6,30 @@ import boundaries from 'eslint-plugin-boundaries';
 import tseslint from 'typescript-eslint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
+// Shared by the border rules below (see the comments there).
+const BORDER_SHADE = '/(^|[\\s:])(border|divide)-border\\/\\d/';
+const BORDER_PALETTE = '/(^|[\\s:])border-(gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\\d/';
+const BORDER_RULES = [
+  ...[`Literal[value=${BORDER_SHADE}]`, `TemplateElement[value.raw=${BORDER_SHADE}]`].map((selector) => ({
+    selector,
+    message: 'Одна линия на тему: border-border без прозрачности (/NN). Мягче нужна — правь токен --border.',
+  })),
+  ...[`Literal[value=${BORDER_PALETTE}]`, `TemplateElement[value.raw=${BORDER_PALETTE}]`].map((selector) => ({
+    selector,
+    message: 'Палитру Tailwind для рамок не используем: цвет = смысл (border-primary, border-destructive…) или border-border.',
+  })),
+];
+const CHAT_BORDER = '/(^|[\\s:])border(-(s|e|bs|be|x|y|2|input|border))?(\\s|$)/';
+const CHAT_FILES = [
+  'src/presentation/components/tasks/WorkerChatMessage.tsx',
+  'src/presentation/components/tasks/WorkerResultMessage.tsx',
+  'src/presentation/components/tasks/CommentBody.tsx',
+  'src/presentation/components/tasks/TaskDrawerComposer.tsx',
+  'src/presentation/components/ai/AiComposer.tsx',
+  'src/presentation/chat/ChatComposer.tsx',
+  'src/presentation/notifications/NotificationQuote.tsx',
+];
+
 export default defineConfig([
   globalIgnores(['dist']),
   {
@@ -147,6 +171,28 @@ export default defineConfig([
             },
           ],
         },
+      ],
+    },
+  },
+  // Рамки (2026-11-21, «рамки как в Claude»): одна линия на тему — `border-border`. Оттенки
+  // `border-border/NN` и палитра Tailwind для рамок снова раздробили бы интерфейс на клетки.
+  {
+    files: ['src/**/*.tsx'],
+    rules: {
+      'no-restricted-syntax': ['error', ...BORDER_RULES],
+    },
+  },
+  // Комментарии, ответы и чат — без рамок вовсе: пузыри и поле ввода держатся заливкой.
+  {
+    files: CHAT_FILES,
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...BORDER_RULES,
+        ...[`Literal[value=${CHAT_BORDER}]`, `TemplateElement[value.raw=${CHAT_BORDER}]`].map((selector) => ({
+          selector,
+          message: 'В комментариях и чате рамок нет — отделяй заливкой (bg-muted, bg-primary-soft) и скруглением.',
+        })),
       ],
     },
   },

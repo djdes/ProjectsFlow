@@ -95,6 +95,9 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
   Hallmark · Wayfind (`landing/DESIGN.md`); C4 там только у живой доски и окон продукта.
   Цвет = смысл статуса (`approval`/`manual`/`done`/`primary`/`destructive`), тона проектов и людей —
   `lib/tone.ts` + `.pf-tone-*`/`.pf-tag`; палитру Tailwind (`violet-500`…) для смыслов не используем.
+  Рамки — одна линия `border-border` без `/NN`; в комментариях и чате рамок нет (заливка); ESLint
+  и смоук `visual-rules` это проверяют. Тёмная тема тёплая (hue 75), засечки — только крупные
+  заголовки (`font-serif`). Подробно — «Обновление 2026-11-21» в начале спеки C4.
 - CSS пишем по скиллу good-css (`.claude/skills/good-css`, `npx skills add vojtaholik/good-css`):
   цвета — тройки OKLCH (`--x: L% C H`, в коде `oklch(var(--x) / a)`, производные — `color-mix`);
   стороны — логические утилиты (`ms/me/ps/pe/start/end`, блочные `mbs/mbe/pbs/pbe/inset-bs/be/
