@@ -412,7 +412,7 @@ function WorkspaceShell(): React.ReactElement {
           </div>
         ) : (
           <div className="flex h-dvh flex-col bg-background text-foreground">
-            <header data-pf-mobile-app-header className="flex min-h-12 shrink-0 items-center gap-2 border-be px-3 pbs-[env(safe-area-inset-top,0px)]">
+            <header data-pf-mobile-app-header className="flex min-h-12 shrink-0 items-center gap-2 px-3 pbs-[env(safe-area-inset-top,0px)]">
               <Button
                 variant="ghost"
                 size="icon"

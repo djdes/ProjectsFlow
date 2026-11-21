@@ -1,3 +1,4 @@
+import { installBannerHidden } from './installBanner';
 export type LoadingLayout =
   | 'board'
   | 'table'
@@ -80,13 +81,13 @@ export function bootSkeletonKey(path: string, search: string, host: string): str
   return `${bare ? 'page' : 'shell'}:${bare && publicBoard ? 'board' : layout}`;
 }
 
-/** InstallAppPrompt shows its banner under the mobile header: not installed, not dismissed. */
+/** InstallAppPrompt shows its banner under the mobile header: not installed, not hidden (installBanner.ts). */
 export function installBannerExpected(): boolean {
   try {
     const standalone =
       matchMedia('(display-mode: standalone)').matches ||
       (navigator as Navigator & { standalone?: boolean }).standalone === true;
-    return !standalone && localStorage.getItem('pf-install-dismissed') !== '1';
+    return !standalone && !installBannerHidden(localStorage, Date.now());
   } catch {
     return false;
   }
