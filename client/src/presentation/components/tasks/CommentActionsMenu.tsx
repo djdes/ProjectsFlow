@@ -10,6 +10,8 @@ import {
   Mail,
   MinusCircle,
   MoreHorizontal,
+  Pencil,
+  Reply,
   Send,
   Trash2,
   Users,
@@ -44,6 +46,14 @@ type Props = {
   comment: TaskComment;
   /** Удаление комментария — пункт меню (перенесено из отдельной кнопки-корзины). */
   onDelete?: () => void;
+  /** Телефон: «Ответить»/«Изменить» живут в меню (ряд кнопок на тач-экранах скрыт). */
+  onReply?: () => void;
+  onEdit?: () => void;
+  /** Управляемое открытие: долгое нажатие на комментарий открывает это же меню. */
+  menuOpen?: boolean;
+  onMenuOpenChange?: (open: boolean) => void;
+  /** Класс кнопки ⋯ (на тач-экранах она невидима, но остаётся якорем меню). */
+  triggerClassName?: string;
 };
 
 // Человеко-читаемая причина пропуска/ошибки доставки.
@@ -108,7 +118,17 @@ function groupByRecipient(recipients: readonly CommentNotification[]): Grouped[]
 
 // Меню ⋮ у отправленного комментария: «Кто уведомлён» (журнал доставки), копирование
 // ссылки на сам комментарий и текста.
-export function CommentActionsMenu({ projectId, taskId, comment, onDelete }: Props): React.ReactElement {
+export function CommentActionsMenu({
+  projectId,
+  taskId,
+  comment,
+  onDelete,
+  onReply,
+  onEdit,
+  menuOpen,
+  onMenuOpenChange,
+  triggerClassName,
+}: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -144,11 +164,11 @@ export function CommentActionsMenu({ projectId, taskId, comment, onDelete }: Pro
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={onMenuOpenChange}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-sm:size-10"
+            className={cn('grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-sm:size-10', triggerClassName)}
             aria-label="Действия с комментарием"
             title="Ещё"
           >
@@ -156,6 +176,24 @@ export function CommentActionsMenu({ projectId, taskId, comment, onDelete }: Pro
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[230px]">
+          {(onReply || onEdit) && (
+            // Только тач-экраны: на десктопе эти действия — кнопки рядом с именем.
+            <div className="[@media(hover:hover)]:hidden">
+              {onReply && (
+                <DropdownMenuItem onSelect={() => onReply()}>
+                  <Reply className="size-3.5" />
+                  Ответить
+                </DropdownMenuItem>
+              )}
+              {onEdit && (
+                <DropdownMenuItem onSelect={() => onEdit()}>
+                  <Pencil className="size-3.5" />
+                  Изменить
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+            </div>
+          )}
           <DropdownMenuItem onSelect={() => void openWhoNotified()}>
             <Bell className="size-3.5" />
             Кто уведомлён

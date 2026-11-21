@@ -1314,6 +1314,56 @@ export const scenarios = [
   },
 
   {
+    id: 'comment-gestures',
+    title: 'Комментарий на телефоне: свайп — ответ, долгое нажатие — меню, без рамок',
+    matrix: [['phone', 'light'], ['narrow', 'dark']],
+    async run(t) {
+      const { page, state } = t;
+      const at = new Date(Date.now() - 3_600_000).toISOString();
+      state.comments = { 't-home': [{
+        id: 'c-gesture', taskId: 't-home', ownerUserId: 'u-boris', body: 'Проверьте, пожалуйста, первый экран.',
+        actorKind: 'user', agentName: null, notifyMode: 'all', replyToCommentId: null, quotedText: null,
+        createdAt: at, updatedAt: at, attachments: [], acknowledgements: [],
+      }] };
+      await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/t-home`, { ready: () => page.locator('[data-pf-comment-composer]:visible') });
+      const item = page.locator('#comment-c-gesture:visible');
+      const body = item.getByText('Проверьте, пожалуйста, первый экран.', { exact: true });
+      await t.visible(body, 'комментарий в ленте');
+      await t.check('на тач-экране у комментария нет ряда кнопок и рамок', async () => {
+        await t.hidden(item.getByRole('button', { name: 'Ответить', exact: true }), 'кнопка «Ответить» у имени');
+        const card = page.locator('[data-pf-comment-composer]:visible .pf-comment-composer-card');
+        const borders = await card.evaluate((el) => getComputedStyle(el).borderTopWidth);
+        t.assert(borders === '0px', `у поля комментария рамка ${borders}`);
+        const itemBorder = await item.evaluate((el) => getComputedStyle(el).borderTopWidth);
+        t.assert(itemBorder === '0px', `у комментария рамка ${itemBorder}`);
+      });
+      await t.step('долгое нажатие открывает меню с «Ответить»', async () => {
+        await item.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        const { x, y } = await touchPoint(body);
+        const cdp = await page.context().newCDPSession(page);
+        try {
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+          await page.waitForTimeout(650);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        } finally {
+          await cdp.detach().catch(() => {});
+        }
+        await t.visible(page.getByRole('menuitem', { name: 'Ответить', exact: true }), 'пункт «Ответить» в меню');
+        await t.visible(page.getByRole('menuitem', { name: 'Кто уведомлён', exact: true }), 'пункт «Кто уведомлён»');
+        await page.keyboard.press('Escape');
+        await t.hidden(page.getByRole('menu'), 'меню закрылось');
+      });
+      await t.step('свайп вправо отвечает на комментарий', async () => {
+        // The sticky composer overlaps the end of the list: bring the comment to the middle first.
+        await item.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await touchSwipeRight(t, body, 110);
+        await t.visible(page.locator('[data-pf-comment-composer]:visible .pf-comment-reply-strip'), 'плашка «В ответ» в поле комментария');
+      });
+      await t.pageChecks('лента после жестов');
+    },
+  },
+
+  {
     id: 'notifications-bell',
     title: 'Колокольчик: приглашение в чужое пространство и лента уведомлений',
     matrix: [['desktop', 'light'], ['phone', 'light']],
