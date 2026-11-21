@@ -23,6 +23,14 @@ import { liveChatScenarios, liveRolesScenarios } from './live-chat.mjs';
 import { adminMailingScenarios } from './admin-mailing.mjs';
 import { adminUsersScenarios } from './admin-users.mjs';
 
+// Phone folds task properties after the first three rows (TaskProperties.tsx).
+async function expandTaskProperties(t, properties) {
+  const toggle = properties.getByRole('button', { name: /^Все свойства/ });
+  if (!(await toggle.isVisible())) return;
+  await toggle.tap();
+  await t.visible(properties.getByRole('button', { name: 'Свернуть свойства', exact: true }), 'свойства развёрнуты');
+}
+
 export const VIEWPORTS = {
   desktop: { label: 'десктоп 1440×900', viewport: { width: 1440, height: 900 } },
   phone: {
@@ -1133,6 +1141,13 @@ export const scenarios = [
       const properties = page.locator('[data-pf-task-properties]');
       const press = (locator) => t.isMobile ? locator.tap() : locator.click();
       await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/t-home`, { ready: () => properties });
+      if (t.isMobile) {
+        await t.check('на телефоне свойства свёрнуты до трёх строк', async () => {
+          await t.visible(properties.getByText('Статус', { exact: true }), 'Статус');
+          await t.hidden(properties.getByText('Повтор', { exact: true }), 'Повтор под «Все свойства»');
+          await expandTaskProperties(t, properties);
+        });
+      }
       await t.check('подписи свойств и «Создано» в меню', async () => {
         for (const label of ['Статус', 'Проект', 'Исполнитель', 'Срок до', 'Повтор', 'Кто утверждает']) {
           await t.visible(properties.getByText(label, { exact: true }), label);
@@ -1220,6 +1235,7 @@ export const scenarios = [
       await page.locator(card('t-home')).getByText(taskTitle(state, 't-home'), { exact: true }).tap();
       const properties = page.locator('[data-pf-task-properties]');
       await t.visible(properties, 'свойства в окне задачи');
+      await expandTaskProperties(t, properties);
       await t.step('закрытие вложенной шторки сохраняет окно задачи', async () => {
         await properties.getByRole('button', { name: 'Кто утверждает', exact: true }).tap();
         const picker = page.getByRole('dialog', { name: 'Кто утверждает' });
