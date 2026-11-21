@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useMotion } from './MotionProvider';
+import { viewTransitionRecently } from '@/lib/viewTransition';
 
 /** Keep the same wrapper and children mounted when the motion preference changes. */
 export function PageTransition({
@@ -17,7 +18,8 @@ export function PageTransition({
     // blink the skeleton. Only real navigations fade.
     if (shownPath.current === pathname) return;
     shownPath.current = pathname;
-    if (!animations || !element.current?.animate) return;
+    // A tab switch already animated through the View Transitions API (MobileBottomNav).
+    if (!animations || !element.current?.animate || viewTransitionRecently()) return;
     // Opacity does not create a transformed containing block for fixed task panels.
     const animation = element.current.animate(
       [{ opacity: 0.45 }, { opacity: 1 }],

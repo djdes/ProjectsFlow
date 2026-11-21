@@ -49,6 +49,8 @@ import { SidebarCollapsedContext } from './sidebarCollapsedContext';
 import { SidebarResizingContext } from './sidebarResizingContext';
 import { Sidebar } from './Sidebar';
 import { useEdgeSwipe } from '@/presentation/hooks/useEdgeSwipe';
+import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
+import { canLeaveTaskPage, closeTopLayer } from '@/lib/edgeBack';
 import { PlatformUpdateNotice } from '@/presentation/components/experience/PlatformUpdateNotice';
 import { ImpersonationBanner } from '@/presentation/auth/ImpersonationBanner';
 
@@ -91,11 +93,22 @@ function WorkspaceShell(): React.ReactElement {
   }, [pathname]);
   // iPhone-style жест: тянешь от левого края — панель открывается (доска не скроллится),
   // свайп влево — закрывается. Только на мобиле; на десктопе панель управляется иначе.
+  useKeyboardInset();
   useEdgeSwipe({
     enabled: !isDesktop,
     open: drawerOpen,
     onOpen: () => setDrawerOpen(true),
     onClose: () => setDrawerOpen(false),
+    // Свайп от края как «назад»: сначала закрывает верхнее окно/шторку, на странице задачи
+    // возвращает назад; иначе — как раньше открывает панель.
+    onBack: () => {
+      if (closeTopLayer()) return true;
+      if (canLeaveTaskPage(window.location.pathname, window.history.state)) {
+        navigate(-1);
+        return true;
+      }
+      return false;
+    },
   });
   // Свёрнутость левой панели (desktop), переживает перезагрузку.
   const [collapsed, setCollapsed] = useState<boolean>(() => {

@@ -15,6 +15,7 @@ import {
   pullRefreshDistance,
   PULL_REFRESH_THRESHOLD,
 } from '@/lib/pullRefreshGesture';
+import { haptic } from '@/lib/haptics';
 import {
   canRefreshPage,
   isRefreshingPage,
@@ -140,7 +141,10 @@ export function AppExperience({
         cancel();
         return;
       }
+      const before = pull;
       pull = pullRefreshDistance(dx, dy);
+      // A short tick when the pull crosses «release to refresh» (Android; iOS ignores it).
+      if ((before >= PULL_REFRESH_THRESHOLD) !== (pull >= PULL_REFRESH_THRESHOLD)) haptic('tap');
       if (pull > 4 && event.cancelable) event.preventDefault();
       setDistance(pull);
     };

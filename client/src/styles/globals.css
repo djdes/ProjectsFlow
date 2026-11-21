@@ -533,6 +533,12 @@
     }
   }
 
+  /* Клавиатура на телефоне открыта (useKeyboardInset): нижняя навигация не нужна и на iOS
+     ехала бы над клавиатурой, съедая место под поле ввода. */
+  html[data-pf-keyboard] [data-pf-bottom-nav] {
+    display: none;
+  }
+
   /* Палец промахивается мимо маленьких квадратных кнопок (size-6/size-7 — крестики, «ещё»,
      скрепка). Видимую кнопку не раздуваем: зону нажатия расширяет невидимый ::before до 44px
      (тот же приём, что у .pf-platform-update в deployment.css). position: relative — в слое
@@ -656,6 +662,46 @@ main[data-pf-scrolled='true'] .pf-sticky-surface {
    левый паддинг на том же элементе, а не складывается с ним. */
 [data-pf-floating-burger='true'] .pf-burger-gap {
   padding-inline-start: 1.875rem;
+}
+
+/* Смена вкладки нижней навигации (View Transitions, lib/viewTransition.ts): контент мягко
+   поднимается, шапка и таб-бар со своими именами остаются на месте. Без движения — только
+   при разрешённой анимации; иначе переход мгновенный. */
+[data-pf-mobile-app-header] {
+  view-transition-name: pf-mobile-header;
+}
+[data-pf-bottom-nav] {
+  view-transition-name: pf-bottom-nav;
+}
+::view-transition-group(pf-mobile-header),
+::view-transition-group(pf-bottom-nav) {
+  animation: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: pf-vt-out 140ms var(--pf-ease) both;
+  }
+  ::view-transition-new(root) {
+    animation: pf-vt-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+@keyframes pf-vt-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes pf-vt-in {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
 }
 
 /* Нажатие (good-css «Press feedback»): у каждой кнопки есть :active. Общая Button

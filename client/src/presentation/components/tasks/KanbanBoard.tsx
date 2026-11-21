@@ -102,6 +102,8 @@ import { TaskDragPill, snapToCursor } from './AssignedToMeBlock';
 import { BoardWorkShelf } from './BoardWorkShelf';
 import { BoardColumnTabs } from './BoardColumnTabs';
 import { KanbanCard } from './KanbanCard';
+import { CardActionsSheet } from './CardActionsSheet';
+import { haptic } from '@/lib/haptics';
 import { plainTaskTitle } from '@/lib/taskTitleBody';
 import type { ViewCreateRequest } from './views/ProjectBoardViews';
 import {
@@ -378,6 +380,8 @@ export function KanbanBoard({
   }, [dialog, drawerStoreKey]);
   // Цель удаления для стильного диалога подтверждения (вместо window.confirm).
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  // Меню карточки на телефоне: долгое нажатие без переноса (handleDragEnd).
+  const [cardMenuTask, setCardMenuTask] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState(false);
   // Прокручиваемый контейнер доски — для закреплённого снизу горизонтального скролла.
   const boardScrollRef = useRef<HTMLDivElement>(null);
@@ -902,6 +906,14 @@ export function KanbanBoard({
   const handleDragEnd = async (e: DragEndEvent): Promise<void> => {
     if (!canEdit) return;
     setDropTarget(null);
+    // Телефон: долгое нажатие, отпущенное на месте, — это не перенос, а меню карточки.
+    if (e.activatorEvent?.type.startsWith('touch') && Math.hypot(e.delta.x, e.delta.y) < 8) {
+      const pressed = tasks.find((t) => t.id === e.active.id);
+      if (pressed) {
+        haptic('tap');
+        setCardMenuTask(pressed);
+      }
+    }
     // activeId держим живым ровно до конца drop-таймера, чтобы source-карточка не
     // мигнула из opacity-30 в полную до применения move.
     dropTimerRef.current = setTimeout(() => {
@@ -1073,6 +1085,15 @@ export function KanbanBoard({
   // окно, реальное удаление — в confirmDelete по кнопке «Удалить».
   const handleDelete = (task: Task): void => {
     setDeleteTarget(task);
+  };
+  const moveFromMenu = async (task: Task, targetStatus: TaskStatus): Promise<void> => {
+    try {
+      await moveWithUndo(task, { targetStatus, beforeTaskId: null, afterTaskId: null });
+      setRecentlyMovedId(task.id);
+      if (targetStatus === 'done' && task.status !== 'done') celebrate(task.id);
+    } catch (err) {
+      toast.error(`Не удалось переместить: ${(err as Error).message}`);
+    }
   };
   const confirmDelete = async (): Promise<void> => {
     if (!deleteTarget || deleting) return;
@@ -1624,6 +1645,23 @@ export function KanbanBoard({
           onExit={exitSelection}
         />
       )}
+      <CardActionsSheet
+        task={cardMenuTask}
+        canEdit={canEdit}
+        targets={shownStatuses.map((s) => ({
+          status: s,
+          label: resolveColumnLabel(
+            s === 'pending_approval' ? undefined : settings?.[s as VisibleKanbanStatus],
+            STATUS_LABEL[s],
+          ),
+        }))}
+        onOpenChange={(open) => {
+          if (!open) setCardMenuTask(null);
+        }}
+        onOpenTask={(task) => setDialog({ mode: 'edit', task })}
+        onMove={(task, status) => void moveFromMenu(task, status)}
+        onDelete={handleDelete}
+      />
     </div>
     </SidebarResizingContext.Provider>
   );

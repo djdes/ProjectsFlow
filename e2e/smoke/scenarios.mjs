@@ -23,6 +23,22 @@ import { liveChatScenarios, liveRolesScenarios } from './live-chat.mjs';
 import { adminMailingScenarios } from './admin-mailing.mjs';
 import { adminUsersScenarios } from './admin-users.mjs';
 
+// Left-edge swipe (iOS «back»): starts inside the 22px edge zone of useEdgeSwipe.
+async function touchEdgeSwipe(t, distance = 120) {
+  const y = (t.page.viewportSize()?.height ?? 640) / 2;
+  const cdp = await t.page.context().newCDPSession(t.page);
+  try {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 8, y }] });
+    for (let step = 1; step <= 12; step += 1) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 8 + (distance * step) / 12, y }] });
+      await t.page.waitForTimeout(16);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
 // Phone folds task properties after the first three rows (TaskProperties.tsx).
 async function expandTaskProperties(t, properties) {
   const toggle = properties.getByRole('button', { name: /^Все свойства/ });
@@ -1244,6 +1260,15 @@ export const scenarios = [
         await t.hidden(picker, 'закрытая шторка утверждающих');
         await t.visible(properties, 'окно задачи после закрытия шторки');
       });
+      await t.step('свайп от левого края закрывает верхнюю шторку, окно задачи остаётся', async () => {
+        await properties.getByRole('button', { name: 'Кто утверждает', exact: true }).tap();
+        const picker = page.getByRole('dialog', { name: 'Кто утверждает' });
+        await t.visible(picker, 'шторка утверждающих');
+        await touchEdgeSwipe(t);
+        await t.hidden(picker, 'шторка закрылась свайпом от края');
+        await t.visible(properties, 'окно задачи после свайпа');
+        await t.hidden(page.getByRole('navigation', { name: 'Проекты' }), 'панель не открылась вместо «назад»');
+      });
       await t.step('долгий тап меняет порядок внутри окна, не закрывая его', async () => {
         await touchLongDrag(t, properties.locator('[data-pf-task-property="status"]'), properties.locator('[data-pf-task-property="assignee"]'));
         await t.waitForMutation((m) => m.path === '/me/ui-prefs', 'порядок не сохранён');
@@ -1310,6 +1335,38 @@ export const scenarios = [
       });
       await shot('comment-sent');
       await t.pageChecks('окно задачи после комментария с картинкой');
+    },
+  },
+
+  {
+    id: 'board-card-menu',
+    title: 'Доска на телефоне: долгое нажатие на карточку без переноса открывает меню',
+    matrix: [['phone', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      await t.goto(`/projects/${BOARD_PROJECT_ID}`, { ready: () => page.locator(card('t-home')) });
+      const target = page.locator(card('t-home')).getByText(taskTitle(state, 't-home'), { exact: true }).first();
+      await t.step('долгое нажатие и отпускание на месте', async () => {
+        await target.scrollIntoViewIfNeeded();
+        await target.tap({ trial: true });
+        const { x, y } = await touchPoint(target);
+        const cdp = await page.context().newCDPSession(page);
+        try {
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+          await page.waitForTimeout(500);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        } finally {
+          await cdp.detach().catch(() => {});
+        }
+        const sheet = page.getByRole('dialog', { name: taskTitle(state, 't-home') });
+        await t.visible(sheet, 'меню карточки');
+        await t.visible(sheet.getByRole('button', { name: 'Открыть', exact: true }), 'пункт «Открыть»');
+        await t.visible(sheet.getByRole('button', { name: 'Удалить', exact: true }), 'пункт «Удалить»');
+        t.assert(!t.journal.mutations.some((m) => m.path.endsWith('/t-home/move')), 'долгое нажатие без переноса сдвинуло карточку');
+        await sheet.getByRole('button', { name: 'Открыть', exact: true }).tap();
+        await t.visible(page.locator('[data-pf-task-properties]:visible'), 'задача открылась из меню');
+      });
+      await t.pageChecks('доска после меню карточки');
     },
   },
 
