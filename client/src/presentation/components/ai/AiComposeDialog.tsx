@@ -620,7 +620,7 @@ export function AiComposeDialog({
                   </Tabs>
                   <p className="px-0.5 text-xs text-muted-foreground">{TAB_HINT[activeTab]}</p>
                   {activeTab === 'advanced' && advancedPhase === 'loading' && (
-                    <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 rounded-md bg-muted/70 px-2.5 py-1.5 text-xs text-muted-foreground">
                       <Loader2 className="size-3.5 shrink-0 motion-safe:animate-spin text-primary" />
                       Готовим «Продвинутый» вариант по базе знаний… (~1 минута, пока показан
                       «Простой»)
@@ -685,7 +685,7 @@ export function AiComposeDialog({
 
                 {/* Управляемая область */}
                 {!distribute ? (
-                  <div className="rounded-lg border bg-panel px-3 py-2.5">
+                  <div className="rounded-lg bg-panel px-3 py-2.5">
                     <CommentBody body={joinedDoc(activeTab)} />
                   </div>
                 ) : (
@@ -700,7 +700,7 @@ export function AiComposeDialog({
                         <div
                           key={row.id}
                           className={cn(
-                            'rounded-xl border p-2.5 transition-[color,background-color,border-color,box-shadow] duration-200',
+                            'rounded-xl p-2.5 transition-[color,background-color,border-color,box-shadow] duration-200 bg-card shadow-card',
                             row.include
                               ? 'border-primary/40 bg-primary/[0.04]'
                               : 'border-border bg-background opacity-60 hover:opacity-100',
@@ -789,7 +789,7 @@ export function AiComposeDialog({
 
                               <div className="px-1.5">
                                 {isOpen ? (
-                                  <div className="max-h-56 overflow-y-auto rounded-md border bg-muted/30 p-2">
+                                  <div className="max-h-56 overflow-y-auto rounded-md bg-muted/70 p-2">
                                     <CommentBody body={body} />
                                   </div>
                                 ) : isLong ? (

@@ -76,7 +76,7 @@ export function EditableProjectTitle({ projectId, name }: Props): React.ReactEle
       // text-ellipsis: длинное название на телефоне обрезалось посреди буквы («Зерно и п»);
       // многоточие видно, пока поле не в фокусе, при вводе текст прокручивается как обычно.
       className={cn(
-        'w-full min-w-0 text-ellipsis bg-transparent p-0 font-bold text-foreground outline-none',
+        'w-full min-w-0 text-ellipsis bg-transparent p-0 font-serif font-semibold text-foreground outline-none',
         'text-title leading-[1.2] placeholder:text-muted-foreground/40',
       )}
     />

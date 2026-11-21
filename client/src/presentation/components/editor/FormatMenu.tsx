@@ -296,7 +296,7 @@ function MenuItemTooltip({
         className="z-[80] w-56 max-w-[calc(100vw-1rem)] overflow-hidden p-0"
       >
         {example != null && (
-          <div className="border-be bg-panel px-3 py-2.5">{example}</div>
+          <div className="bg-panel px-3 py-2.5">{example}</div>
         )}
         <div className="px-3 py-2 text-xs leading-snug text-muted-foreground">{description}</div>
       </TooltipContent>

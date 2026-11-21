@@ -199,7 +199,7 @@ export function RepositoryCodeEditor({
 
   return (
     <div className="overflow-clip rounded-xl border bg-background">
-      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-be bg-panel px-3 py-2">
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 bg-panel px-3 py-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
             {tree?.fullName ?? "GitHub repository"}
@@ -242,7 +242,7 @@ export function RepositoryCodeEditor({
       )}
       <div className="grid min-h-[560px] lg:grid-cols-[290px_minmax(0,1fr)]">
         <aside
-          className="max-h-[680px] overflow-auto border-be bg-panel p-2 lg:border-be-0 lg:border-e"
+          className="max-h-[680px] overflow-auto bg-panel p-2 lg:border-be-0 lg:border-e"
           aria-label="Файлы репозитория"
         >
           {treeLoading && (

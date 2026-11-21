@@ -156,7 +156,7 @@ export function AiImproveButton({
             <div className="grid min-h-0 flex-1 gap-3 sm:grid-cols-2">
               <div className="flex min-h-0 flex-col gap-1.5">
                 <span className="text-xs font-medium text-muted-foreground">Исходный текст</span>
-                <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground max-sm:max-h-32">
+                <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted/70 px-3 py-2 text-sm text-muted-foreground max-sm:max-h-32">
                   {original}
                 </div>
               </div>

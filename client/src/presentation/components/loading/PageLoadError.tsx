@@ -9,7 +9,7 @@ export function PageLoadError({
   return (
     <div className="grid min-h-[60dvh] place-items-center p-6">
       <div role="alert" className="max-w-sm space-y-4 text-center">
-        <h1 className="text-xl font-semibold">Не удалось загрузить страницу</h1>
+        <h1 className="font-serif text-xl font-semibold">Не удалось загрузить страницу</h1>
         <p className="text-sm leading-relaxed text-muted-foreground">
           Проверьте подключение к интернету и попробуйте ещё раз.
         </p>

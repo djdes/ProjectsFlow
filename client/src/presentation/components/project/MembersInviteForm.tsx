@@ -135,7 +135,7 @@ export function MembersInviteForm(): React.ReactElement {
           {emails.map((e) => (
             <li
               key={e}
-              className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 ps-2 pe-1 text-xs"
+              className="inline-flex items-center gap-1 rounded-full bg-muted/70 py-0.5 ps-2 pe-1 text-xs"
             >
               <span className="max-w-[140px] truncate">{e}</span>
               <button

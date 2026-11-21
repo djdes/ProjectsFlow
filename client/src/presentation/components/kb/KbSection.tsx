@@ -180,7 +180,7 @@ export function KbSection({ project }: Props): React.ReactElement {
           </DialogHeader>
 
           <div className="space-y-3">
-            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-sm">
+            <div className="rounded-md bg-muted/70 px-3 py-2 font-mono text-sm">
               {githubConnection?.githubLogin ?? 'твой-аккаунт'} / {previewRepoName(project.name)}
             </div>
             <ul className="space-y-1.5 text-sm text-muted-foreground">

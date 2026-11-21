@@ -727,7 +727,7 @@ export function ProjectPreview({
     <section
       className={cn(
         'relative overflow-hidden bg-muted/20',
-        fillAvailable ? 'flex h-full min-h-0 flex-col' : 'rounded-xl border',
+        fillAvailable ? 'flex h-full min-h-0 flex-col' : 'rounded-xl bg-card shadow-card',
       )}
       aria-label="Preview результата проекта"
     >

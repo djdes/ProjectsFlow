@@ -17,10 +17,11 @@
      готовые значения со своей альфой (в тёмной теме это полупрозрачные тинты). */
   :root {
     color-scheme: light;
-    --background: 100% 0 none;
+    /* Лист чуть кремовый (Claude ivory), карточки и поля остаются белыми. */
+    --background: 99% 0.004 95;
     --foreground: 32.89% 0.011 91.66;
 
-    --muted: 95.76% 0.003 106.45;
+    --muted: 95.4% 0.006 95;
     --muted-foreground: 53.75% 0.008 97.45;
 
     --card: 100% 0 none;
@@ -45,10 +46,10 @@
     --primary-ink: 52.83% 0.147 252.93;
     --primary-soft: oklch(95.36% 0.017 248.01);
 
-    --secondary: 95.76% 0.003 106.45;
+    --secondary: 95.4% 0.006 95;
     --secondary-foreground: 32.89% 0.011 91.66;
 
-    --accent: 94.88% 0.001 106.42;
+    --accent: 94.6% 0.006 95;
     --accent-foreground: 32.89% 0.011 91.66;
 
     --destructive: 54.49% 0.183 26.91;
@@ -60,8 +61,8 @@
 
     /* Поверхности: сайдбар, колонка/панель (серый лист под белыми карточками), поле ввода,
        приподнятая плашка (быстрые действия на карточке, тост). */
-    --sidebar: 97.56% 0.003 106.45;
-    --panel: 97.56% 0.003 106.45;
+    --sidebar: 96.9% 0.006 95;
+    --panel: 96.9% 0.006 95;
     --panel-divider: 92.9% 0.005 91.5;
     --field: 100% 0 none;
     --raised: 100% 0 none;
@@ -123,30 +124,30 @@
     --selection: color-mix(in oklch, oklch(60.58% 0.167 252.7) 14%, transparent);
   }
 
-  /* Тёмная тема «C3 плотный» — для работы весь день: чернильный графит с лёгким холодным
-     оттенком (hue ~274), ступени поверхностей разнесены заметно: фон #16171B → сайдбар
-     #1A1B20 → колонка #1D1E23 → карточка #24262C → плашка/меню #2B2D35, линия #2E3038.
+  /* Тёмная тема «C3 тёплый» (2026-11-21) — для работы весь день: тёплый графит как в
+     приложении Claude (hue ~75, хрома почти ноль), ступени поверхностей разнесены заметно:
+     фон #181715 → сайдбар → колонка → карточка #282624 → плашка/меню, линия на ступень выше.
      Акцент — светлый барвинок #7C8CFF с тёмным текстом на заливке; статусы — те же смыслы,
      что в светлой, в светлых неоновых тонах. Карточка держится рамкой, без тени. */
   .dark {
     color-scheme: dark;
-    --background: 20.53% 0.008 274.52;
-    --foreground: 94.59% 0.003 264.54;
+    --background: 20.5% 0.004 75;
+    --foreground: 94.6% 0.005 90;
 
-    --muted: 29.85% 0.015 274.37;
-    --muted-foreground: 71.62% 0.015 272.62;
+    --muted: 29.85% 0.006 75;
+    --muted-foreground: 71.6% 0.009 80;
 
-    --card: 26.91% 0.012 270.96;
-    --card-foreground: 94.59% 0.003 264.54;
-    --card-hover: 28.59% 0.013 272.91;
+    --card: 26.9% 0.005 75;
+    --card-foreground: 94.6% 0.005 90;
+    --card-hover: 28.6% 0.005 75;
 
-    --popover: 29.85% 0.015 274.37;
-    --popover-foreground: 94.59% 0.003 264.54;
+    --popover: 29.85% 0.006 75;
+    --popover-foreground: 94.6% 0.005 90;
 
     /* Линия на ступень мягче (была 31%): блоки отделяются заливкой ступеней, рамка лишь
        обозначает край и не «режет» экран на клетки. */
-    --border: 29% 0.012 274.4;
-    --input: 31.6% 0.014 275;
+    --border: 29.3% 0.006 75;
+    --input: 31.8% 0.007 75;
     --ring: 68.09% 0.169 275.03;
 
     --primary: 68.09% 0.169 275.03;
@@ -154,24 +155,24 @@
     --primary-ink: 78.95% 0.107 277.23;
     --primary-soft: color-mix(in oklch, oklch(68.09% 0.169 275.03) 14%, transparent);
 
-    --secondary: 29.85% 0.015 274.37;
-    --secondary-foreground: 94.59% 0.003 264.54;
+    --secondary: 29.85% 0.006 75;
+    --secondary-foreground: 94.6% 0.005 90;
 
-    --accent: 29.85% 0.015 274.37;
-    --accent-foreground: 94.59% 0.003 264.54;
+    --accent: 29.85% 0.006 75;
+    --accent-foreground: 94.6% 0.005 90;
 
     /* Светлый коралл: читается текстом на графите; на заливке — тёмный текст. */
     --destructive: 73.45% 0.163 25.78;
-    --destructive-foreground: 20.53% 0.008 274.52;
+    --destructive-foreground: 20.5% 0.004 75;
     --destructive-soft: color-mix(in oklch, oklch(73.45% 0.163 25.78) 16%, transparent);
 
     --success: 77.67% 0.143 155.36;
 
-    --sidebar: 22.32% 0.01 276.61;
-    --panel: 23.61% 0.01 276.66;
-    --panel-divider: 29% 0.012 274.4;
-    --field: 23.61% 0.01 276.66;
-    --raised: 29.85% 0.015 274.37;
+    --sidebar: 22.3% 0.004 75;
+    --panel: 23.6% 0.005 75;
+    --panel-divider: 29.3% 0.006 75;
+    --field: 23.6% 0.005 75;
+    --raised: 29.85% 0.006 75;
 
     --approval: 73.68% 0.142 299.36;
     --approval-soft: color-mix(in oklch, oklch(73.68% 0.142 299.36) 16%, transparent);
@@ -182,24 +183,26 @@
     --manual-zone: color-mix(in oklch, oklch(81.65% 0.14 80.1) 5%, transparent);
     --manual-ink: 85% 0.115 80.1;
     --done: 77.67% 0.143 155.36;
-    --done-soft: oklch(40.44% 0.069 157.52);
-    --done-soft-hover: oklch(47.72% 0.086 155.9);
+    /* Полупрозрачный зелёный поверх тёплого графита вместо плотного болотного (#2f4a3a):
+       кнопка «Принять» читается чище, текст --done-ink остаётся AA. */
+    --done-soft: color-mix(in oklch, oklch(77.67% 0.143 155.36) 20%, transparent);
+    --done-soft-hover: color-mix(in oklch, oklch(77.67% 0.143 155.36) 28%, transparent);
     --done-ink: 92.53% 0.054 158.39;
     --today: 81.65% 0.14 80.1;
     --drop: color-mix(in oklch, oklch(68.09% 0.169 275.03) 8%, transparent);
-    --drop-line: 42.12% 0.017 272.38;
-    --toast: 29.85% 0.015 274.37;
-    --toast-foreground: 94.59% 0.003 264.54;
+    --drop-line: 42% 0.008 80;
+    --toast: 29.85% 0.006 75;
+    --toast-foreground: 94.6% 0.005 90;
     --toast-accent: 78.95% 0.107 277.23;
 
     /* Тёмный аналог пузыря: ступень ВЫШЕ фона ленты — пузырь читается как приподнятая
        плашка, а не сливается с обычными muted-поверхностями. */
-    --message-bubble: 29.85% 0.015 274.37;
+    --message-bubble: 29.85% 0.006 75;
 
-    --shadow-card: 0 0 0 1px oklch(29% 0.012 274.4);
-    --shadow-card-hover: 0 0 0 1px oklch(34% 0.016 272.3);
+    --shadow-card: 0 0 0 1px oklch(29.3% 0.006 75);
+    --shadow-card-hover: 0 0 0 1px oklch(34% 0.008 75);
     --shadow-float: 0 12px 32px oklch(0% 0 none / 0.5);
-    --shadow-menu: 0 0 0 1px oklch(33% 0.015 274.4), 0 12px 32px oklch(0% 0 none / 0.5);
+    --shadow-menu: 0 0 0 1px oklch(33% 0.007 75), 0 12px 32px oklch(0% 0 none / 0.5);
 
     --hover: color-mix(in oklch, oklch(100% 0 none) 7%, transparent);
     --active: color-mix(in oklch, oklch(100% 0 none) 10%, transparent);
@@ -578,7 +581,7 @@
   --tone-solid: var(--tone-bg);
   --tone-on-solid: var(--tone-fg);
 }
-.dark .pf-tone-gray { --tone: oklch(70.97% 0.015 272.62); }
+.dark .pf-tone-gray { --tone: oklch(70.97% 0.01 80); }
 .dark .pf-tone-brown { --tone: oklch(75.87% 0.094 71.94); }
 .dark .pf-tone-orange { --tone: oklch(75.14% 0.161 46.76); }
 .dark .pf-tone-yellow { --tone: oklch(81.65% 0.14 80.1); }
@@ -597,7 +600,7 @@
   --tone-bg: color-mix(in oklch, var(--tone) 14%, transparent);
   --tone-fg: oklch(var(--foreground));
   --tone-solid: var(--tone);
-  --tone-on-solid: oklch(20.53% 0.008 274.52);
+  --tone-on-solid: oklch(20.5% 0.004 75);
 }
 
 /* Тосты sonner (richColors) — непрозрачные плашки из палитры статусов. */

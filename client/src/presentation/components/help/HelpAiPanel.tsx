@@ -64,7 +64,7 @@ export function HelpAiPanel({
           <>
             {session.projectName && (
               <div className="pbe-2">
-                <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-2xs font-medium text-muted-foreground">
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-muted/70 px-2 py-1 text-2xs font-medium text-muted-foreground">
                   <Folder className="size-3 shrink-0" />
                   <span className="truncate">{session.projectName}</span>
                 </span>

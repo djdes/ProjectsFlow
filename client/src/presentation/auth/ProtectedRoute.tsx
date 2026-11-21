@@ -28,7 +28,7 @@ export function ProtectedRoute({ children }: Props): React.ReactElement | null {
     return (
       <div className="grid min-h-dvh place-items-center bg-background px-6">
         <div role="alert" className="max-w-sm text-center">
-          <h1 className="text-h1 font-bold leading-tight tracking-[-0.01em]">
+          <h1 className="font-serif text-h1 font-semibold leading-tight">
             {online ? 'Не удалось проверить соединение' : 'Нет сети'}
           </h1>
           <p className="mbs-2 text-sm text-muted-foreground">

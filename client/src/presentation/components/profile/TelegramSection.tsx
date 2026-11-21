@@ -176,7 +176,7 @@ export function TelegramSection(): React.ReactElement {
           </p>
         ) : status.connected ? (
           <>
-            <div className="flex items-center gap-3 rounded-md border bg-muted/40 p-3 text-sm">
+            <div className="flex items-center gap-3 rounded-md bg-muted/70 p-3 text-sm">
               {status.telegramPhotoUrl && (
                 <img
                   src={status.telegramPhotoUrl}

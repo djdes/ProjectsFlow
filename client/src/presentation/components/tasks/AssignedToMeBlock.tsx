@@ -1,4 +1,5 @@
 import { selectInboxView } from './inbox/selectInboxView';
+import { EmptyState } from '@/presentation/components/empty/EmptyState';
 import { filterFromGroups, isFromGroup } from '@/domain/task/groupOriginFilter';
 import { WorkerActivityBadge } from './WorkerActivityBadge';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
@@ -62,6 +63,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Sparkles,
   Trash2,
   Users,
   X,
@@ -1986,7 +1988,11 @@ export function AssignedToMeBlock({
     return (
       <section id={regionId} className="flex flex-col gap-3">
         {headRow}
-        <p className="py-12 text-center text-ui text-muted-foreground">{emptyText}</p>
+        <EmptyState
+          title={emptyText}
+          hint={tab === 'toMe' && !focusedMember && toMeTasks.length === 0 ? 'Новые задачи и то, что ждёт вашего решения, появятся здесь.' : undefined}
+          actions={[{ label: 'Спросить ИИ, с чего начать', icon: Sparkles, onClick: () => window.dispatchEvent(new CustomEvent('pf:open-help')) }]}
+        />
       </section>
     );
   }
@@ -2500,7 +2506,7 @@ export function AssignedToMeBlock({
                 if (searchVisible) setQuery('');
               }}
               className={cn(
-                'grid size-12 shrink-0 place-items-center rounded-lg border border-border bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-[359px]:size-11',
+                'grid size-12 shrink-0 place-items-center rounded-lg bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-[359px]:size-11',
                 searchVisible && 'border-primary/30 bg-primary/10 text-primary-ink',
               )}
             >
@@ -2518,7 +2524,7 @@ export function AssignedToMeBlock({
       {isWide && dueRow}
 
       {focusedError ? (
-        <div role="alert" className="space-y-3 rounded-xl border p-4 text-sm">
+        <div role="alert" className="space-y-3 rounded-xl p-4 text-sm bg-card shadow-card">
           <p>{focusedError}</p><Button variant="outline" onClick={() => { setFocusedError(null); setFocusRetry((n) => n + 1); }}>Повторить</Button>
         </div>
       ) : focusedLoading ? <BoardSkeleton shelf={false} now columns={isWide ? 2 : 0} /> : isWide ? (
@@ -4343,7 +4349,7 @@ export function AssigneeConfirmDialog({
         <p className="line-clamp-2 text-sm text-muted-foreground">{taskTitle || 'Задача'}</p>
         {/* «Сейчас у» → «Кому» с аватарами: наведи на аву — карточка человека. Свежее
             назначение (from=null) — только получатель. */}
-        <div className="flex items-center justify-center gap-2 rounded-lg border bg-muted/30 px-2 py-3">
+        <div className="flex items-center justify-center gap-2 rounded-lg bg-muted/70 px-2 py-3">
           {from ? (
             <>
               <AssigneePerson name={from.name} avatarUrl={from.avatarUrl} label="Сейчас" />

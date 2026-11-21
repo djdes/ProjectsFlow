@@ -46,7 +46,7 @@ function NoWorkspaceScreen(): React.ReactElement {
     <div className="grid min-h-dvh place-items-center p-4">
       <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4 rounded-xl border bg-card p-6">
         <div className="space-y-1">
-          <h1 className="text-lg font-semibold">Создайте пространство</h1>
+          <h1 className="font-serif text-lg font-semibold">Создайте пространство</h1>
           <p className="text-sm text-muted-foreground">
             У аккаунта пока нет ни одного пространства. В нём будут проекты, задачи и чат команды.
           </p>

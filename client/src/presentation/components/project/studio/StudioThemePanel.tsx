@@ -89,7 +89,7 @@ export function StudioThemePanel({
               type="button"
               onClick={() => choosePreset(preset)}
               aria-pressed={selectedId === preset.id}
-              className={cn('group relative flex w-full overflow-clip rounded-xl border text-start transition hover:border-foreground/30', selectedId === preset.id && 'border-primary ring-2 ring-primary/15')}
+              className={cn('group relative flex w-full overflow-clip rounded-xl text-start transition hover:border-foreground/30 bg-card shadow-card', selectedId === preset.id && 'border-primary ring-2 ring-primary/15')}
             >
               <span className="grid w-24 shrink-0 place-items-center text-3xl font-medium text-white" style={{ background: preset.colors[0], fontFamily: preset.font }}>Aa</span>
               <span className="flex min-w-0 flex-1">
@@ -101,7 +101,7 @@ export function StudioThemePanel({
           ))}
         </div>
 
-        <div id="pf-custom-theme" className="mbs-6 rounded-xl border bg-muted/15 p-4">
+        <div id="pf-custom-theme" className="mbs-6 rounded-xl bg-muted/70 p-4">
           <h3 className="text-sm font-semibold">Своя тема</h3>
           <div className="mbs-3 grid gap-3 sm:grid-cols-2">
             <label className="text-xs text-muted-foreground">Основной цвет<Input type="color" value={primary} onChange={(event) => setPrimary(event.target.value)} className="mbs-1 h-10 w-full p-1" /></label>

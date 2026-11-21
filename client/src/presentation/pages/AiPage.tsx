@@ -97,7 +97,7 @@ export function AiPage(): React.ReactElement {
             <div className="mbe-6 grid size-14 place-items-center rounded-xl bg-foreground text-background">
               <Sparkles className="size-7" />
             </div>
-            <h1 className="text-display font-semibold tracking-tight">ProjectsFlow ИИ</h1>
+            <h1 className="font-serif text-display font-semibold">ProjectsFlow ИИ</h1>
             <p className="mbs-3 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">Отдельное рабочее пространство для идей, анализа и помощи с проектами. Разговоры сохраняются и доступны в левой панели.</p>
             <div className="mbs-7 w-full max-w-2xl text-start">
               <AiComposer conversationId={null} sending={busy} onSend={(body) => createAndSend(body)} imageMode={{ enabled: photoMode, onChange: setPhotoMode, onSend: (body) => createAndSend(body, true) }} autoFocus={focusOnOpen} />

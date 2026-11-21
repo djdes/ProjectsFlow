@@ -321,7 +321,7 @@ function NewTokenRevealDialog({
                 Скопировать промпт
               </Button>
             </div>
-            <pre className="max-h-48 overflow-y-auto break-all whitespace-pre-wrap rounded-md border bg-muted/40 px-3 py-2.5 font-mono text-2xs leading-relaxed">
+            <pre className="max-h-48 overflow-y-auto break-all whitespace-pre-wrap rounded-md bg-muted/70 px-3 py-2.5 font-mono text-2xs leading-relaxed">
               {claudePrompt}
             </pre>
             <p className="text-xs text-muted-foreground">
@@ -344,7 +344,7 @@ function NewTokenRevealDialog({
                 Скопировать команду
               </Button>
             </div>
-            <pre className="overflow-x-auto break-all whitespace-pre-wrap rounded-md border bg-muted/40 px-3 py-2.5 font-mono text-2xs leading-relaxed">
+            <pre className="overflow-x-auto break-all whitespace-pre-wrap rounded-md bg-muted/70 px-3 py-2.5 font-mono text-2xs leading-relaxed">
               {installCommand}
             </pre>
             <p className="text-xs text-muted-foreground">
@@ -353,7 +353,7 @@ function NewTokenRevealDialog({
           </div>
 
           {/* Полный token — на случай если нужно скопировать отдельно */}
-          <details className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
+          <details className="rounded-md bg-muted/70 px-3 py-2 text-xs">
             <summary className="cursor-pointer select-none font-medium text-muted-foreground">
               Показать токен отдельно
             </summary>

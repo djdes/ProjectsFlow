@@ -140,7 +140,7 @@ export function ConnectGithubDialog({ open, onOpenChange }: Props): React.ReactE
                 Введи этот код:
               </p>
               <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-md border bg-muted px-3 py-2 text-center font-mono text-lg tracking-widest">
+                <code className="flex-1 rounded-md bg-muted px-3 py-2 text-center font-mono text-lg tracking-widest">
                   {start.userCode}
                 </code>
                 <Button type="button" variant="outline" size="icon" onClick={copyCode} aria-label="Скопировать">

@@ -20,8 +20,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#16171b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fcfcf9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#181715" media="(prefers-color-scheme: dark)" />
     <script>
       // FOUC fix: применяем тему ДО React, чтобы не мерцать светлым на загрузке тёмной.
       (function () {
@@ -34,7 +34,7 @@
           // Status bar follows the chosen theme (ThemeProvider keeps it in sync later).
           var metas = document.querySelectorAll('meta[name="theme-color"]');
           for (var i = 0; i < metas.length; i++) {
-            metas[i].setAttribute('content', dark ? '#16171b' : '#ffffff');
+            metas[i].setAttribute('content', dark ? '#181715' : '#fcfcf9');
             metas[i].removeAttribute('media');
           }
         } catch (_) {

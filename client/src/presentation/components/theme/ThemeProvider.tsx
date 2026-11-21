@@ -15,7 +15,7 @@ function isTheme(value: string | null): value is Theme {
 }
 
 /** Browser chrome colour per theme — equals --background (globals.css). */
-const THEME_COLOR = { light: '#ffffff', dark: '#16171b' } as const;
+const THEME_COLOR = { light: '#fcfcf9', dark: '#181715' } as const;
 
 function resolveTheme(theme: Theme): 'light' | 'dark' {
   if (theme === 'system') {

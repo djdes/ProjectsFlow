@@ -212,7 +212,7 @@ export function ProjectDashboard({
   );
 
   return (
-    <div className={cn('overflow-hidden bg-muted/10', fillAvailable ? 'h-full' : 'rounded-xl border')}>
+    <div className={cn('overflow-hidden bg-muted/10', fillAvailable ? 'h-full' : 'rounded-xl bg-card shadow-card')}>
       <div className={cn('flex min-h-0 flex-col md:flex-row', fillAvailable ? 'h-full' : 'h-[clamp(620px,74vh,840px)]')}>
         <aside className="hidden w-60 shrink-0 overflow-y-auto overscroll-contain border-e bg-background p-3 md:flex md:flex-col">
           <label className="relative mbe-3 block">

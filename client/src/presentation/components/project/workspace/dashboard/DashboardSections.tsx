@@ -301,7 +301,7 @@ export function OverviewSection({
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start gap-4">
-        <span className="grid size-16 shrink-0 place-items-center rounded-xl border bg-panel">
+        <span className="grid size-16 shrink-0 place-items-center rounded-xl bg-panel">
           <ProjectIconPicker
             projectId={project.id}
             icon={project.icon}
@@ -415,7 +415,7 @@ export function OverviewSection({
         </div>
       </header>
       <div className="grid gap-3 lg:grid-cols-3">
-        <section className="rounded-xl border p-4 lg:col-span-2">
+        <section className="rounded-xl p-4 lg:col-span-2 bg-card shadow-card">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold">Результат проекта</p>
@@ -471,7 +471,7 @@ export function OverviewSection({
             </span>
           </div>
         </section>
-        <section className="rounded-xl border p-4">
+        <section className="rounded-xl p-4 bg-card shadow-card">
           <div className="flex items-center gap-2">
             <Users className="size-4 text-muted-foreground" />
             <p className="text-sm font-semibold">Доступ</p>
@@ -494,7 +494,7 @@ export function OverviewSection({
         </section>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
-        <section className="rounded-xl border p-4">
+        <section className="rounded-xl p-4 bg-card shadow-card">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -538,7 +538,7 @@ export function OverviewSection({
             </div>
           )}
         </section>
-        <section className="rounded-xl border p-4">
+        <section className="rounded-xl p-4 bg-card shadow-card">
           <div className="flex items-center gap-2">
             <ShieldCheck className="size-4 text-muted-foreground" />
             <p className="text-sm font-semibold">Автоматические проверки</p>
@@ -753,7 +753,7 @@ export function UsersSection({
           )
         }
       />
-      <div className="overflow-clip rounded-xl border">
+      <div className="overflow-clip rounded-xl bg-card shadow-card">
         <div className="flex min-h-14 flex-wrap items-center gap-2 border-be px-3 py-2">
           <div
             className={SEGMENTS_CLASS}
@@ -1082,14 +1082,14 @@ function AppTrafficView({
   }
   if (state === "loading" && !traffic) {
     return (
-      <div className="grid min-h-64 place-items-center rounded-xl border text-sm text-muted-foreground">
+      <div className="grid min-h-64 place-items-center rounded-xl text-sm text-muted-foreground bg-card shadow-card">
         <Loader2 className="size-5 motion-safe:animate-spin" />
       </div>
     );
   }
   if (state === "error") {
     return (
-      <div className="grid min-h-64 place-items-center rounded-xl border text-sm text-muted-foreground">
+      <div className="grid min-h-64 place-items-center rounded-xl text-sm text-muted-foreground bg-card shadow-card">
         Не удалось загрузить трафик приложения.
       </div>
     );
@@ -1113,7 +1113,7 @@ function AppTrafficView({
     <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
-          <section key={metric.label} className="rounded-xl border p-4">
+          <section key={metric.label} className="rounded-xl p-4 bg-card shadow-card">
             <p className="text-xs font-medium text-muted-foreground">
               {metric.label}
             </p>
@@ -1121,7 +1121,7 @@ function AppTrafficView({
           </section>
         ))}
       </div>
-      <section className="rounded-xl border p-4">
+      <section className="rounded-xl p-4 bg-card shadow-card">
         <div className="flex items-center gap-2">
           <BarChart3 className="size-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold">Визиты по дням</h3>
@@ -1155,7 +1155,7 @@ function AppTrafficView({
           </div>
         )}
       </section>
-      <section className="rounded-xl border p-4">
+      <section className="rounded-xl p-4 bg-card shadow-card">
         <h3 className="text-sm font-semibold">Типы клиентов</h3>
         <div className="mbs-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {classes.map((item) => (
@@ -1205,7 +1205,7 @@ function ProjectCardAnalyticsView({
     <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
-          <section key={metric.label} className="rounded-xl border p-4">
+          <section key={metric.label} className="rounded-xl p-4 bg-card shadow-card">
             <p className="text-xs font-medium text-muted-foreground">
               {metric.label}
             </p>
@@ -1213,7 +1213,7 @@ function ProjectCardAnalyticsView({
           </section>
         ))}
       </div>
-      <section className="rounded-xl border p-4">
+      <section className="rounded-xl p-4 bg-card shadow-card">
         <div className="flex items-center gap-2">
           <BarChart3 className="size-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold">Просмотры по дням</h3>
@@ -1241,7 +1241,7 @@ function ProjectCardAnalyticsView({
           ))}
         </div>
       </section>
-      <section className="overflow-clip rounded-xl border">
+      <section className="overflow-clip rounded-xl bg-card shadow-card">
         <div className="border-be px-4 py-3 text-sm font-semibold">
           Последние зрители
         </div>
@@ -1444,7 +1444,7 @@ export function MarketingSection({
       </div>
       {tab === "overview" && (
         <div className="grid gap-3 lg:grid-cols-2">
-          <section className="rounded-xl border p-4">
+          <section className="rounded-xl p-4 bg-card shadow-card">
             <Sparkles className="size-5 text-primary" />
             <h3 className="mbs-4 font-medium">Поисковое представление</h3>
             <p className="mbs-1 text-sm leading-6 text-muted-foreground">
@@ -1453,7 +1453,7 @@ export function MarketingSection({
             </p>
           </section>
           {/* Превью сниппета поисковой выдачи: заголовок — ссылкой, адрес — зелёным, как в выдаче. */}
-          <section className="rounded-xl border bg-panel p-4">
+          <section className="rounded-xl bg-panel p-4">
             <p className="truncate text-lg text-primary-ink">
               {title || project.name}
             </p>
@@ -1468,7 +1468,7 @@ export function MarketingSection({
         </div>
       )}
       {tab === "meta" && (
-        <div className="max-w-2xl space-y-4 rounded-xl border p-4">
+        <div className="max-w-2xl space-y-4 rounded-xl p-4 bg-card shadow-card">
           <label className="block space-y-1.5">
             <span className="text-sm font-medium">Title</span>
             <input
@@ -1499,7 +1499,7 @@ export function MarketingSection({
         </div>
       )}
       {tab === "advanced" && (
-        <div className="max-w-3xl space-y-4 rounded-xl border p-4">
+        <div className="max-w-3xl space-y-4 rounded-xl p-4 bg-card shadow-card">
           <label className="flex items-start justify-between gap-4">
             <span>
               <span className="block text-sm font-medium">
@@ -1540,7 +1540,7 @@ export function MarketingSection({
               placeholder={'{\n  "@context": "https://schema.org"\n}'}
               disabled={!canEdit}
               rows={9}
-              className="w-full resize-y rounded-lg border bg-panel px-3 py-2 font-mono text-xs text-foreground"
+              className="w-full resize-y rounded-lg bg-panel px-3 py-2 font-mono text-xs text-foreground"
             />
             <span className="text-xs text-muted-foreground">
               Перед сохранением JSON проверяется сервером.
@@ -1550,7 +1550,7 @@ export function MarketingSection({
       )}
       {tab === "social" && (
         <div className="space-y-4">
-          <section className="max-w-3xl space-y-4 rounded-xl border p-4">
+          <section className="max-w-3xl space-y-4 rounded-xl p-4 bg-card shadow-card">
             <label className="block space-y-1.5">
               <span className="text-sm font-medium">Цель публикации</span>
               <textarea
@@ -1600,7 +1600,7 @@ export function MarketingSection({
               {generated.map((post, index) => (
                 <article
                   key={`${index}-${post.slice(0, 12)}`}
-                  className="rounded-xl border p-4"
+                  className="rounded-xl p-4 bg-card shadow-card"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-semibold text-muted-foreground">
@@ -1699,7 +1699,7 @@ export function DomainsSection({
         title="Домены"
         description="Встроенный адрес работает сразу; пользовательский домен проверяется по реальной DNS-записи CNAME."
       />
-      <section className="rounded-xl border p-4">
+      <section className="rounded-xl p-4 bg-card shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <span className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary">
@@ -1735,7 +1735,7 @@ export function DomainsSection({
           )}
         </div>
       </section>
-      <section className="max-w-3xl rounded-xl border p-4">
+      <section className="max-w-3xl rounded-xl p-4 bg-card shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold">Пользовательский домен</p>
@@ -1998,12 +1998,12 @@ export function IntegrationsSection({
               href={integration.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-xl border p-4 transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-xl p-4 transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring bg-card shadow-card"
             >
               {content}
             </a>
           ) : (
-            <section key={integration.id} className="rounded-xl border p-4">
+            <section key={integration.id} className="rounded-xl p-4 bg-card shadow-card">
               {content}
               {integration.id === "site" && integration.connected && (
                 <Button
@@ -2019,8 +2019,8 @@ export function IntegrationsSection({
           );
         })}
       </div>
-      <section className="overflow-clip rounded-xl border">
-        <div className="border-be bg-panel px-4 py-3">
+      <section className="overflow-clip rounded-xl bg-card shadow-card">
+        <div className="bg-panel px-4 py-3">
           <p className="text-sm font-semibold">Внешние подключения</p>
           <p className="mbs-1 text-xs text-muted-foreground">
             Статус «Ожидает настройки» означает сохранённый запрос, а не
@@ -2076,7 +2076,7 @@ export function IntegrationsSection({
           })}
         </div>
       </section>
-      <section className="max-w-3xl space-y-4 rounded-xl border p-4">
+      <section className="max-w-3xl space-y-4 rounded-xl p-4 bg-card shadow-card">
         <div>
           <p className="text-sm font-semibold">Параметры подключений</p>
           <p className="mbs-1 text-xs leading-5 text-muted-foreground">
@@ -2192,7 +2192,7 @@ export function SecuritySection({
         <div
           role="status"
           className={cn(
-            "rounded-xl border p-4",
+            "rounded-xl p-4 bg-card shadow-card",
             scan.findings.length
               ? "border-warning/30 bg-warning/5"
               : "border-done/30 bg-done/5",
@@ -2213,7 +2213,7 @@ export function SecuritySection({
         </div>
       )}
       {scan && scan.findings.length > 0 && (
-        <section className="overflow-clip rounded-xl border">
+        <section className="overflow-clip rounded-xl bg-card shadow-card">
           <div className="border-be px-4 py-3 text-sm font-semibold">
             Результаты серверной проверки
           </div>
@@ -2244,7 +2244,7 @@ export function SecuritySection({
           </div>
         </section>
       )}
-      <section className="overflow-clip rounded-xl border">
+      <section className="overflow-clip rounded-xl bg-card shadow-card">
         <div className="border-be px-4 py-3 text-sm font-semibold">
           Контрольный список
         </div>
@@ -2452,7 +2452,7 @@ export function AgentsSection({
         }
       />
       <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
-        <section className="space-y-4 rounded-xl border p-4">
+        <section className="space-y-4 rounded-xl p-4 bg-card shadow-card">
           <label className="block space-y-1.5">
             <span className="text-sm font-medium">Диспетчер проекта</span>
             <select
@@ -2495,7 +2495,7 @@ export function AgentsSection({
             Сохранить диспетчера
           </Button>
         </section>
-        <aside className="rounded-xl border bg-panel p-4">
+        <aside className="rounded-xl bg-panel p-4">
           <div className="flex items-center gap-2">
             <Bot className="size-4 text-primary" />
             <h3 className="text-sm font-semibold">Режим выполнения</h3>
@@ -2537,7 +2537,7 @@ export function AgentsSection({
           </button>
         </aside>
       </div>
-      <section className="rounded-xl border">
+      <section className="rounded-xl bg-card shadow-card">
         <div className="flex items-center justify-between border-be px-4 py-3">
           <div className="flex items-center gap-2">
             <Activity className="size-4 text-primary" />
@@ -2563,7 +2563,7 @@ export function AgentsSection({
           </p>
         ) : (
           <div className="grid gap-4 p-4 sm:grid-cols-2">
-            <div className="rounded-lg border bg-panel p-3">
+            <div className="rounded-lg bg-panel p-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <KeyRound className="size-4 text-muted-foreground" />
                 Права доступа (capabilities)
@@ -2595,7 +2595,7 @@ export function AgentsSection({
                 </ul>
               )}
             </div>
-            <div className="rounded-lg border bg-panel p-3">
+            <div className="rounded-lg bg-panel p-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Bot className="size-4 text-muted-foreground" />
                 Режим
@@ -2618,7 +2618,7 @@ export function AgentsSection({
           </div>
         )}
       </section>
-      <section className="overflow-clip rounded-xl border">
+      <section className="overflow-clip rounded-xl bg-card shadow-card">
         <div className="border-be px-4 py-3 text-sm font-semibold">
           История запусков
         </div>
@@ -2834,8 +2834,8 @@ function WorkflowRulesPanel({
     members.find((m) => m.userId === userId)?.user.displayName ?? userId;
 
   return (
-    <section className="overflow-clip rounded-xl border">
-      <div className="border-be bg-panel px-4 py-3">
+    <section className="overflow-clip rounded-xl bg-card shadow-card">
+      <div className="bg-panel px-4 py-3">
         <p className="text-sm font-semibold">Правила «событие → действие»</p>
         <p className="mbs-1 text-xs text-muted-foreground">
           Конструктор поверх автономного цикла: замкнутый набор триггеров и действий над
@@ -3132,7 +3132,7 @@ export function WorkflowsSection({
       />
       <WorkflowRulesPanel project={project} canEdit={canEdit} members={members} />
       {loading ? (
-        <div className="grid min-h-44 place-items-center rounded-xl border text-sm text-muted-foreground">
+        <div className="grid min-h-44 place-items-center rounded-xl text-sm text-muted-foreground bg-card shadow-card">
           <span>
             <Loader2 className="me-2 inline size-4 motion-safe:animate-spin" />
             Загружаем конфигурацию…
@@ -3146,7 +3146,7 @@ export function WorkflowsSection({
       ) : (
         automation && (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <section className="rounded-xl border p-4">
+            <section className="rounded-xl p-4 bg-card shadow-card">
               <p className="text-xs font-medium text-muted-foreground">
                 Прогресс цикла
               </p>
@@ -3161,7 +3161,7 @@ export function WorkflowsSection({
                     : "Запусков пока не было"}
               </p>
             </section>
-            <section className="rounded-xl border p-4">
+            <section className="rounded-xl p-4 bg-card shadow-card">
               <p className="text-xs font-medium text-muted-foreground">
                 Лимит запуска
               </p>
@@ -3175,7 +3175,7 @@ export function WorkflowsSection({
                 сек.
               </p>
             </section>
-            <section className="rounded-xl border p-4">
+            <section className="rounded-xl p-4 bg-card shadow-card">
               <p className="text-xs font-medium text-muted-foreground">
                 Публикация
               </p>
@@ -3193,7 +3193,7 @@ export function WorkflowsSection({
                 {automation.ultracodeReviewEnabled ? "включён" : "выключен"}
               </p>
             </section>
-            <section className="rounded-xl border p-4">
+            <section className="rounded-xl p-4 bg-card shadow-card">
               <p className="text-xs font-medium text-muted-foreground">
                 Активные критерии
               </p>
@@ -3211,8 +3211,8 @@ export function WorkflowsSection({
           </div>
         )
       )}
-      <section className="overflow-clip rounded-xl border">
-        <div className="border-be bg-panel px-4 py-3">
+      <section className="overflow-clip rounded-xl bg-card shadow-card">
+        <div className="bg-panel px-4 py-3">
           <p className="text-sm font-semibold">Готовность проекта</p>
           <p className="mbs-1 text-xs text-muted-foreground">
             Перед запуском планировщик проверит эти реальные настройки.
@@ -3391,9 +3391,9 @@ export async function appRequest(path, options = {}) {
             tableNames.map((table) => (
               <section
                 key={table}
-                className="overflow-clip rounded-xl border"
+                className="overflow-clip rounded-xl bg-card shadow-card"
               >
-                <div className="border-be bg-panel px-3 py-2">
+                <div className="bg-panel px-3 py-2">
                   <p className="font-mono text-xs font-semibold">{table}</p>
                   <p className="mbs-1 text-xs text-muted-foreground">
                     {runtimeUrl
@@ -3453,7 +3453,7 @@ export async function appRequest(path, options = {}) {
           )}
         </div>
       ) : tab === "sdk" ? (
-        <div className="overflow-clip rounded-xl border bg-panel">
+        <div className="overflow-clip rounded-xl bg-panel">
           <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 border-be px-3 py-2 text-xs text-muted-foreground">
             <span>projectsflow-app.js</span>
             <Button
@@ -3471,7 +3471,7 @@ export async function appRequest(path, options = {}) {
           </pre>
         </div>
       ) : (
-        <div className="overflow-clip rounded-xl border bg-panel">
+        <div className="overflow-clip rounded-xl bg-panel">
           <div className="flex h-11 items-center justify-between border-be px-3 text-xs text-muted-foreground">
             <span>openapi.json</span>
             <div className="flex gap-1">
@@ -3773,7 +3773,7 @@ export function SettingsSection({
       </div>
       {tab === "app" && (
         <div className="space-y-4">
-          <section className="max-w-3xl space-y-4 rounded-xl border p-4">
+          <section className="max-w-3xl space-y-4 rounded-xl p-4 bg-card shadow-card">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-1.5">
                 <span className="text-sm font-medium">Логотип приложения</span>
@@ -3896,7 +3896,7 @@ export function SettingsSection({
               </span>
             </button>
           </section>
-          <section className="max-w-3xl rounded-xl border p-4">
+          <section className="max-w-3xl rounded-xl p-4 bg-card shadow-card">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold">
@@ -3952,8 +3952,8 @@ export function SettingsSection({
               </button>
             )}
           </section>
-          <section className="max-w-3xl overflow-clip rounded-xl border">
-            <div className="border-be bg-panel px-4 py-3">
+          <section className="max-w-3xl overflow-clip rounded-xl bg-card shadow-card">
+            <div className="bg-panel px-4 py-3">
               <p className="text-sm font-semibold">Копирование и шаблоны</p>
               <p className="mbs-1 text-xs text-muted-foreground">
                 Копия переносит профиль и конфигурацию Dashboard в новый проект.
@@ -4000,7 +4000,7 @@ export function SettingsSection({
         </div>
       )}
       {tab === "access" && (
-        <section className="max-w-3xl overflow-clip rounded-xl border">
+        <section className="max-w-3xl overflow-clip rounded-xl bg-card shadow-card">
           <div className="divide-y">
             <div className="flex items-center justify-between gap-4 px-4 py-4">
               <span>
@@ -4046,8 +4046,8 @@ export function SettingsSection({
         </section>
       )}
       {tab === "auth" && (
-        <section className="max-w-3xl overflow-clip rounded-xl border">
-          <div className="border-be bg-panel px-4 py-3">
+        <section className="max-w-3xl overflow-clip rounded-xl bg-card shadow-card">
+          <div className="bg-panel px-4 py-3">
             <p className="text-sm font-semibold">Способы входа</p>
             <p className="mbs-1 text-xs text-muted-foreground">
               Email применяется к runtime API сразу. Внешние провайдеры
@@ -4265,7 +4265,7 @@ function GoogleAuthProviderRow({
         </Button>
       </div>
       {expanded && (
-        <div className="mbs-4 space-y-4 rounded-lg border bg-panel p-4">
+        <div className="mbs-4 space-y-4 rounded-lg bg-panel p-4">
           <div className="space-y-1.5 text-xs text-muted-foreground">
             <p>
               Создайте OAuth-клиент в{" "}

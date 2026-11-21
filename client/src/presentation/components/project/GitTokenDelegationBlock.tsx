@@ -148,7 +148,7 @@ export function GitTokenDelegationBlock({
       </p>
 
       {/* «Моя делегация» — toggle CALLER-а */}
-      <div className="rounded-md border bg-muted/10 p-3">
+      <div className="rounded-md bg-muted/70 p-3">
         <div className="flex items-start gap-3">
           <div className="flex-1 text-sm">
             <p className="font-medium">Моя делегация</p>
@@ -200,7 +200,7 @@ export function GitTokenDelegationBlock({
             Порядок выбора сервером сверху вниз. Owner идёт первым, дальше — по
             алфавиту. Диспетчер сам исключается из кандидатов.
           </p>
-          <ul className="divide-y rounded-md border bg-panel">
+          <ul className="divide-y rounded-md bg-panel">
             {status.all.map((m, idx) => (
               <GrantorRow
                 key={m.granterUserId}

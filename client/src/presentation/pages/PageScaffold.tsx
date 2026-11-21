@@ -38,7 +38,7 @@ export function PageMessage({
         {eyebrow && (
           <p className="text-sm font-medium tabular-nums text-muted-foreground">{eyebrow}</p>
         )}
-        <h1 className="text-h1 font-bold leading-tight tracking-[-0.01em]">{title}</h1>
+        <h1 className="font-serif text-h1 font-semibold leading-tight">{title}</h1>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
         {children && <div className="mbs-3 flex flex-wrap items-center justify-center gap-2">{children}</div>}
       </div>

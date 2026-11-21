@@ -86,7 +86,7 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
       </p>
 
       {/* URL-строка + копирование. */}
-      <div className="mbs-3 flex items-center gap-1.5 rounded-md border border-border bg-panel px-2.5 py-1.5">
+      <div className="mbs-3 flex items-center gap-1.5 rounded-md bg-panel px-2.5 py-1.5">
         <span className="min-w-0 flex-1 truncate text-sm text-primary-ink">{display}</span>
         <button
           type="button"
@@ -107,7 +107,7 @@ export function ProjectSiteTab({ projectId }: { projectId: string }): React.Reac
       {/* Бэкенд приложения (db/102): показываем только когда воркер его завёл. */}
       {appBackend?.status === 'active' && (
         // Контейнер нейтральный (C4), смысл «работает» — зелёным в счётчике и полосе.
-        <div className="mbs-3 rounded-lg border border-border bg-panel px-3 py-2.5">
+        <div className="mbs-3 rounded-lg bg-panel px-3 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium text-foreground">Бэкенд приложения</span>
             <span className="shrink-0 text-2xs font-medium text-done">

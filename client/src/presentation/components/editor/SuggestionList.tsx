@@ -108,7 +108,7 @@ export const SuggestionList = React.forwardRef<SuggestionListHandle, SuggestionL
             Показываем только если у пункта есть preview. */}
         {active?.preview ? (
           <div className="pointer-events-none ms-2 hidden w-56 shrink-0 overflow-clip rounded-lg bg-popover text-popover-foreground shadow-menu sm:block">
-            <div className="min-h-[4.5rem] border-be bg-panel px-3.5 py-3 text-foreground">
+            <div className="min-h-[4.5rem] bg-panel px-3.5 py-3 text-foreground">
               {active.preview}
             </div>
             {active.description ? (

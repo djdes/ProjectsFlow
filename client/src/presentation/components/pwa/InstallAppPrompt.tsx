@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import { Download, Plus, Share, SquarePlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { SettingsButtonRow, SettingsGroup } from '@/components/ui/settings-list';
 import {
   Dialog,
   DialogContent,
@@ -141,20 +135,17 @@ export function InstallAppPrompt({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Приложение на телефон</CardTitle>
-        <CardDescription>
-          Добавьте ProjectsFlow на экран «Домой» — откроется на весь экран, как обычное приложение.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Button onClick={() => void handleInstall()} className="gap-2">
-          <Download className="size-4" />
-          Установить приложение
-        </Button>
-        <InstructionsDialog open={showSteps} onOpenChange={setShowSteps} platform={platform} />
-      </CardContent>
-    </Card>
+    <SettingsGroup
+      title="Приложение на телефон"
+      description="ProjectsFlow откроется на весь экран, как обычное приложение."
+    >
+      <SettingsButtonRow
+        icon={<Download />}
+        label="Установить приложение"
+        chevron
+        onClick={() => void handleInstall()}
+      />
+      <InstructionsDialog open={showSteps} onOpenChange={setShowSteps} platform={platform} />
+    </SettingsGroup>
   );
 }
