@@ -333,7 +333,7 @@ export function InboxSectionSwitch({
     <div
       role="group"
       aria-label="Раздел"
-      className={cn('flex h-12 rounded-lg border border-transparent bg-foreground/[0.06] p-0.5 dark:border-border dark:bg-panel', className)}
+      className={cn('flex h-12 rounded-lg bg-foreground/[0.06] p-0.5 dark:bg-panel', className)}
     >
       {item('now', 'Сейчас', nowCount, nowAttention)}
       {item('queue', 'Очередь', queueCount)}

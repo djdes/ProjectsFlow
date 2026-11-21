@@ -133,7 +133,7 @@ export function AnalyzeServerPanel({
           <p className="text-sm text-muted-foreground">Анализов пока нет.</p>
         ) : (
           history.map((a) => (
-            <div key={a.jobId} className="rounded-md border border-border/60 p-3">
+            <div key={a.jobId} className="rounded-md border border-border p-3">
               <div className="mbe-1 flex items-center gap-2 text-xs text-muted-foreground">
                 <Sparkles className="size-3.5 text-primary" />
                 <span className="font-medium text-foreground">{TYPE_LABEL[a.analysisType]}</span>

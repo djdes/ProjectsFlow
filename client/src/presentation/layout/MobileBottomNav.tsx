@@ -65,12 +65,12 @@ export function MobileBottomNav(): React.ReactElement {
       aria-label="Основная навигация"
       // Дизайн C4: нижняя полоса с линией сверху (как линия под шапкой страниц), внутри —
       // тот же переключатель, что «Мои / Все»: серая подложка и белая плашка выбранного.
-      className="shrink-0 border-bs bg-background px-3 pbe-[max(env(safe-area-inset-bottom,0px),0.5rem)] pbs-2"
+      className="shrink-0 bg-background px-3 pbe-[max(env(safe-area-inset-bottom,0px),0.5rem)] pbs-1.5"
     >
       <div
         ref={innerRef}
         data-pf-no-edge-swipe
-        className="relative mx-auto flex max-w-md touch-pan-y select-none items-stretch rounded-xl bg-foreground/[0.05] p-1 dark:border dark:border-border dark:bg-panel"
+        className="relative mx-auto flex max-w-md touch-pan-y select-none items-stretch rounded-2xl bg-foreground/[0.05] p-1 dark:bg-panel"
         onPointerDown={(event) => {
           if (!event.isPrimary) {
             suppressClickRef.current = true;

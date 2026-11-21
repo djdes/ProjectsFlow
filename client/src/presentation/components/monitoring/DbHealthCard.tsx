@@ -4,7 +4,7 @@ import { fmtBytes, fmtDuration } from './format';
 // Метрики БД (MariaDB): соединения, размер, аптайм, slow queries.
 export function DbHealthCard({ db }: { db: DbHealth }): React.ReactElement {
   return (
-    <div className="rounded-md border border-border/60 p-3">
+    <div className="rounded-md border border-border p-3">
       <h4 className="mbe-2 text-sm font-medium">База данных{db.version ? ` · ${db.version}` : ''}</h4>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
         <div>

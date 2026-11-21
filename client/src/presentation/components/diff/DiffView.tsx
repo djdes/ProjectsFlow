@@ -182,10 +182,10 @@ function UnifiedDiff({
                 : 'text-foreground';
           return (
             <div key={i} className={cn('flex', rowBg)}>
-              <span className="w-9 shrink-0 select-none border-e border-border/60 px-1 text-end text-muted-foreground/70">
+              <span className="w-9 shrink-0 select-none border-e border-border px-1 text-end text-muted-foreground/70">
                 {l.oldNo ?? ''}
               </span>
-              <span className="w-9 shrink-0 select-none border-e border-border/60 px-1 text-end text-muted-foreground/70">
+              <span className="w-9 shrink-0 select-none border-e border-border px-1 text-end text-muted-foreground/70">
                 {l.newNo ?? ''}
               </span>
               <pre className={cn('m-0 flex-1 whitespace-pre px-2', textCls)}>

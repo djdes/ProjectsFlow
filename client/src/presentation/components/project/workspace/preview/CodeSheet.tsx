@@ -94,7 +94,7 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-be px-3 py-2">
-        <div className="flex rounded-lg bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-0.5" role="tablist" aria-label="Представление элемента">
+        <div className="flex rounded-lg bg-foreground/[0.06] dark:bg-panel p-0.5" role="tablist" aria-label="Представление элемента">
           <button type="button" role="tab" aria-selected={tab === 'preview'} onClick={() => setTab('preview')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm text-muted-foreground', tab === 'preview' && 'bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none')}><Eye className="size-3.5" />Параметры</button>
           <button type="button" role="tab" aria-selected={tab === 'source'} onClick={() => setTab('source')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm text-muted-foreground', tab === 'source' && 'bg-background text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none')}><Braces className="size-3.5" />Исходник</button>
         </div>

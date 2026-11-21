@@ -326,12 +326,12 @@ function TaskDrawerComposerForm({
     <div ref={rootRef} data-pf-comment-composer className="bg-background/95 px-3 pbe-3 pbs-2">
       <div
         data-replying={replyDraft ? '' : undefined}
-        className="pf-comment-composer-card overflow-clip rounded-2xl border border-input bg-background"
+        className="pf-comment-composer-card overflow-clip rounded-3xl"
       >
         {replyDraft && (
           <div
             key={replyDraft.commentId}
-            className="pf-comment-reply-strip flex items-center gap-1.5 border-be bg-primary/[0.06] py-1.5 pe-2 ps-3 text-xs text-muted-foreground"
+            className="pf-comment-reply-strip flex items-center gap-1.5 py-1.5 pe-2 ps-3.5 text-xs text-muted-foreground"
           >
             <CornerDownRight className="size-3.5 shrink-0 text-primary" />
             <button
@@ -348,7 +348,7 @@ function TaskDrawerComposerForm({
             <button
               type="button"
               onClick={clearReply}
-              className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
               aria-label="Отменить ответ"
               title="Отменить ответ"
             >
@@ -357,11 +357,11 @@ function TaskDrawerComposerForm({
           </div>
         )}
         {pending.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 border-be bg-muted/30 px-3 py-1.5">
+          <div className="flex flex-wrap gap-1.5 px-3 pbs-2">
             {pending.map((pf) => (
               <span
                 key={pf.id}
-                className="pf-comment-chip inline-flex items-center gap-1.5 rounded-md border bg-background py-0.5 ps-1.5 pe-1 text-2xs"
+                className="pf-comment-chip inline-flex items-center gap-1.5 rounded-lg bg-background py-1 ps-1.5 pe-1 text-2xs"
                 title={pf.file.name}
               >
                 {/* Картинку можно рассмотреть ДО отправки — клик открывает лайтбокс на
@@ -424,7 +424,7 @@ function TaskDrawerComposerForm({
               value={sessionMode}
               onChange={event => setSessionMode(event.target.value as WorkerSessionMode)}
               disabled={submitting}
-              className="max-w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:bg-muted"
+              className="max-w-full rounded-lg bg-background px-2 py-1 text-xs text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:bg-muted"
             >
               <option value="continue">Продолжить сессию</option>
               <option value="new">Новая сессия</option>

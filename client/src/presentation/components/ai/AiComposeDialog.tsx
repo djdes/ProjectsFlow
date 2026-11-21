@@ -645,7 +645,7 @@ export function AiComposeDialog({
 
                 {/* Переключатель режима — сегмент-контрол ВЫШЕ управляемой области */}
                 {canDistribute && (
-                  <div className="grid grid-cols-2 gap-1 rounded-xl bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-1">
+                  <div className="grid grid-cols-2 gap-1 rounded-xl bg-foreground/[0.06] dark:bg-panel p-1">
                     <button
                       type="button"
                       onClick={() => setDistribute(false)}

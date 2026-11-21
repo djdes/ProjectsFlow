@@ -290,7 +290,7 @@ export function ReviewVerdictCard({ verdict }: { verdict: LiveReviewVerdict }): 
       {verdict.findings.length > 0 && (
         <ul className="m-0 list-none space-y-2 px-3 pbe-3 pbs-1">
           {verdict.findings.map((finding, index) => (
-            <li key={index} data-severity={finding.severity} className="min-w-0 rounded-md border border-border bg-background/60 px-2.5 py-2">
+            <li key={index} data-severity={finding.severity} className="min-w-0 rounded-lg bg-background/60 px-2.5 py-2">
               <div className="mbe-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className={cn('shrink-0 rounded-sm px-1.5 py-px text-2xs font-semibold', SEVERITY[finding.severity].className)}>{SEVERITY[finding.severity].label}</span>
                 {finding.file && (
@@ -367,7 +367,7 @@ export function ToolJournal({ round, events, live, children }: {
   const { title, errors } = journalTitle(round, events);
   const preview = live && !open ? lastActionPreview(events.at(-1)) : null;
   return (
-    <div data-live-journal={round ?? 0} className="min-w-0 overflow-hidden rounded-md border border-border bg-card">
+    <div data-live-journal={round ?? 0} className="min-w-0 overflow-hidden rounded-lg bg-muted/60">
       <button type="button" onClick={() => setOpen(value => !value)} aria-expanded={open}
         className="flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-start text-xs hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
         <ChevronRight className={cn('size-3.5 shrink-0 text-muted-foreground motion-safe:transition-transform', open && 'rotate-90')} aria-hidden />
@@ -375,8 +375,8 @@ export function ToolJournal({ round, events, live, children }: {
         {errors > 0 && <span className="shrink-0 rounded-sm bg-destructive-soft px-1 text-2xs font-medium text-destructive">{plural(errors, 'ошибка', 'ошибки', 'ошибок')}</span>}
         <span className="ms-auto shrink-0 text-2xs text-muted-foreground">{open ? 'свернуть' : 'журнал'}</span>
       </button>
-      {preview && <p className="m-0 truncate border-bs border-border px-2.5 py-1 font-mono text-2xs text-muted-foreground" title={preview}>{preview}</p>}
-      {open && <div className="space-y-2 border-bs border-border bg-panel/60 p-2">{events.map(event => <div key={event.seq} className="min-w-0">{children(event)}</div>)}</div>}
+      {preview && <p className="m-0 truncate px-2.5 py-1 font-mono text-2xs text-muted-foreground" title={preview}>{preview}</p>}
+      {open && <div className="space-y-2 bg-muted/40 p-2">{events.map(event => <div key={event.seq} className="min-w-0">{children(event)}</div>)}</div>}
     </div>
   );
 }

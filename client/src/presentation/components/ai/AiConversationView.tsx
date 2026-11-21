@@ -262,7 +262,7 @@ export function AiConversationView({
                     />
                   );
                 })}
-                {state.error && <div className="mx-auto flex max-w-lg items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"><AlertCircle className="size-4 shrink-0" />{state.error}</div>}
+                {state.error && <div className="mx-auto flex max-w-lg items-center gap-2 rounded-xl bg-destructive-soft px-3 py-2 text-xs text-destructive"><AlertCircle className="size-4 shrink-0" />{state.error}</div>}
                 {images.error && <p role="alert" className="text-sm text-destructive">{images.error}</p>}
                 <div aria-hidden="true" />
               </div>
@@ -289,7 +289,7 @@ export function AiConversationView({
           {/* Нижний safe-area — только от md: на телефоне под композером всегда есть
               кто-то, кто его уже учёл (нижняя навигация приложения или нижний лист панели
               ИИ/студии), и второй инсет давал пустую полосу ~34px над навигацией. */}
-          <div className="shrink-0 border-bs bg-background/95 px-3 pbe-3 pbs-3 backdrop-blur md:pbe-[max(12px,env(safe-area-inset-bottom,0px))]">
+          <div className="shrink-0 bg-background/95 px-3 pbe-3 pbs-3 backdrop-blur md:pbe-[max(12px,env(safe-area-inset-bottom,0px))]">
             <div className={cn('mx-auto', compact ? 'max-w-3xl' : 'max-w-4xl')}>
               {/* Подсказки живут НАД композером и приезжают из metadata последнего ответа.
                   Своего генератора у нас нет: сервер не прислал — блок не рендерится. */}
@@ -511,7 +511,7 @@ function ConversationMessage({ message, previousUser, sending, onRetry, projectI
       )}
       <div className={cn(
         'min-w-0 max-w-full overflow-hidden text-sm leading-6',
-        user ? 'select-text rounded-md bg-message-bubble p-3' : 'w-full',
+        user ? 'select-text rounded-2xl rounded-ee-md bg-message-bubble px-3.5 py-2.5' : 'w-full',
       )}>
         {!user && <AiAgentStepsBlock steps={steps} needsReview={batchStatus === 'pending_review'} />}
         {/* Как в референсе: бейдж зоны — первый ребёнок внутри пузыря, над текстом
@@ -594,9 +594,9 @@ function MessageActions({
 
 function MessageAttachments({ attachments }: { attachments: ReturnType<typeof extractAiAttachments>['attachments'] }): React.ReactElement {
   return <div className="not-prose mbs-2 flex flex-wrap gap-2">{attachments.map((attachment) => attachment.kind === 'image' && attachment.previewUrl ? (
-    <button key={attachment.id} type="button" className="group relative overflow-clip rounded-xl border bg-muted" onClick={() => window.open(attachment.previewUrl, '_blank', 'noopener,noreferrer')}><img src={attachment.previewUrl} alt={attachment.name} className="max-h-48 max-w-[280px] object-contain" /><span className="absolute inset-x-0 inset-be-0 truncate bg-black/55 px-2 py-1 text-start text-2xs text-white opacity-0 transition group-hover:opacity-100"><Image className="me-1 inline size-3" />{attachment.name}</span></button>
+    <button key={attachment.id} type="button" className="group relative overflow-clip rounded-xl bg-muted" onClick={() => window.open(attachment.previewUrl, '_blank', 'noopener,noreferrer')}><img src={attachment.previewUrl} alt={attachment.name} className="max-h-48 max-w-[280px] object-contain" /><span className="absolute inset-x-0 inset-be-0 truncate bg-black/55 px-2 py-1 text-start text-2xs text-white opacity-0 transition group-hover:opacity-100"><Image className="me-1 inline size-3" />{attachment.name}</span></button>
   ) : (
-    <div key={attachment.id} className="flex max-w-[280px] items-center gap-2 rounded-xl border bg-muted/30 px-2.5 py-2">{attachment.kind === 'text' ? <FileText className="size-4 shrink-0" /> : <Paperclip className="size-4 shrink-0" />}<span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-2xs text-muted-foreground">{Math.max(1, Math.round(attachment.size / 1024))} КБ</span></span></div>
+    <div key={attachment.id} className="flex max-w-[280px] items-center gap-2 rounded-xl bg-muted px-2.5 py-2">{attachment.kind === 'text' ? <FileText className="size-4 shrink-0" /> : <Paperclip className="size-4 shrink-0" />}<span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-2xs text-muted-foreground">{Math.max(1, Math.round(attachment.size / 1024))} КБ</span></span></div>
   ))}</div>;
 }
 

@@ -17,7 +17,7 @@ const buttonVariants = cva(
   // `.button svg` (0,1,1) специфичнее `.size-3` (0,1,0) и раньше перебивал ЛЮБОЙ
   // явный размер иконки во всех кнопках сайта (иконки выходили ~15px вместо 12px).
   // `:not([class*="size-"])` исключает иконки, у которых размер задан явно.
-  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*=size-])]:size-[1.05em] [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*=size-])]:size-[1.05em] [&_svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -36,9 +36,9 @@ const buttonVariants = cva(
         // Плотная шкала C4: на десктопе 32px (как кнопки Notion), на мобиле 44px (touch).
         default: 'h-11 px-4 py-2 text-sm sm:h-8 sm:px-3',
         // mobile 40px → desktop 28px.
-        sm: 'h-10 rounded-md px-3 text-sm sm:h-7 sm:px-2.5 sm:text-xs',
+        sm: 'h-10 rounded-lg px-3 text-sm sm:h-7 sm:px-2.5 sm:text-xs',
         // mobile 48px → desktop 36px. Самый крупный — для главного действия формы.
-        lg: 'h-12 rounded-md px-6 sm:h-9 sm:px-4',
+        lg: 'h-12 rounded-lg px-6 sm:h-9 sm:px-4',
         // Квадратные icon-кнопки: `size-8` (32px) desktop → `size-11` (44px) на mobile.
         // ⚠️ Базовый `size-8` + бамп на `max-sm:` (а НЕ `sm:size-8`): иначе call-site
         // override вида `size-6` (без префикса) НЕ перебивал бы `sm:size-8` на десктопе.

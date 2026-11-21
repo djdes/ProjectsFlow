@@ -20,7 +20,7 @@ export function ProjectWorkspaceSwitcher({
     <div
       role="tablist"
       aria-label="Рабочая область проекта"
-      className="mbe-3 inline-flex w-fit max-w-full items-center rounded-lg bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-0.5"
+      className="mbe-3 inline-flex w-fit max-w-full items-center rounded-lg bg-foreground/[0.06] dark:bg-panel p-0.5"
     >
       {ITEMS.map(({ id, label, icon: Icon }) => (
         <button

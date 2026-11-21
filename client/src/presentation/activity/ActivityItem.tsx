@@ -340,7 +340,7 @@ export function ActivityItem({
             side="top"
             align="end"
             sideOffset={8}
-            className="flex items-center gap-3 rounded-xl border-border/60 p-3 shadow-lg"
+            className="flex items-center gap-3 rounded-xl border-border p-3 shadow-lg"
           >
             <UserAvatar displayName={actor} avatarUrl={item.actorAvatarUrl} className="size-11 text-base" />
             <span className="pe-2 text-start">

@@ -278,7 +278,7 @@ export function ImportProjectRepoDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-foreground/[0.06] p-1 dark:border dark:border-border dark:bg-panel">
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-foreground/[0.06] p-1 dark:bg-panel">
             <button
               type="button"
               onClick={() => {

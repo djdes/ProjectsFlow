@@ -752,7 +752,7 @@ export const RichTextEditor = React.forwardRef<RichTextEditorHandle, RichTextEdi
       }, 0);
     }} className={cn('relative', taskDocument && '[&_.tiptap]:leading-relaxed [&_.pf-task-title-line]:text-lg [&_.pf-task-title-line]:font-medium [&_.pf-task-title-line]:leading-7 [&_.pf-task-title-line]:text-foreground [&_.tiptap>p:first-child]:mbe-3 [&_.tiptap_strong]:font-bold', className)}>
       {editor && toolbar && !disabled && (!coarsePointer || toolbarRevealed) ? (
-        <div data-editor-owner={ownerId} className="mbe-3 border-be border-border/70 pbe-1">
+        <div data-editor-owner={ownerId} className="mbe-3 border-be border-border pbe-1">
           <FormatMenu editor={editor} inline />
         </div>
       ) : null}

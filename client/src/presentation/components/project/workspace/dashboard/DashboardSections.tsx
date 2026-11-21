@@ -106,7 +106,7 @@ export type DashboardContentProps = {
 // белая плашка с лёгкой тенью (в тёмной теме — приподнятая графитовая), остальные — вторичным
 // цветом. Высота 32px — вровень с полями поиска в той же строке.
 const SEGMENTS_CLASS =
-  "inline-flex rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel";
+  "inline-flex rounded-lg bg-foreground/[0.06] p-0.5 dark:bg-panel";
 const segmentClass = (active: boolean): string =>
   cn(
     "h-8 rounded-md px-3 text-ui transition-colors",

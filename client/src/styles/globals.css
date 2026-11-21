@@ -30,8 +30,10 @@
     --popover: 100% 0 none;
     --popover-foreground: 32.89% 0.011 91.66;
 
-    --border: 93.35% 0.003 106.45;
-    --input: 90.66% 0.004 91.45;
+    /* Одна тонкая тёплая линия на весь продукт (2026-11-21, «рамки как в Claude»): рамки
+       не разного оттенка, а одного; поле ввода — на полтона плотнее. */
+    --border: 92.9% 0.005 91.5;
+    --input: 90.9% 0.006 91.5;
     --ring: 56.67% 0.166 252.48;
 
     /* Синий акцент Notion, на полтона темнее (#0F77D4 вместо #2383E2): белая подпись на
@@ -60,7 +62,7 @@
        приподнятая плашка (быстрые действия на карточке, тост). */
     --sidebar: 97.56% 0.003 106.45;
     --panel: 97.56% 0.003 106.45;
-    --panel-divider: 93.67% 0.005 95.1;
+    --panel-divider: 92.9% 0.005 91.5;
     --field: 100% 0 none;
     --raised: 100% 0 none;
 
@@ -141,8 +143,10 @@
     --popover: 29.85% 0.015 274.37;
     --popover-foreground: 94.59% 0.003 264.54;
 
-    --border: 31.05% 0.015 274.41;
-    --input: 33.45% 0.016 275.59;
+    /* Линия на ступень мягче (была 31%): блоки отделяются заливкой ступеней, рамка лишь
+       обозначает край и не «режет» экран на клетки. */
+    --border: 29% 0.012 274.4;
+    --input: 31.6% 0.014 275;
     --ring: 68.09% 0.169 275.03;
 
     --primary: 68.09% 0.169 275.03;
@@ -165,7 +169,7 @@
 
     --sidebar: 22.32% 0.01 276.61;
     --panel: 23.61% 0.01 276.66;
-    --panel-divider: 31.05% 0.015 274.41;
+    --panel-divider: 29% 0.012 274.4;
     --field: 23.61% 0.01 276.66;
     --raised: 29.85% 0.015 274.37;
 
@@ -192,10 +196,10 @@
        плашка, а не сливается с обычными muted-поверхностями. */
     --message-bubble: 29.85% 0.015 274.37;
 
-    --shadow-card: 0 0 0 1px oklch(31.05% 0.015 274.41);
-    --shadow-card-hover: 0 0 0 1px oklch(36.87% 0.018 272.29);
+    --shadow-card: 0 0 0 1px oklch(29% 0.012 274.4);
+    --shadow-card-hover: 0 0 0 1px oklch(34% 0.016 272.3);
     --shadow-float: 0 12px 32px oklch(0% 0 none / 0.5);
-    --shadow-menu: 0 0 0 1px oklch(31.05% 0.015 274.41), 0 12px 32px oklch(0% 0 none / 0.5);
+    --shadow-menu: 0 0 0 1px oklch(33% 0.015 274.4), 0 12px 32px oklch(0% 0 none / 0.5);
 
     --hover: color-mix(in oklch, oklch(100% 0 none) 7%, transparent);
     --active: color-mix(in oklch, oklch(100% 0 none) 10%, transparent);
@@ -528,6 +532,22 @@
       min-height: 44px;
     }
   }
+
+  /* Палец промахивается мимо маленьких квадратных кнопок (size-6/size-7 — крестики, «ещё»,
+     скрепка). Видимую кнопку не раздуваем: зону нажатия расширяет невидимый ::before до 44px
+     (тот же приём, что у .pf-platform-update в deployment.css). position: relative — в слое
+     base со специфичностью одного атрибута: утилиты .absolute/.fixed/.sticky идут позже и
+     перебивают его, так что позиционированные кнопки остаются на месте. */
+  @media (pointer: coarse) {
+    :where(button, [role='button'])[class*='size-'] {
+      position: relative;
+    }
+    :where(button, [role='button'])[class*='size-']::before {
+      content: '';
+      position: absolute;
+      inset: min(0px, (100% - 44px) / 2);
+    }
+  }
 }
 
 /* Тона и переменные тостов — вне @layer: классы .pf-tone-<имя> собираются в коде
@@ -537,7 +557,7 @@
    утилиты берут их через bg-tone-bg / text-tone-fg / bg-tone (точка) / bg-tone-solid /
    text-tone-on-solid. Светлая тема — пастельная подложка и тёмный текст; тёмная —
    метка без подложки с цветной точкой (см. .pf-tag), аватар — яркая заливка. */
-.notification-quote { border-inline-start-color: var(--tone); background: color-mix(in oklch, var(--tone) 10%, transparent); }
+.notification-quote { background: color-mix(in oklch, var(--tone) 10%, transparent); }
 .notification-quote-author { color: var(--tone); }
 .pf-tone-gray { --tone-bg: oklch(91.3% 0.003 84.56); --tone-fg: oklch(30.98% 0.008 84.59); --tone: oklch(68.62% 0.004 91.47); }
 .pf-tone-brown { --tone-bg: oklch(91.62% 0.017 44.8); --tone-fg: oklch(31.39% 0.044 45.46); --tone: oklch(57.66% 0.076 45.56); }
@@ -1143,22 +1163,20 @@ html[data-pf-modality='pointer'] :focus-visible {
     display: none;
   }
 
-  /* Карточка композера комментария. Фокус — заметная рамка цвета primary и мягкий ореол
-     вокруг, чтобы сразу было видно, куда идёт ввод; режим ответа держит рамку тонированной. */
+  /* Карточка композера комментария — залитая капсула без рамки, как поле ввода в приложении
+     Claude: на листе её держит заливка --muted. Фокус — мягкий ореол акцента (без рамки),
+     режим ответа — лёгкий тинт акцента в заливке. */
   .pf-comment-composer-card {
-    box-shadow: 0 1px 2px oklch(0% 0 none / 0.05);
+    background-color: oklch(var(--muted));
     transition:
-      border-color 200ms var(--pf-ease),
+      background-color 200ms var(--pf-ease),
       box-shadow 240ms var(--pf-ease);
   }
   .pf-comment-composer-card[data-replying] {
-    border-color: oklch(var(--primary) / 0.35);
+    background-color: color-mix(in oklch, oklch(var(--primary)) 6%, oklch(var(--muted)));
   }
   .pf-comment-composer-card:focus-within {
-    border-color: oklch(var(--primary) / 0.6);
-    box-shadow:
-      0 0 0 3px oklch(var(--primary) / 0.12),
-      0 10px 28px -14px oklch(var(--primary) / 0.45);
+    box-shadow: 0 0 0 2px oklch(var(--primary) / 0.28);
   }
 
   /* Плашка «В ответ …» и чипы вложений выезжают, а не возникают рывком. */

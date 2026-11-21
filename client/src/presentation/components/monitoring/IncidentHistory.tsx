@@ -35,7 +35,7 @@ export function IncidentHistory({ projectId }: { projectId: string }): React.Rea
             ? Math.max(1, Math.round((a.resolvedAt.getTime() - a.firstSeenAt.getTime()) / 60000))
             : null;
         return (
-          <li key={a.id} className="flex items-start gap-2 rounded-md border border-border/60 p-2.5 opacity-80">
+          <li key={a.id} className="flex items-start gap-2 rounded-md border border-border p-2.5 opacity-80">
             <SeverityBadge severity={a.severity} />
             <div className="min-w-0 flex-1">
               <p className="text-sm">{a.message}</p>
