@@ -19,7 +19,7 @@ export function OfflineBanner(): React.ReactElement | null {
       <div className="flex min-w-0 max-w-md items-start gap-2 rounded-2xl bg-foreground px-3.5 py-2 text-ui text-background shadow-float">
         <WifiOff className="mbs-0.5 size-4 shrink-0" aria-hidden />
         <p className="min-w-0">
-          <span className="font-semibold">Нет сети</span> — показываем сохранённую версию приложения, изменения не сохранятся
+          <span className="font-semibold">Нет сети</span> — показываем последние загруженные данные, изменения не сохранятся
         </p>
       </div>
     </div>

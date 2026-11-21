@@ -1339,6 +1339,29 @@ export const scenarios = [
   },
 
   {
+    id: 'offline-reads',
+    title: 'Без сети: доска открывается из последней сохранённой копии',
+    matrix: [['phone', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      await t.goto(`/projects/${BOARD_PROJECT_ID}`, { ready: () => page.locator(card('t-home')) });
+      // Saved copies are written right after the reads finish.
+      await page.waitForTimeout(800);
+      await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('button', { name: 'Профиль' }).tap();
+      await t.visible(page.getByRole('heading', { name: 'Профиль' }), 'профиль');
+      await t.step('сеть пропала — назад на доску', async () => {
+        t.offlineSimulated = true;
+        await page.context().route(
+          (url) => url.pathname === '/api' || url.pathname.startsWith('/api/'),
+          (route) => route.abort('internetdisconnected'),
+        );
+        await page.goBack();
+        await t.visible(page.locator(card('t-home')).getByText(taskTitle(state, 't-home'), { exact: true }).first(), 'карточка из сохранённой копии');
+      });
+    },
+  },
+
+  {
     id: 'board-card-menu',
     title: 'Доска на телефоне: долгое нажатие на карточку без переноса открывает меню',
     matrix: [['phone', 'light']],

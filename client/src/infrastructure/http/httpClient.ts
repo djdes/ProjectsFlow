@@ -5,9 +5,36 @@
 import { HttpError, type HttpErrorBody } from '@/lib/HttpError';
 import { InFlightReads } from './InFlightReads';
 import { fetchWithDeadline } from './fetchWithDeadline';
+import {
+  cacheStorageStore,
+  fitsOfflineStore,
+  isNetworkFailure,
+  isOfflineCacheable,
+  offlineKey,
+  readOfflineOwner,
+  writeOfflineOwner,
+} from './offlineReads';
 
 const reads = new InFlightReads();
 let requestWorkspace: string | null = null;
+// Offline reading (offlineReads.ts): the account the stored reads belong to.
+const offlineStore = cacheStorageStore();
+let offlineOwner: string | null = readOfflineOwner();
+
+function forgetOfflineReads(): void {
+  offlineOwner = null;
+  writeOfflineOwner(null);
+  void offlineStore?.clear().catch(() => undefined);
+}
+
+function rememberOfflineOwner(data: unknown): void {
+  const id = (data as { user?: { id?: unknown } } | null)?.user?.id;
+  if (typeof id !== 'string' || id === offlineOwner) return;
+  // Another account on this device: the previous account's reads must not be shown offline.
+  if (offlineOwner) void offlineStore?.clear().catch(() => undefined);
+  offlineOwner = id;
+  writeOfflineOwner(id);
+}
 export function setRequestWorkspace(workspaceId: string | null): void {
   if (requestWorkspace !== workspaceId) reads.invalidate();
   requestWorkspace = workspaceId;
@@ -41,9 +68,29 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
     init.body = JSON.stringify(opts.body);
   }
 
-  const { response: res, text } = await fetchWithDeadline(
-    `/api${path}`, init, opts.timeoutMs ?? (init.method === 'GET' ? 45000 : 90000),
-  );
+  const isRead = init.method === 'GET' && isOfflineCacheable(path);
+  let fetched: Awaited<ReturnType<typeof fetchWithDeadline>>;
+  try {
+    fetched = await fetchWithDeadline(
+      `/api${path}`, init, opts.timeoutMs ?? (init.method === 'GET' ? 45000 : 90000),
+    );
+  } catch (error) {
+    // No network: answer a read from the last saved copy of this account and workspace.
+    if (isRead && offlineOwner && offlineStore && isNetworkFailure(error)) {
+      const saved = await offlineStore.get(offlineKey(offlineOwner, workspace, path)).catch(() => null);
+      if (saved !== null) {
+        try {
+          window.dispatchEvent(new CustomEvent('pf:offline-read', { detail: { path } }));
+        } catch {
+          /* non-browser environment */
+        }
+        return JSON.parse(saved) as T;
+      }
+    }
+    throw error;
+  }
+  const { response: res, text } = fetched;
+  if (res.ok && init.method === 'POST' && path === '/auth/logout') forgetOfflineReads();
 
   if (res.status === 204) return undefined as T;
 
@@ -67,6 +114,7 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
     // 401 в середине сессии — сообщаем всему приложению одним событием: AuthProvider
     // переведёт статус в anonymous, ProtectedRoute уведёт на /login с возвратом.
     // The session probe owns its result; a late probe must not undo a newer login.
+    if (res.status === 401) forgetOfflineReads();
     if (res.status === 401 && !(path === '/auth/me' && init.method === 'GET')) {
       reads.invalidate();
       try {
@@ -79,6 +127,12 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
     throw new HttpError(res.status, body);
   }
 
+  if (isRead) {
+    if (path === '/auth/me') rememberOfflineOwner(data);
+    if (offlineOwner && offlineStore && fitsOfflineStore(text)) {
+      void offlineStore.put(offlineKey(offlineOwner, workspace, path), text).catch(() => undefined);
+    }
+  }
   return data as T;
 }
 
