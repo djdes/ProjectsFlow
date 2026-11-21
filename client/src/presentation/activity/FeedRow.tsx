@@ -82,7 +82,7 @@ export function FeedRow({
                     {formatRelativeTime(createdAt.getTime())}
                   </time>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" align="end" className="flex items-center gap-1.5 border-border/60 shadow-lg">
+                <TooltipContent side="bottom" align="end" className="flex items-center gap-1.5 border-border shadow-lg">
                   <CalendarDays className="size-3.5 text-muted-foreground" />
                   {formatExactDateTime(createdAt)}
                 </TooltipContent>

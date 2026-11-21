@@ -82,7 +82,7 @@ export function AllWorkspaceTasksPage(): React.ReactElement {
                       'inline-flex cursor-pointer select-none items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
                       isVisible
                         ? 'border-border bg-card text-foreground hover:bg-hover'
-                        : 'border-dashed border-border/70 text-muted-foreground opacity-75 hover:border-border hover:text-foreground hover:opacity-100',
+                        : 'border-dashed border-border text-muted-foreground opacity-75 hover:border-border hover:text-foreground hover:opacity-100',
                     )}
                   >
                     <input

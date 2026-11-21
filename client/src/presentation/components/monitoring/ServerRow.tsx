@@ -47,7 +47,7 @@ export function ServerRow({
     <button
       type="button"
       onClick={onOpen}
-      className="group flex w-full items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5 text-start transition-colors hover:border-foreground/30 hover:bg-hover"
+      className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-start transition-colors hover:border-foreground/30 hover:bg-hover"
     >
       <Server className="size-4 shrink-0 text-muted-foreground" />
       <div className="flex min-w-0 flex-1 items-center gap-2">

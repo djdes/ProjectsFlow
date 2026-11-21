@@ -26,7 +26,7 @@ export function Pm2Table({ pm2 }: { pm2: ReadonlyArray<Pm2ProcessSnapshot> }): R
           {pm2.map((p) => {
             const recent = p.uptimeMs !== null && p.uptimeMs < RECENT_RESTART_MS;
             return (
-              <tr key={p.name} className="border-bs border-border/40">
+              <tr key={p.name} className="border-bs border-border">
                 <td className="py-1.5 pe-3 font-medium">{p.name}</td>
                 <td className="py-1.5 pe-3">
                   <PmStatusBadge status={p.status} />

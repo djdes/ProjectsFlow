@@ -168,7 +168,7 @@ export function AppLogsPanel({
   return (
     <div className="overflow-clip rounded-xl border bg-background">
       <div className="flex min-h-14 flex-wrap items-center gap-2 border-be px-3 py-2">
-        <div className="inline-flex rounded-lg bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-0.5">
+        <div className="inline-flex rounded-lg bg-foreground/[0.06] dark:bg-panel p-0.5">
           <button
             type="button"
             onClick={() => setTab("app")}

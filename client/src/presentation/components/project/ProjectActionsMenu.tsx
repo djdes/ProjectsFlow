@@ -340,7 +340,7 @@ export function ProjectActionsMenu({
               }}
               placeholder="Поиск действий…"
               aria-label="Поиск действий"
-              className="h-11 w-full rounded-lg border border-border/70 bg-panel ps-9 pe-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2 md:h-7 md:rounded-md md:border-0 md:ps-7 md:pe-2 md:text-xs"
+              className="h-11 w-full rounded-lg border border-border bg-panel ps-9 pe-3 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2 md:h-7 md:rounded-md md:border-0 md:ps-7 md:pe-2 md:text-xs"
             />
           </div>
           {/* Тумблер «Скрыть плашки» — только на странице задач (только там живёт

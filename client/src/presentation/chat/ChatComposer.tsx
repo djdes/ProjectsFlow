@@ -95,10 +95,10 @@ export function ChatComposer({
   };
 
   return (
-    <div className="shrink-0 border-bs bg-sidebar px-2 py-2">
+    <div className="shrink-0 bg-sidebar px-2 py-2">
       {/* контекст: ответ / редактирование */}
       {(replyTo || editing) && (
-        <div className="mbe-1 flex items-center gap-2 rounded-md border-s-2 border-primary/60 bg-primary/5 px-2 py-1 text-xs">
+        <div className="mbe-1 flex items-center gap-2 rounded-lg bg-primary/[0.07] px-2 py-1 text-xs">
           <div className="min-w-0 flex-1">
             <div className="font-medium text-primary-ink/90">
               {editing ? 'Редактирование' : `Ответ ${replyTo?.authorDisplayName}`}
@@ -164,7 +164,7 @@ export function ChatComposer({
           onPaste={onPaste}
           rows={1}
           placeholder={editing ? 'Изменить сообщение…' : 'Сообщение…'}
-          className="min-h-8 w-0 min-w-0 flex-1 resize-none rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="min-h-8 w-0 min-w-0 flex-1 resize-none rounded-2xl bg-background px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         />
 
         <button

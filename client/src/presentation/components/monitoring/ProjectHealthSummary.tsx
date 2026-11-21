@@ -78,7 +78,7 @@ export function ProjectHealthSummary({
       )}
 
       <div className="ms-auto flex items-center gap-2">
-        <div className="hidden items-center gap-0.5 rounded-lg bg-foreground/[0.06] p-0.5 dark:border dark:border-border dark:bg-panel lg:flex">
+        <div className="hidden items-center gap-0.5 rounded-lg bg-foreground/[0.06] p-0.5 dark:bg-panel lg:flex">
           {(['compact', 'detailed'] as RowDensity[]).map((d) => (
             <button
               key={d}

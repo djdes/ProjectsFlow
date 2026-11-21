@@ -146,7 +146,7 @@ export function ChatBubble({
             <button
               type="button"
               onClick={() => onJumpTo(message.replyTo!.id)}
-              className="mbe-1 flex w-full flex-col items-start rounded-md border-s-2 border-primary/40 bg-primary/5 px-2 py-0.5 text-start text-xs"
+              className="mbe-1 flex w-full flex-col items-start rounded-lg bg-primary/[0.07] px-2 py-0.5 text-start text-xs"
             >
               <span className="font-medium text-primary-ink/90">{message.replyTo.authorDisplayName}</span>
               <span className="line-clamp-1 text-muted-foreground">{message.replyTo.excerpt}</span>
@@ -209,10 +209,10 @@ export function ChatBubble({
                   type="button"
                   onClick={() => onToggleReaction(message.id, r.emoji, mine)}
                   className={cn(
-                    'inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-xs transition-colors',
+                    'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs transition-colors',
                     mine
-                      ? 'border-primary/40 bg-primary-soft text-foreground'
-                      : 'border-transparent bg-foreground/[0.05] text-muted-foreground hover:bg-hover',
+                      ? 'bg-primary-soft text-foreground'
+                      : 'bg-foreground/[0.05] text-muted-foreground hover:bg-hover',
                   )}
                 >
                   <span>{r.emoji}</span>

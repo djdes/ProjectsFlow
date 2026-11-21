@@ -177,7 +177,7 @@ export function HelpWidget({
             <SheetTitle className="sr-only">ИИ и поддержка</SheetTitle>
             <SheetDescription className="sr-only">Помощник проекта и обращение в поддержку</SheetDescription>
             <header className="flex shrink-0 items-center gap-2 border-be px-2.5 py-2">
-              <div role="tablist" className="flex min-w-0 flex-1 rounded-xl bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-1">
+              <div role="tablist" className="flex min-w-0 flex-1 rounded-xl bg-foreground/[0.06] dark:bg-panel p-1">
                 {TABS.map((t) => {
                   const active = t.value === tab;
                   return (

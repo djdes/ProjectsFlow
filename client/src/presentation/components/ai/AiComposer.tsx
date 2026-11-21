@@ -249,8 +249,8 @@ export function AiComposer({
 
   return (
     <div className={cn(
-      // Поле ИИ — карточка C4: тень-кольцо вместо рамки, фокус — синее кольцо.
-      'rounded-xl bg-card shadow-card transition focus-within:ring-2 focus-within:ring-ring',
+      // Поле ИИ — залитая капсула без рамки, как в приложении Claude; фокус — мягкий ореол.
+      'rounded-3xl bg-muted transition-shadow focus-within:ring-2 focus-within:ring-ring/30',
       compact ? 'pbe-2' : 'pbe-3',
     )}>
       {/* Выделенная зона — над полем ввода, как бейдж в отправленном пузыре. Показываем
@@ -315,7 +315,7 @@ export function AiComposer({
       {attachments.length > 0 && (
         <div className="mbe-2 mbs-2 flex max-h-28 flex-wrap gap-2 overflow-y-auto px-3">
           {attachments.map((attachment) => (
-            <div key={attachment.id} className="group relative flex h-14 max-w-[220px] items-center gap-2 rounded-xl border bg-muted/30 p-1.5 pe-7">
+            <div key={attachment.id} className="group relative flex h-14 max-w-[220px] items-center gap-2 rounded-xl bg-background p-1.5 pe-7">
               {attachment.previewUrl ? <img src={attachment.previewUrl} alt="" className="size-10 shrink-0 rounded-lg object-cover" /> : <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-background">{attachment.kind === 'text' ? <FileText className="size-4" /> : <Paperclip className="size-4" />}</span>}
               <span className="min-w-0"><span className="block truncate text-xs font-medium">{attachment.name}</span><span className="block text-2xs text-muted-foreground">{Math.max(1, Math.round(attachment.size / 1024))} КБ</span></span>
               <button type="button" className="absolute end-1 inset-bs-1 grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground" onClick={() => setAttachments((items) => items.filter((item) => item.id !== attachment.id))} aria-label={`Убрать ${attachment.name}`}><X className="size-3.5" /></button>

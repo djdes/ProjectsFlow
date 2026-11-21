@@ -395,17 +395,17 @@ function TaskLiveChat({
       <div ref={contentRef} className="space-y-2.5">
         {sessionsLoading && rows.length === 0 && <div className="flex items-center justify-center py-10 text-sm text-muted-foreground"><Loader2 className="me-2 size-4 motion-safe:animate-spin" /> Загрузка…</div>}
         {timelineError && <p role="status" className="text-sm text-muted-foreground">{timelineError}</p>}
-        {hiddenCount > 0 && <button type="button" onClick={() => setVisibleCount(count => count + DOM_CAP)} className="mx-auto block rounded-md border px-3 py-1 text-xs text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80">Показать ранее ({hiddenCount})</button>}
+        {hiddenCount > 0 && <button type="button" onClick={() => setVisibleCount(count => count + DOM_CAP)} className="mx-auto block rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80">Показать ранее ({hiddenCount})</button>}
         {shown.map((entry, index) => {
           if (entry.kind === 'message') return <WorkerChatMessage key={entry.key} projectId={projectId} comment={entry.comment} authorName={members.find(member => member.userId === entry.comment.ownerUserId)?.user.displayName ?? 'Участник'} />;
           if (entry.kind === 'event' || entry.kind === 'tools') return <FeedRow key={entry.key} row={entry} firstShown={index === 0} live={entry.key === liveJournalKey} finalFiles={runs.find(run => run.session.id === entry.sessionId)?.fileDiffs} />;
           if (entry.kind === 'finish') return entry.run.fileDiffs.length > 0 ? <FinalDiffs key={entry.key} files={entry.run.fileDiffs} session={entry.run.session} /> : null;
-          return <p key={entry.key} data-worker-run={entry.session.id} className="border-bs border-border pbs-3 text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · {runCaption(entry.session, entry.session.id === runningRun?.session.id)}{entry.session.id === runs.at(-1)?.session.id && <span data-run-mode={taskRunMode(task)}> · {RUN_MODE_META[taskRunMode(task)].label}</span>}</p>;
+          return <p key={entry.key} data-worker-run={entry.session.id} className="pbs-3 text-center text-xs text-muted-foreground">{SESSION_TIME_FMT.format(entry.session.startedAt)} · {runCaption(entry.session, entry.session.id === runningRun?.session.id)}{entry.session.id === runs.at(-1)?.session.id && <span data-run-mode={taskRunMode(task)}> · {RUN_MODE_META[taskRunMode(task)].label}</span>}</p>;
         })}
         {runningRun && <ClaudeSpinner key={runningRun.session.id} startedAt={runningRun.session.startedAt} label={pipelineRun === runningRun ? spinnerStage : undefined} />}
         {runningRun && <LiveRunModeNote task={task} />}
         {stopReason && !queued && !isWorking && (
-          <div role="status" data-pf-live-stop-reason="" className="rounded-lg border border-destructive/30 bg-card px-3 py-2 text-sm">
+          <div role="status" data-pf-live-stop-reason="" className="rounded-lg bg-destructive-soft px-3 py-2 text-sm">
             <p className="font-medium text-destructive">Почему остановлено: {stopReason.title}</p>
             {stopReason.line && <p className="mbs-0.5 truncate font-mono text-xs text-muted-foreground" title={stopReason.line}>{stopReason.line}</p>}
           </div>
@@ -439,7 +439,7 @@ function TaskLiveChat({
       {/* The overlay belongs to the visible viewport, never to message flow. */}
       {active && (
         <button type="button" aria-label="К последнему сообщению" title="К последнему сообщению"
-          className={cn('absolute inset-be-3 start-1/2 -translate-x-1/2 z-10 grid size-10 place-items-center rounded-full border bg-card shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80', showScrollBottom ? 'text-foreground' : 'text-muted-foreground')}
+          className={cn('absolute inset-be-3 start-1/2 -translate-x-1/2 z-10 grid size-10 place-items-center rounded-full bg-raised shadow-float focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:opacity-80', showScrollBottom ? 'text-foreground' : 'text-muted-foreground')}
           onClick={() => { followTail(); scrollToBottom(); }}>
           <ChevronDown className="size-5" aria-hidden />
         </button>
@@ -691,8 +691,8 @@ function LiveEventRow({ event, finalFiles = [], bare = false }: { event: LiveEve
       return (
         <div className="flex gap-2">
           <Dot tone="pf-tone-blue bg-tone" />
-          <div className="min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-card">
-            <div className="border-be border-border bg-muted/60 px-2.5 py-1 text-2xs text-muted-foreground">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-lg bg-muted/60">
+            <div className="bg-muted px-2.5 py-1 text-2xs text-muted-foreground">
               терминал
             </div>
             <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-2xs leading-relaxed text-foreground"
@@ -792,7 +792,7 @@ function LiveEventRow({ event, finalFiles = [], bare = false }: { event: LiveEve
       return (
         <div className="flex gap-2">
           <Dot tone="pf-tone-gray bg-tone" />
-          <pre className="m-0 min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-card px-2 py-1 font-mono text-2xs leading-relaxed text-foreground">
+          <pre className="m-0 min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap rounded-lg bg-muted/60 px-2 py-1 font-mono text-2xs leading-relaxed text-foreground">
             {event.text}
           </pre>
         </div>
@@ -813,8 +813,8 @@ function FileCard({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <div className="min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-card">
-      <div className="flex items-center gap-1.5 border-be border-border bg-muted/60 px-2.5 py-1 font-mono text-2xs text-muted-foreground">
+    <div className="min-w-0 flex-1 overflow-hidden rounded-lg bg-muted/60">
+      <div className="flex items-center gap-1.5 bg-muted px-2.5 py-1 font-mono text-2xs text-muted-foreground">
         <span className={cn('text-tone', tone === 'add' ? 'pf-tone-green' : 'pf-tone-yellow')}>
           {icon}
         </span>
@@ -885,7 +885,7 @@ function FinalDiffs({
 function FinalFileDiff({ file }: { file: LiveFileDiff }): React.ReactElement {
   const [open, setOpen] = useState(false);
   return (
-    <div className="overflow-clip rounded-md border border-border bg-card">
+    <div className="overflow-clip rounded-lg bg-muted/60">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

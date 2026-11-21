@@ -33,7 +33,7 @@ export function KanbanColorPicker({
           aria-label={KANBAN_COLOR_LABELS[c]}
           aria-pressed={value === c}
           className={cn(
-            'grid size-7 place-items-center rounded-full border border-border/40 transition',
+            'grid size-7 place-items-center rounded-full border border-border transition',
             KANBAN_COLOR_CLASSES[c].dot,
             value === c
               ? 'ring-2 ring-foreground/40 ring-offset-1 ring-offset-background'

@@ -476,7 +476,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
               {analytics ? (
                 <section className="space-y-2.5">
                   <p className="text-sm font-medium">Зрители</p>
-                  <div className="flex items-start justify-between gap-3 rounded-xl border border-border/70 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3 rounded-xl border border-border px-4 py-3">
                     <div className="min-w-0 space-y-0.5">
                       <p className="text-sm font-medium">Показывать историю ваших просмотров</p>
                       <p className="text-xs text-muted-foreground">

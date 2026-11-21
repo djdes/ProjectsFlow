@@ -190,7 +190,7 @@ export function TableSkeleton({
   return (
     <LoadingRegion
       label="Загружаем таблицу…"
-      className="overflow-clip rounded-lg border border-border/60"
+      className="overflow-clip rounded-lg border border-border"
     >
       <div className="grid grid-cols-[minmax(10rem,2fr)_1fr_1fr] gap-8 border-be bg-muted/35 px-4 py-3">
         <Skeleton className="h-3 w-28" />
@@ -218,7 +218,7 @@ export function ListSkeleton({
 }): React.ReactElement {
   return (
     <LoadingRegion label="Загружаем список…">
-      <div className="divide-y rounded-lg border border-border/60">
+      <div className="divide-y rounded-lg border border-border">
         {Array.from({ length: rows }, (_, i) => (
           <div key={i} className="flex min-h-14 items-center gap-3 px-4">
             <Skeleton className="size-4 shrink-0" />
@@ -607,7 +607,7 @@ export function ShellSkeleton({
           {page ?? <PageSkeleton layout={layout} />}
         </div>
         <div className="shrink-0 border-bs bg-background px-3 pbe-[max(env(safe-area-inset-bottom,0px),0.5rem)] pbs-2 md:hidden">
-          <div className="mx-auto flex max-w-md rounded-xl bg-foreground/[0.05] p-1 dark:border dark:border-border dark:bg-panel">
+          <div className="mx-auto flex max-w-md rounded-xl bg-foreground/[0.05] p-1 dark:bg-panel">
             {[0, 1, 2].map((i) => (
               <div key={i} className="flex min-h-11 flex-1 flex-col items-center justify-center gap-1 px-2 py-1.5">
                 <Skeleton className="size-5" />

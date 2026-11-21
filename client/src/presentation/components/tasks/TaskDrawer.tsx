@@ -2862,7 +2862,7 @@ function CommentComposer({
   };
 
   return (
-    <div className="relative rounded-md border bg-card transition-colors focus-within:border-foreground/30">
+    <div className="relative rounded-2xl bg-muted transition-shadow focus-within:ring-2 focus-within:ring-ring/25">
       {preview ? (
         <div className="min-h-[2.75rem] px-3 py-2">
           {body.trim().length > 0 ? (
@@ -2929,7 +2929,7 @@ function CommentComposer({
           {pending.map((pf) => (
             <span
               key={pf.id}
-              className="inline-flex items-center gap-1 rounded border bg-muted/60 py-0.5 ps-1.5 pe-1 text-2xs"
+              className="inline-flex items-center gap-1 rounded-md bg-background/70 py-0.5 ps-1.5 pe-1 text-2xs"
             >
               {pf.previewUrl ? (
                 <img src={pf.previewUrl} alt="" decoding="async" loading="lazy" className="size-4 rounded object-cover" />
@@ -3132,13 +3132,12 @@ function CommentItem({
     onReply?.(comment.id, displayName, within && text ? text : null);
   };
 
-  // Вертикальная линия-коннектор идёт по КОЛОНКЕ АВАТАРОК (Notion-thread): от низа
-  // аватара к верху аватара следующего коммента. Псевдо `after` на х=центр аватара
-  // (size-7 → 14px), мостит зазор space-y-4 (-bottom-4); у последнего скрыта.
+  // Лента без линий (как в приложении Claude): ни рамок, ни линии-коннектора между
+  // аватарами — комментарии разделяет только воздух space-y-4.
   return (
     <li
       id={`comment-${comment.id}`}
-      className="group relative flex scroll-mbs-4 items-start gap-3 after:absolute after:start-[14px] after:inset-bs-7 after:inset-be-[-1rem] after:w-px after:-translate-x-1/2 after:bg-border/70 after:content-[''] last:after:hidden"
+      className="group relative flex scroll-mbs-4 items-start gap-3"
     >
       {isAgent ? (
         // Avatar заменён на «✻»-плашку — иконка Claude в peach-кружке, не путается с
@@ -3238,7 +3237,7 @@ function CommentItem({
           <button
             type="button"
             onClick={() => onNavigateToComment?.(comment.replyToCommentId as string, comment.quotedText)}
-            className="mbs-1 flex max-w-full items-center gap-1.5 rounded-md border-s-2 border-primary/40 bg-primary/[0.06] px-2 py-1 text-start text-xs text-muted-foreground transition-colors hover:bg-primary/10"
+            className="mbs-1 flex max-w-full items-center gap-1.5 rounded-lg bg-primary/[0.07] px-2 py-1 text-start text-xs text-muted-foreground transition-colors hover:bg-primary/[0.12]"
             title="Перейти к исходному комментарию"
           >
             <CornerDownRight className="size-3 shrink-0 text-primary/70" />
@@ -3280,7 +3279,7 @@ function CommentItem({
                   key={att.id}
                   type="button"
                   onClick={() => setPreview(att)}
-                  className="size-14 overflow-clip rounded border bg-muted"
+                  className="size-14 overflow-clip rounded-lg bg-muted"
                   aria-label={`Открыть ${att.filename}`}
                 >
                   <img src={att.url} alt={att.filename} loading="lazy" className="size-full object-cover" />
@@ -3290,7 +3289,7 @@ function CommentItem({
                   key={att.id}
                   href={att.url}
                   download={att.filename}
-                  className="inline-flex items-center gap-1.5 rounded border bg-muted/50 px-2 py-1 text-2xs hover:bg-muted"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-muted/70 px-2 py-1 text-2xs hover:bg-muted"
                 >
                   <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="max-w-[140px] truncate">{att.filename}</span>

@@ -73,7 +73,7 @@ export function CommunicationPanel(): React.ReactElement {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-foreground/[0.06] dark:border dark:border-border dark:bg-panel p-0.5 text-xs">
+      <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-foreground/[0.06] dark:bg-panel p-0.5 text-xs">
         <TabButton active={tab === 'all'} onClick={() => select('all')}>
           Все
         </TabButton>

@@ -8,7 +8,7 @@ export function Card({
   return (
     <div
       // C4: карточка держится кольцом-тенью, а не рамкой; в тёмной теме кольцо = линия.
-      className={cn('rounded-lg bg-card text-card-foreground shadow-card', className)}
+      className={cn('rounded-xl bg-card text-card-foreground shadow-card', className)}
       {...props}
     />
   );

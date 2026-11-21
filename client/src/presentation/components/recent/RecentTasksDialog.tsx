@@ -54,7 +54,7 @@ function HistoryBody({ onClose }: { onClose: () => void }): React.ReactElement {
   }
 
   return (
-    <ul className="-mx-2 max-h-[60dvh] divide-y divide-border/60 overflow-y-auto">
+    <ul className="-mx-2 max-h-[60dvh] divide-y divide-border overflow-y-auto">
       {items.map((item) => (
         <li key={item.taskId}>
           <button

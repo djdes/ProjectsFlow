@@ -96,7 +96,7 @@ export function AlertRulesDialog({
             {sorted.map((r) => {
               const meta = RULE_META[r.ruleKind];
               return (
-                <div key={r.ruleKind} className="flex items-center gap-3 rounded-md border border-border/60 p-3">
+                <div key={r.ruleKind} className="flex items-center gap-3 rounded-md border border-border p-3">
                   <Switch checked={r.enabled} onCheckedChange={(v) => update(r.ruleKind, { enabled: v })} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm">{meta.label}</p>
