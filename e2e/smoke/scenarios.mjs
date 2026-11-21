@@ -1477,6 +1477,10 @@ export const scenarios = [
         await t.visible(page.getByRole('menuitem', { name: 'Кто уведомлён', exact: true }), 'пункт «Кто уведомлён»');
         await page.keyboard.press('Escape');
         await t.hidden(page.getByRole('menu'), 'меню закрылось');
+        // The menu opens on release: lifting the finger must not pick an item (it once hit «Изменить»).
+        await t.hidden(item.locator('[contenteditable="true"]'), 'комментарий не перешёл в правку после долгого нажатия');
+        // Radix keeps body pointer-events off until the menu's exit finishes; a finger lands later.
+        await t.waitFor(() => page.evaluate(() => document.body.style.pointerEvents !== 'none'), 'страница не приняла касания после меню');
       });
       await t.step('свайп вправо отвечает на комментарий', async () => {
         // The sticky composer overlaps the end of the list: bring the comment to the middle first.

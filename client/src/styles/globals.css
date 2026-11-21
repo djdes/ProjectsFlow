@@ -547,11 +547,14 @@
      (тот же приём, что у .pf-platform-update в deployment.css). position: relative — в слое
      base со специфичностью одного атрибута: утилиты .absolute/.fixed/.sticky идут позже и
      перебивают его, так что позиционированные кнопки остаются на месте. */
+  /* Только настоящий класс size-N (в начале или после пробела): подстрока «size-» есть и в
+     базовом классе Button ([&_svg…]:size-[1.05em]) — иначе каждая кнопка расширялась бы и
+     перехватывала касания у соседей (так «Принять» под комментарием ловила свайп по тексту). */
   @media (pointer: coarse) {
-    :where(button, [role='button'])[class*='size-'] {
+    :where(button, [role='button']):is([class^='size-'], [class*=' size-']) {
       position: relative;
     }
-    :where(button, [role='button'])[class*='size-']::before {
+    :where(button, [role='button']):is([class^='size-'], [class*=' size-'])::before {
       content: '';
       position: absolute;
       inset: min(0px, (100% - 44px) / 2);

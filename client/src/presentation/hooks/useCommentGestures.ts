@@ -11,7 +11,7 @@ import {
 type Handlers = {
   onTouchStart: (event: TouchEvent<HTMLElement>) => void;
   onTouchMove: (event: TouchEvent<HTMLElement>) => void;
-  onTouchEnd: () => void;
+  onTouchEnd: (event: TouchEvent<HTMLElement>) => void;
   onTouchCancel: () => void;
 };
 
@@ -32,6 +32,9 @@ export function useCommentGestures({
   const start = useRef<{ x: number; y: number } | null>(null);
   const axis = useRef<SwipeAxis>('undecided');
   const timer = useRef<number | null>(null);
+  // The press is long enough: the menu opens when the finger lifts, not under it — a menu
+  // opened mid-press would take the release as a tap on whatever item lies under the finger.
+  const pressArmed = useRef(false);
   const dxRef = useRef(0);
   const [offset, setOffset] = useState(0);
 
@@ -43,6 +46,7 @@ export function useCommentGestures({
 
   const reset = (): void => {
     clearTimer();
+    pressArmed.current = false;
     start.current = null;
     axis.current = 'undecided';
     dxRef.current = 0;
@@ -53,17 +57,20 @@ export function useCommentGestures({
     onTouchStart(event) {
       if (disabled || event.touches.length !== 1) return;
       const target = event.target as Element;
-      if (target.closest('button, a, input, textarea, img, [contenteditable="true"], [role="menu"]')) return;
+      // Typing and menus keep their own touches entirely.
+      if (target.closest('input, textarea, select, [contenteditable="true"], [role="menu"]')) return;
+      // A swipe may start on a button or link inside the comment (browsers snap a touch to a
+      // nearby control), but a long press there belongs to the control itself.
+      const onControl = target.closest('button, a, img') !== null;
       const touch = event.touches[0];
       start.current = { x: touch.clientX, y: touch.clientY };
       axis.current = 'undecided';
-      if (onLongPress) {
+      if (onLongPress && !onControl) {
         timer.current = window.setTimeout(() => {
           timer.current = null;
           if (axis.current !== 'undecided') return;
           haptic('tap');
-          start.current = null;
-          onLongPress();
+          pressArmed.current = true;
         }, LONG_PRESS_MS);
       }
     },
@@ -74,7 +81,10 @@ export function useCommentGestures({
       const dy = touch.clientY - start.current.y;
       if (axis.current === 'undecided') {
         axis.current = lockSwipeAxis(dx, dy);
-        if (axis.current !== 'undecided') clearTimer();
+        if (axis.current !== 'undecided') {
+          clearTimer();
+          pressArmed.current = false;
+        }
         if (axis.current === 'horizontal' && !onReply) axis.current = 'vertical';
       }
       if (axis.current !== 'horizontal') return;
@@ -83,9 +93,15 @@ export function useCommentGestures({
       if (swipeCommitsReply(dx) !== swipeCommitsReply(before)) haptic('tap');
       setOffset(swipeOffset(dx));
     },
-    onTouchEnd() {
+    onTouchEnd(event) {
       const commit = axis.current === 'horizontal' && swipeCommitsReply(dxRef.current);
+      const longPress = pressArmed.current;
       reset();
+      if (longPress) {
+        // No synthetic click after the press: it would land on the text or the opened menu.
+        if (event.cancelable) event.preventDefault();
+        onLongPress?.();
+      }
       if (commit) onReply?.();
     },
     onTouchCancel: reset,
