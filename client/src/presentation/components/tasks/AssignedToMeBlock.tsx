@@ -4488,10 +4488,11 @@ function InboxFiltersPopover({
   onResetFilters: () => void;
 }): React.ReactElement {
   const activeFilterCount = showFilters ? [to, project].filter((v) => v !== null).length : 0;
-  // Бейдж на кнопке = сколько «нестандартного» включено (фильтры + скрытие выполненных),
-  // чтобы было видно активность, не открывая поповер. Сортировка — выбор, не «активный фильтр».
+  // Бейдж на кнопке = сколько «нестандартного» включено (фильтры, показанные выполненные),
+  // чтобы было видно активность, не открывая поповер. Скрытые выполненные — умолчание
+  // (lib/inboxDonePreference), их не считаем. Сортировка — выбор, не «активный фильтр».
   const badgeCount =
-    activeFilterCount + (hideDone ? 1 : 0) + (showHidePersonal && hidePersonal ? 1 : 0);
+    activeFilterCount + (hideDone ? 0 : 1) + (showHidePersonal && hidePersonal ? 1 : 0);
   return (
     <Popover>
       <PopoverTrigger asChild>

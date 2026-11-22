@@ -1,4 +1,5 @@
 import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { INBOX_SHOW_DONE_KEY, inboxHidesDone, inboxShowDoneValue } from '@/lib/inboxDonePreference';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
 import { useCallback, useEffect, useState } from 'react';
 import { EyeOff, ListChecks } from 'lucide-react';
@@ -14,11 +15,9 @@ import { AssignedToMeBlock } from '@/presentation/components/tasks/AssignedToMeB
 import { useCurrentWorkspace } from '@/presentation/hooks/useCurrentWorkspace';
 import { WorkspaceIcon } from '@/presentation/layout/WorkspaceIcon';
 
-const HIDE_DONE_STORAGE_KEY = 'inbox.hide-done';
-
 function loadHideDone(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem(HIDE_DONE_STORAGE_KEY) === '1';
+  if (typeof window === 'undefined') return true;
+  return inboxHidesDone(window.localStorage);
 }
 
 // The home button opens the selected workspace's working board.
@@ -89,7 +88,7 @@ export function InboxPage({
   const handleHideDoneChange = (next: boolean): void => {
     setHideDone(next);
     try {
-      window.localStorage.setItem(HIDE_DONE_STORAGE_KEY, next ? '1' : '0');
+      window.localStorage.setItem(INBOX_SHOW_DONE_KEY, inboxShowDoneValue(next));
     } catch {
       // ignore — preference не переживёт reload, но это не критично.
     }
