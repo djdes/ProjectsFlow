@@ -170,6 +170,7 @@ import {
   buildToMeInboxBlockTasks,
   canOpenMemberBoard,
   canSendToApproval,
+  isHandWork,
   selectApprovalTasks,
   selectBoardTasks,
   type InboxBlockTask,
@@ -1797,6 +1798,27 @@ export function AssignedToMeBlock({
   // фильтры ответственного/проекта (только вкладка «Для всех»).
   const hasLocalFilters =
     normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null || replyFilterOn || groupOnly;
+  // «Ответить» и чипы срока — взаимоисключающие быстрые срезы. Раньше «@» включался поверх
+  // выбранного «Просрочено»: вопрос в непросроченной задаче прятался сроком, а чип честно
+  // показывал «1» — «ответить нужно, а отвечать некому». Теперь «@» сбрасывает срок, а на
+  // телефоне открывает раздел, где эти задачи лежат; выбор срока выключает «@».
+  const toggleReplyOnly = (): void => {
+    if (replyOnly) {
+      setReplyOnly(false);
+      return;
+    }
+    setReplyOnly(true);
+    setDue(null);
+    if (isWide) return;
+    const inNow = awaitingReplyTasks.some((t) => t.status === 'pending_approval' || isHandWork(t, workerEnabled));
+    const inQueue = awaitingReplyTasks.some((t) => t.status !== 'pending_approval' && !isHandWork(t, workerEnabled));
+    if (section === 'now' && !inNow && inQueue) setMobileSection('queue');
+    else if (section === 'queue' && !inQueue && inNow) setMobileSection('now');
+  };
+  const changeDue = (next: DueKind | null): void => {
+    setDue(next);
+    if (next !== null) setReplyOnly(false);
+  };
   const resetFilters = (): void => {
     setQuery('');
     setSearchOpen(false);
@@ -2477,12 +2499,12 @@ export function AssignedToMeBlock({
   // сроков с поиском и действиями у правого края.
   const dueRowInner = (
     <div className={cn('flex items-center gap-x-2 gap-y-1.5', isWide ? 'flex-wrap' : 'w-max gap-x-1.5')}>
-      <DueFilterChips value={due} onChange={setDue} counts={dueCounts} wrap={isWide} />
+      <DueFilterChips value={due} onChange={changeDue} counts={dueCounts} wrap={isWide} />
       {!focusedMemberId && (replyFilterOn || awaitingReplyTasks.length > 0) && (
         <ReplyFilterChip
           active={replyFilterOn}
           count={awaitingReplyTasks.length}
-          onToggle={() => setReplyOnly((on) => !on)}
+          onToggle={toggleReplyOnly}
         />
       )}
       {(groupOnly || groupTaskCount > 0) && (
