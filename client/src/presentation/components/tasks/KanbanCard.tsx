@@ -3,8 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { motion } from 'motion/react';
 import { useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { ArrowRight, Check, ImageIcon, ListChecks, MessageSquare, Play, Trash2, Undo2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Check, ImageIcon, ListChecks, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SelectModifiers } from './selection/selectionReducer';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
@@ -26,7 +25,8 @@ import { useTaskOriginLabel } from '@/presentation/hooks/useTaskOriginLabel';
 import { TaskGroupOriginBadge } from './TaskGroupOriginBadge';
 import { checklistProgress } from '@/lib/checklist';
 import { STATUS_LABEL, canSendToWorker, canTakeToManual, quickPromoteNext } from './statusLabels';
-import { WorkerHandoffIcon } from './workerHandoff';
+import { TaskActionButton, TaskActionIcon, taskActionClass } from './TaskActionButton';
+import { isBoardColumnOnScreen } from '@/lib/taskExitFx';
 import { WorkerHandoffMenu } from './WorkerHandoffMenu';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
@@ -41,7 +41,8 @@ import { toast } from '@/components/ui/sonner';
 type Props = {
   task: Task;
   onEdit: (task: Task) => void;
-  onDelete: (task: Task) => void;
+  // origin — нажатая кнопка: из неё потом «взрывается» карточка (lib/taskExitFx).
+  onDelete: (task: Task, origin?: Element | null) => void;
   // Когда true — рендерится для DragOverlay: без motion-layoutId (иначе конфликт двух
   // элементов с одинаковым id) и без sortable-хуков; плюс «приподнятый» вид.
   preview?: boolean;
@@ -101,6 +102,8 @@ const DND_TRANSITION = {
 // Тач-устройство? Считаем ОДИН раз при загрузке модуля (тип указателя не меняется в рантайме).
 // На тач-девайсах (телефон/PWA) полностью отключаем framer-motion layout-обёртку карточек:
 // пер-карточный layout-пересчёт 200+ элементов — главный источник лагов при скролле доски.
+const doneExitMode = (): 'leave' | 'pulse' => (isBoardColumnOnScreen('done') ? 'pulse' : 'leave');
+
 const IS_COARSE_POINTER =
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
@@ -260,26 +263,25 @@ function KanbanCardImpl({
 
   // Кнопки действий рендерятся в ДВУХ раскладках: десктоп — плавающий оверлей в правом
   // верхнем углу (по hover), мобила — статичный ряд, прижатый под текстом (всегда виден).
-  // big=true → тач-размер, иначе компактный десктопный (size-6). На телефоне все кнопки ряда
-  // одного размера — 40px: вариант icon у Button давал 44px, а чекбокс-кнопка — 32px, и
-  // ряд выглядел разнокалиберным, а в 32px пальцем промахивались.
-  const bigAction = 'size-9 max-sm:size-10';
+  // Размеры задаёт .pf-task-action (TaskActionButton): одна коробка и один глиф у всех кнопок
+  // ряда — 24/14px на десктопе, 40/18px на телефоне. Раньше у каждой был свой размер иконки,
+  // а залитый треугольник соседствовал с тонкой галкой.
   const renderActions = (big: boolean): React.ReactNode => {
     if (!showActions) return null;
     const complete = checkboxVisible ? (
-      // contents — обёртка не участвует в раскладке; через неё доводим чекбокс-кнопку
-      // (общий компонент со «Входящими») до тач-размера только в мобильном ряду.
-      <span key="complete" className={cn('contents', big && 'max-sm:[&>button]:size-10')}>
-        <InboxCheckbox
-          task={task}
-          lastDoneTaskId={lastDoneTaskId}
-          lastTodoTaskId={lastTodoTaskId}
-          onChanged={onTaskChanged}
-          variant="toolbar"
-          doneTitle={awaitingApproval ? 'Принять работу' : undefined}
-          move={onMove ? (input) => onMove(task.id, input) : undefined}
-        />
-      </span>
+      <InboxCheckbox
+        key="complete"
+        task={task}
+        lastDoneTaskId={lastDoneTaskId}
+        lastTodoTaskId={lastTodoTaskId}
+        onChanged={onTaskChanged}
+        variant="toolbar"
+        doneTitle={awaitingApproval ? 'Принять работу' : undefined}
+        // Колонка «Готово» видна рядом — карточка переезжает туда сама, только отметка.
+        // Не видна (телефон: соседняя вкладка; десктоп: за краем) — карточка уходит.
+        exit={doneExitMode}
+        move={onMove ? (input) => onMove(task.id, input) : undefined}
+      />
     ) : null;
     const promote =
       onQuickPromote && promoteNext === 'todo' ? (
@@ -288,111 +290,63 @@ function KanbanCardImpl({
           key="promote"
           runMode={task.runMode}
           onPick={(mode) => onQuickPromote(task, 'todo', mode)}
-          className={cn(
-            'group/promote inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
-            big ? bigAction : 'size-6',
-          )}
+          className={taskActionClass()}
+          tone="neutral"
         >
-          <ArrowRight className={big ? 'size-4' : 'size-3'} />
+          <TaskActionIcon name="arrow" />
         </WorkerHandoffMenu>
       ) : onQuickPromote && promoteNext ? (
-        <Button
+        <TaskActionButton
           key="promote"
-          variant="ghost"
-          size="icon"
-          className={cn(
-            'group/promote shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
-            big ? bigAction : 'size-6',
-          )}
-          onClick={(e) => {
-            e.stopPropagation();
-            onQuickPromote(task);
-          }}
-          aria-label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
-          title={`Передать в «${STATUS_LABEL[promoteNext]}»`}
-        >
-          <ArrowRight
-            className={cn(
-              'motion-safe:transition-transform duration-150 group-hover/promote:translate-x-0.5',
-              big ? 'size-4' : 'size-3',
-            )}
-          />
-        </Button>
+          icon="arrow"
+          label={`Передать в «${STATUS_LABEL[promoteNext]}»`}
+          onClick={() => onQuickPromote(task)}
+        />
       ) : null;
     const take = canTake ? (
-      <Button
+      <TaskActionButton
         key="take"
-        variant="ghost"
-        size="icon"
-        className={cn(
-          'shrink-0 cursor-pointer rounded-[5px] text-manual hover:bg-hover',
-          big ? bigAction : 'size-6',
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          onQuickPromote?.(task, 'manual');
-        }}
-        aria-label="Взять в работу"
-        title="Взять в работу — в «В работе»"
-      >
-        <Play className={cn('fill-current', big ? 'size-4' : 'size-3')} />
-      </Button>
+        icon="play"
+        tone="manual"
+        label="Взять в работу"
+        onClick={() => onQuickPromote?.(task, 'manual')}
+      />
     ) : null;
     const worker = showWorkerAction && workerEnabled && onQuickPromote && canSendToWorker(task.status) ? (
       <WorkerHandoffMenu
         key="worker"
         runMode={task.runMode}
         onPick={(mode) => onQuickPromote(task, 'todo', mode)}
-        className={cn(
-          'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[5px] text-primary hover:bg-hover',
-          big ? bigAction : 'size-6',
-        )}
+        className={taskActionClass()}
+        tone="primary"
       >
-        <WorkerHandoffIcon className={big ? 'size-4' : 'size-3'} />
+        <TaskActionIcon name="worker" />
       </WorkerHandoffMenu>
     ) : null;
     const withdrawButton = canWithdraw ? (
-      <Button
+      <TaskActionButton
         key="withdraw"
-        variant="ghost"
-        size="icon"
-        disabled={withdrawing}
-        className={cn(
-          'shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-foreground',
-          big ? bigAction : 'size-6',
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          void withdraw();
-        }}
-        aria-label="Забрать с утверждения"
+        icon="undo"
+        label="Забрать с утверждения"
         title="Забрать с утверждения и продолжить работу"
-      >
-        <Undo2 className={big ? 'size-4' : 'size-3'} />
-      </Button>
+        disabled={withdrawing}
+        onClick={() => void withdraw()}
+      />
     ) : null;
     const remove = !frozenByApproval ? (
-      <Button
+      <TaskActionButton
         key="remove"
-        variant="ghost"
-        size="icon"
-        className={cn(
-          'shrink-0 cursor-pointer rounded-[5px] text-muted-foreground hover:bg-hover hover:text-destructive',
-          big ? bigAction : 'size-6',
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(task);
-        }}
-        aria-label="Удалить"
-      >
-        <Trash2 className={big ? 'size-4' : 'size-3'} />
-      </Button>
+        icon="trash"
+        tone="danger"
+        label="Удалить"
+        onClick={(e) => onDelete(task, e.currentTarget)}
+      />
     ) : null;
     // Телефон: порядок зеркальный — «выполнено» у правого края, ближе всего к середине
     // карточки — корзина. На узкой карточке ряд кнопок доходит почти до её центра, и тап
     // «по середине» попадал в «выполнено»: задача закрывалась вместо того, чтобы открыться.
     // Корзина же только спрашивает подтверждение — промах по ней ничего не ломает.
+    // Тот же порядок — у карточек «Входящих» (AcceptedCard).
     return big
       ? [remove, withdrawButton, promote, worker, take, complete]
       : [complete, take, worker, promote, withdrawButton, remove];

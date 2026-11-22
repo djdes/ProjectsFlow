@@ -26,6 +26,8 @@ desktop/notes/obj/
 */.astro/
 # Claude Code state
 .claude/
+# Agent skills installed by `npx skills add` (versions pinned in skills-lock.json)
+.agents/
 # Local Notion reference materials
 /primer/
 # Task attachments (картинки/скриншоты — хранятся на диске, не коммитим)

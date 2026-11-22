@@ -17,11 +17,14 @@ export function WorkerHandoffMenu({
   runMode,
   onPick,
   className,
+  tone,
   children,
 }: {
   runMode: RunMode;
   onPick: (mode: RunMode) => void;
   className?: string;
+  // Тон кнопки-действия карточки (.pf-task-action[data-tone]) — цвет и подложка нажатия.
+  tone?: 'neutral' | 'primary';
   children: ReactNode;
 }): ReactElement {
   const current: RunMode = runMode === 'full' ? 'full' : 'quick';
@@ -34,6 +37,7 @@ export function WorkerHandoffMenu({
           aria-label={WORKER_HANDOFF_LABEL}
           title={WORKER_HANDOFF_LABEL}
           className={className}
+          data-tone={tone}
           data-pf-worker-handoff=""
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}

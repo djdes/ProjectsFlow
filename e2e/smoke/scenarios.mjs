@@ -858,6 +858,27 @@ export const scenarios = [
         }
       }
 
+      // Quick actions of a card (delete, take, worker, done): one 40px box and one glyph size
+      // for every button in the row — a filled triangle next to a thin check and a bigger trash
+      // read as three different icon sets.
+      await t.check('кнопки действий карточки — одной коробки 40px и с одним размером иконки', async () => {
+        const sizes = await page.evaluate(() => {
+          const out = [];
+          for (const btn of document.querySelectorAll('[data-pf-task-id] .pf-task-action')) {
+            const r = btn.getBoundingClientRect();
+            if (r.width === 0 || r.height === 0) continue;
+            const icon = btn.querySelector('svg')?.getBoundingClientRect();
+            out.push({ box: `${Math.round(r.width)}×${Math.round(r.height)}`, icon: icon ? Math.round(icon.width) : 0 });
+          }
+          return out;
+        });
+        t.assert(sizes.length >= 3, `видимых кнопок действий на карточках: ${sizes.length}`);
+        const boxes = [...new Set(sizes.map((s) => s.box))];
+        t.assert(boxes.length === 1 && boxes[0] === '40×40', `размеры кнопок: ${boxes.join(', ')}`);
+        const icons = [...new Set(sizes.map((s) => s.icon))];
+        t.assert(icons.length === 1, `размеры иконок: ${icons.join(', ')}`);
+      });
+
       await openAndCloseTask(t, page.locator(`${QUEUE} ${card('t-home')}`), taskTitle(state, 't-home'));
     },
   },

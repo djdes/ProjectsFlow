@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Check, Loader2, Undo2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { playTaskExit, type TaskExitHandle } from '@/lib/taskExitFx';
+import { TaskActionIcon } from './TaskActionButton';
 import type { Task } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { useContainer } from '@/infrastructure/di/container';
@@ -29,6 +31,11 @@ type Props = {
   // сразу (как drag), а не только после onChanged→refetch. Без него (списки, полки
   // входящих без общего useTasks) поведение прежнее — прямой вызов репозитория.
   move?: (input: MoveTaskInput) => Promise<void>;
+  // Анимация отметки «выполнено» (lib/taskExitFx): leave — карточка штампуется зелёной
+  // галкой и уходит из списка (там, где выполненные скрыты), pulse — только штамп и зелёная
+  // вспышка (карточка остаётся на виду или сама переезжает в видимую колонку).
+  // Функция — решение в момент нажатия (доска: видна ли колонка «Готово»).
+  exit?: 'leave' | 'pulse' | 'none' | (() => 'leave' | 'pulse');
 };
 
 // Круглый чекбокс «выполнено» в строке inbox-задачи. Optimistic UI: тиково
@@ -45,11 +52,14 @@ export function InboxCheckbox({
   variant = 'circle',
   doneTitle,
   move,
+  exit = 'pulse',
 }: Props): React.ReactElement {
   const { taskRepository } = useContainer();
   const { celebrate } = useCompletedToday();
   const [optimistic, setOptimistic] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
+  // Идёт анимация отметки (до сетевого запроса): кнопка неактивна, но без спиннера.
+  const [animating, setAnimating] = useState(false);
 
   const isDone = optimistic ?? task.status === 'done';
 
@@ -62,8 +72,17 @@ export function InboxCheckbox({
 
   const toggle = async (e: React.MouseEvent | React.PointerEvent): Promise<void> => {
     e.stopPropagation();
-    if (pending || disabled) return;
+    if (pending || animating || disabled) return;
     const next = !isDone;
+    // Кнопка — точка, откуда «штампуется» галка; currentTarget живёт только до await.
+    const origin = e.currentTarget as Element;
+    let fx: TaskExitHandle | null = null;
+    const exitMode = typeof exit === 'function' ? exit() : exit;
+    if (next && exitMode !== 'none') {
+      setAnimating(true);
+      fx = await playTaskExit(task.id, 'complete', { origin, leave: exitMode === 'leave' });
+      setAnimating(false);
+    }
     setOptimistic(next);
     setPending(true);
     try {
@@ -92,6 +111,7 @@ export function InboxCheckbox({
       if (next) celebrate(task.id);
       onChanged?.();
     } catch (err) {
+      fx?.restore();
       setOptimistic(null);
       toast.error(`Не удалось: ${(err as Error).message}`);
     } finally {
@@ -104,7 +124,7 @@ export function InboxCheckbox({
       type="button"
       onClick={toggle}
       onPointerDown={(e) => e.stopPropagation()}
-      disabled={pending || disabled}
+      disabled={pending || animating || disabled}
       aria-label={isDone ? 'Снять отметку «выполнено»' : 'Отметить выполненным'}
       aria-pressed={isDone}
       title={
@@ -114,31 +134,32 @@ export function InboxCheckbox({
             ? 'Снять отметку'
             : (doneTitle ?? 'Выполнено')
       }
+      data-tone={variant === 'toolbar' ? (isDone ? 'neutral' : 'done') : undefined}
       className={cn(
-        'grid shrink-0 place-items-center transition-colors',
-        // Дизайн C4: «Готово» — зелёная галочка в плашке быстрых действий; уже выполненная —
-        // серая «вернуть». В списках — круглый чекбокс, заливка зелёным «Готово».
+        // Дизайн C4: «Готово» — зелёная галочка в плашке быстрых действий (общая коробка
+        // .pf-task-action — тот же размер, что у соседних кнопок); уже выполненная — серая
+        // «вернуть». В списках — круглый чекбокс, заливка зелёным «Готово».
         variant === 'toolbar'
-          ? cn(
-              'size-6 rounded-[5px] hover:bg-hover max-sm:size-8',
-              isDone ? 'text-muted-foreground hover:text-foreground' : 'text-done',
-            )
+          ? 'pf-task-action'
           : cn(
-              'size-[18px] rounded-full border-[1.5px]',
+              'grid shrink-0 place-items-center rounded-full border-[1.5px] transition-colors',
+              'size-[18px]',
               isDone
                 ? 'border-done bg-done text-background'
                 : 'border-foreground/30 hover:border-done',
             ),
-        (pending || disabled) && 'opacity-60',
+        (pending || disabled) && variant !== 'toolbar' && 'opacity-60',
         disabled && 'cursor-not-allowed',
       )}
     >
       {pending ? (
-        <Loader2 className="size-3 motion-safe:animate-spin" />
-      ) : variant === 'toolbar' && isDone ? (
-        <Undo2 className="size-3.5" strokeWidth={2.25} />
-      ) : isDone || variant === 'toolbar' ? (
-        <Check className={variant === 'toolbar' ? 'size-3.5' : 'size-3'} strokeWidth={variant === 'toolbar' ? 2.4 : 3} />
+        <Loader2 className={cn(variant === 'circle' && 'size-3', 'motion-safe:animate-spin')} />
+      ) : variant === 'toolbar' ? (
+        // key — новая иконка входит поворотом (pf-ai-enter), а не подменяется: тот же объект
+        // меняет состояние (галка ↔ «вернуть»).
+        <TaskActionIcon key={isDone ? 'undo' : 'check'} name={isDone ? 'undo' : 'check'} className={optimistic !== null ? 'pf-ai-enter' : undefined} />
+      ) : isDone ? (
+        <TaskActionIcon key="done" name="check" className={cn('size-3 [stroke-width:3]', optimistic !== null && 'pf-ai-enter')} />
       ) : null}
     </button>
   );
