@@ -384,7 +384,7 @@ export function TaskComposer({
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) scheduleCollapse();
       }}
       className={cn(
-        'group/composer w-full overflow-hidden border bg-card transition-colors focus-within:border-foreground/30',
+        'pf-field-capsule group/composer w-full overflow-hidden border bg-card transition-colors focus-within:border-foreground/30',
         isInline
           ? 'rounded-lg'
           : 'pointer-events-auto max-w-2xl rounded-2xl bg-card/95 shadow-lg backdrop-blur-md',

@@ -3678,7 +3678,16 @@ function ApprovalItemCard({
   // Явные кнопки внутри карточки, а не только чекбокс: приёмка — решение, а не отметка.
   // В режиме выделения их прячем: решение принимают по одной задаче, а не пачкой.
   const footer = selecting ? null : isApprover ? (
-    <div className="flex gap-1.5">
+    // Решение — справа, под большой палец: «Вернуть» левее, «Принять» у самого края.
+    <div className="flex justify-end gap-1.5">
+      <button
+        type="button"
+        onClick={onReject}
+        disabled={accepting}
+        className="inline-flex h-11 items-center rounded-[10px] px-3 text-meta text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active disabled:cursor-not-allowed disabled:opacity-50 sm:h-[26px] sm:rounded-md sm:px-2.5"
+      >
+        Вернуть
+      </button>
       {/* Высота — тач-минимум 44px на телефоне, 26px на десктопе; галка — тот же глиф, что
           у «выполнено» на карточках, и так же прорисовывается при наведении. */}
       <button
@@ -3690,14 +3699,6 @@ function ApprovalItemCard({
       >
         <TaskActionIcon name="check" className="size-[18px] [stroke-width:2.4] sm:size-3.5" />
         Принять
-      </button>
-      <button
-        type="button"
-        onClick={onReject}
-        disabled={accepting}
-        className="inline-flex h-11 items-center rounded-[10px] px-3 text-meta text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active disabled:cursor-not-allowed disabled:opacity-50 sm:h-[26px] sm:rounded-md sm:px-2.5"
-      >
-        Вернуть
       </button>
     </div>
   ) : item.assignee.userId === currentUserId ? (

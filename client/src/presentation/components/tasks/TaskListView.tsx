@@ -306,7 +306,7 @@ function QuickAddInput({
   };
 
   return (
-    <div className="relative rounded-lg border bg-card transition-colors focus-within:border-foreground/30 focus-within:bg-background">
+    <div className="pf-field-capsule relative rounded-lg border bg-card transition-colors focus-within:border-foreground/30 focus-within:bg-background">
       <ContextMenu onOpenChange={fmt.onMenuOpenChange}>
         <ContextMenuTrigger asChild>
           <textarea
