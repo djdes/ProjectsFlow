@@ -18,6 +18,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ErrorBoundary } from '@/presentation/components/ErrorBoundary';
 import { router } from '@/presentation/app/routes';
 import { trackInputModality } from '@/lib/inputModality';
+import { trackFieldTapPoint } from '@/lib/fieldTapPoint';
 import { registerServiceWorker } from '@/lib/serviceWorker';
 import { OfflineBanner } from '@/presentation/components/pwa/OfflineBanner';
 
@@ -27,6 +28,8 @@ console.info(`ProjectsFlow build ${__PF_BUILD__}`);
 
 // Указатель/клавиатура — от этого зависит, показывать ли фокус-кольцо (см. globals.css).
 trackInputModality();
+// Точка касания поля ввода — оттуда «расцветает» его фокус (globals.css, pf-field-bloom).
+trackFieldTapPoint();
 
 // Service worker (public/sw.js): push notifications and offline start. Production builds only:
 // in development it would get in the way of Vite serving fresh modules.

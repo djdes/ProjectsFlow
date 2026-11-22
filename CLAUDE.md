@@ -108,6 +108,10 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
   (`.pf-task-action`: 24/14px на десктопе, 40/18px на телефоне, анимированные иконки). Уход карточки
   при «принять/выполнено» и «удалить» — `lib/taskExitFx` (`playTaskExit`, затем мутация; при ошибке
   `restore()`). Движение — по скиллу stageshow (`npx skills add benjitaylor/skills --skill stageshow`).
+- Выбор вкладки / сегмента / раздела — «жидкий» индикатор на пружинах: `useLiquidIndicator`
+  (`lib/liquidIndicator`; уже в `TabsList`, `SegmentedControl`, нижней навигации, «Мои / Все»,
+  чипах колонок); меняющиеся счётчики — `RollingNumber`; пружинные кривые — `--pf-spring*`
+  в `motion.css`. Свой индикатор на `transition`/`layoutId` не заводим.
 - Шрифты подключаются через `@fontsource-variable/*` в `main.tsx`, без CDN.
 - `/llms.txt` (описание сайта для ИИ-помощников, llmstxt.org) — `landing/src/pages/llms.txt.ts`: собирается при
   сборке лендинга из `data/site.ts`, `data/pricing.ts`, `data/faq.ts` и коллекции блога; своего текста не содержит.

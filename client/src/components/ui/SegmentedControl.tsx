@@ -1,7 +1,6 @@
-import { useId } from 'react';
-import { motion } from 'motion/react';
+import { useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { useMotion } from '@/presentation/components/motion/MotionProvider';
+import { useLiquidIndicator } from '@/presentation/components/motion/useLiquidIndicator';
 
 export type SegmentOption<T extends string> = {
   readonly value: T;
@@ -10,10 +9,11 @@ export type SegmentOption<T extends string> = {
   readonly ariaLabel?: string;
 };
 
-// Сегментированный переключатель с плавно «переезжающей» активной пилюлей (spring, как rail).
+// Сегментированный переключатель: выбранная пилюля перетекает к новому сегменту на двух
+// пружинах — передний край убегает, задний догоняет (lib/liquidIndicator).
 // Вид C4: серая подложка, выбранный сегмент — белая плашка с лёгкой тенью (в тёмной теме —
 // приподнятая графитовая). Единая высота сегментов (h-7 desktop, ≥40px touch на мобайле).
-// Анимация гейтится useMotion (+ pf-no-motion / reduced-motion → мгновенно).
+// Без движения при reduced-motion и «Анимации: выкл» — пилюля встаёт на место сразу.
 export function SegmentedControl<T extends string>({
   options,
   value,
@@ -27,18 +27,25 @@ export function SegmentedControl<T extends string>({
   className?: string;
   size?: 'sm' | 'md';
 }): React.ReactElement {
-  const { animations } = useMotion();
-  const layoutId = useId();
+  const rail = useRef<HTMLDivElement>(null);
+  const pill = useRef<HTMLSpanElement>(null);
+  useLiquidIndicator({ containerRef: rail, indicatorRef: pill, activeSelector: '[aria-selected="true"]', activeKey: value });
   const seg = size === 'sm' ? 'h-6 px-2 max-sm:h-9' : 'h-7 px-2.5 max-sm:h-10';
 
   return (
     <div
+      ref={rail}
       role="tablist"
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-lg bg-foreground/[0.06] p-0.5 text-ui dark:bg-panel',
+        'relative isolate inline-flex items-center gap-0.5 rounded-lg bg-foreground/[0.06] p-0.5 text-ui dark:bg-panel',
         className,
       )}
     >
+      <span
+        ref={pill}
+        aria-hidden
+        className="pointer-events-none absolute start-0 top-0 rounded-md bg-background opacity-0 shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
+      />
       {options.map((opt) => {
         const active = opt.value === value;
         return (
@@ -56,16 +63,6 @@ export function SegmentedControl<T extends string>({
               active ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground hover:text-foreground',
             )}
           >
-            {active && (
-              <motion.span
-                aria-hidden
-                layoutId={animations ? `seg-${layoutId}` : undefined}
-                className="absolute inset-0 rounded-md bg-background shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
-                transition={
-                  animations ? { type: 'spring', stiffness: 460, damping: 34 } : { duration: 0 }
-                }
-              />
-            )}
             <span className="relative z-10 inline-flex items-center gap-1.5">
               {opt.icon}
               {opt.label}

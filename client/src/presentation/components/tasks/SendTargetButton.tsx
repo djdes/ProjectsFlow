@@ -64,13 +64,14 @@ export function SendTargetButton<V extends string>({
       className={cn(
         dim,
         // Появление текста «зажигает» кнопку: цвет и тень плавно, масштаб — только без reduce.
-        'group/send grid shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-offset-background transition-[color,background-color,border-color,box-shadow] duration-200 ease-[var(--pf-ease)] hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.94] motion-safe:transition-[color,background-color,border-color,box-shadow,transform] disabled:pointer-events-none disabled:scale-95 disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none',
+        // Масштаб нажатия/неактивности и пружина на смену — .pf-send-button (motion.css).
+        'pf-send-button group/send grid shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-offset-background transition-[color,background-color,border-color,box-shadow] duration-200 ease-[var(--pf-ease)] hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground/50 disabled:shadow-none',
       )}
     >
       {submitting ? (
         <Loader2 className={cn(iconDim, 'motion-safe:animate-spin')} />
       ) : (
-        <Send className={cn(iconDim, '-translate-x-px translate-y-px motion-safe:transition-transform duration-200 ease-[var(--pf-ease)] group-hover/send:-translate-y-px group-hover/send:translate-x-px')} />
+        <Send className={cn(iconDim, 'pf-send-icon -translate-x-px translate-y-px group-hover/send:-translate-y-px group-hover/send:translate-x-px')} />
       )}
     </button>
   );

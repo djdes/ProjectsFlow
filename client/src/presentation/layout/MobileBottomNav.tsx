@@ -10,6 +10,8 @@ import {
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { wantsViewTransition } from '@/lib/viewTransition';
+import { boxIn } from '@/lib/liquidIndicator';
+import { useLiquidIndicator } from '@/presentation/components/motion/useLiquidIndicator';
 import { cn } from '@/lib/utils';
 
 type Gesture = { id: number; x: number; y: number; dragged: boolean };
@@ -42,13 +44,28 @@ export function MobileBottomNav(): React.ReactElement {
   const gestureRef = useRef<Gesture | null>(null);
   const suppressClickRef = useRef(false);
 
+  // Плашка выбранной вкладки — жидкий индикатор на двух пружинах (lib/liquidIndicator):
+  // перетекает к новой вкладке, передний край убегает, задний догоняет. Под пальцем идёт за
+  // ним напрямую, отпущенная — доезжает пружиной оттуда, где её отпустили.
+  const engineRef = useLiquidIndicator({
+    containerRef: innerRef,
+    indicatorRef,
+    activeSelector: '[aria-current="page"]',
+    activeKey: activeIndex,
+    paused: () => Boolean(gestureRef.current?.dragged),
+  });
+  const itemBox = (index: number) => {
+    const inner = innerRef.current;
+    const item = inner?.querySelectorAll<HTMLElement>('[data-pf-route]')[index];
+    return inner && item ? boxIn(inner, item) : null;
+  };
   const restore = (index = activeIndex): void => {
     gestureRef.current = null;
     const indicator = indicatorRef.current;
     if (!indicator) return;
-    indicator.style.transition = '';
     indicator.style.opacity = index < 0 ? '0' : '1';
-    indicator.style.transform = `translateX(${Math.max(0, index) * 100}%)`;
+    const box = itemBox(Math.max(0, index));
+    if (box) engineRef.current?.release(box);
   };
   const metrics = () => {
     const inner = innerRef.current!;
@@ -106,18 +123,17 @@ export function MobileBottomNav(): React.ReactElement {
             event.currentTarget.setPointerCapture(event.pointerId);
           }
           const indicator = indicatorRef.current;
-          if (!indicator) return;
+          const first = itemBox(0);
+          const last = itemBox(items.length - 1);
+          if (!indicator || !first || !last) return;
           const { left, width } = metrics();
+          // Плашка идёт за пальцем по центру под ним, не выходя за крайние вкладки.
           const x = Math.max(
-            0,
-            Math.min(
-              width * (items.length - 1),
-              event.clientX - left - width / 2,
-            ),
+            first.left,
+            Math.min(last.left, first.left + (event.clientX - left - width / 2)),
           );
-          indicator.style.transition = 'none';
           indicator.style.opacity = '1';
-          indicator.style.transform = `translateX(${x}px)`;
+          engineRef.current?.follow({ left: x, top: first.top, width: first.width, height: first.height });
         }}
         onPointerUp={(event) => {
           const gesture = gestureRef.current;
@@ -166,12 +182,7 @@ export function MobileBottomNav(): React.ReactElement {
         <span
           ref={indicatorRef}
           aria-hidden
-          className="pf-nav-glass pointer-events-none absolute inset-y-1 start-1 rounded-lg bg-background shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] transition-[transform,opacity] duration-300 ease-out dark:bg-raised dark:shadow-none"
-          style={{
-            width: `calc((100% - 0.5rem) / ${items.length})`,
-            opacity: activeIndex < 0 ? 0 : 1,
-            transform: `translateX(${Math.max(0, activeIndex) * 100}%)`,
-          }}
+          className="pf-nav-glass pointer-events-none absolute start-0 top-0 rounded-lg bg-background opacity-0 shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] transition-opacity duration-200 dark:bg-raised dark:shadow-none"
         />
         {items.map((item, index) => (
           <button

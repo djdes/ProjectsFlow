@@ -10,6 +10,19 @@
   --pf-duration-fast: 140ms;
   --pf-duration: 220ms;
   --pf-duration-panel: 340ms;
+  /* Пружины (шаг пружины, посчитанный и записанный как linear()): --pf-spring — затухание
+     0.78, перелёт ~2% («чуть-чуть», не пружинка); --pf-spring-soft — критическое затухание,
+     без перелёта. Длительность — время, за которое пружина успокаивается. Старые браузеры
+     без linear() берут --pf-ease (см. @supports ниже). */
+  --pf-spring: var(--pf-ease);
+  --pf-spring-soft: var(--pf-ease);
+  --pf-spring-duration: 520ms;
+}
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --pf-spring: linear(0, 0.0218, 0.0775, 0.155, 0.2447, 0.3393, 0.4335, 0.5236, 0.607, 0.6823, 0.7487, 0.8061, 0.8547, 0.8951, 0.9281, 0.9544, 0.9749, 0.9904, 1.0018, 1.0098, 1.0151, 1.0182, 1.0197, 1.0199, 1.0192, 1.018, 1.0163, 1.0145, 1.0126, 1.0107, 1.009, 1.0074, 1.0059, 1.0046, 1.0036, 1.0026, 1.0019, 1.0013, 1.0008, 1.0004, 1);
+    --pf-spring-soft: linear(0, 0.0133, 0.0474, 0.0956, 0.1523, 0.2138, 0.2771, 0.3401, 0.4012, 0.4596, 0.5145, 0.5655, 0.6126, 0.6557, 0.6948, 0.7302, 0.762, 0.7905, 0.816, 0.8386, 0.8587, 0.8765, 0.8922, 0.906, 0.9182, 0.9288, 0.9381, 0.9463, 0.9534, 0.9597, 0.9651, 0.9698, 0.9739, 0.9774, 0.9805, 0.9832, 0.9855, 0.9875, 0.9892, 0.9907, 1);
+  }
 }
 .pf-skeleton {
   position: relative;
@@ -51,6 +64,25 @@
 .pf-content-reveal {
   animation: pf-content-reveal var(--pf-duration) var(--pf-ease) both;
 }
+/* Содержимое вкладки (TabsContent): без движения — то же проявление, что у pf-content-reveal;
+   с движением — проявляется из лёгкого размытия и въезжает со стороны выбранной вкладки
+   (--pf-tab-dir ставит TabsList на корне Tabs). Только кадр «from»: после конца у панели не
+   остаётся ни filter, ни translate — они бы сделали её контейнером для position: fixed. */
+.pf-tab-content {
+  animation: pf-content-reveal var(--pf-duration) var(--pf-ease) both;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pf-tab-content {
+    animation: pf-tab-content-in 320ms var(--pf-ease) backwards;
+  }
+}
+@keyframes pf-tab-content-in {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    translate: calc(var(--pf-tab-dir, 0) * 14px) 0;
+  }
+}
 .pf-loading-shell {
   display: grid;
   grid-template-columns: var(--pf-boot-sidebar, 270px) minmax(0, 1fr);
@@ -88,13 +120,25 @@
   transform: scale(0.975);
 }
 @media (prefers-reduced-motion: no-preference) {
+  /* Нажатие — быстро вниз, отпускание — пружиной обратно с еле заметным перелётом. */
   .pf-button {
-    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition:
+      color var(--pf-duration-fast) var(--pf-ease-press),
+      background-color var(--pf-duration-fast) var(--pf-ease-press),
+      border-color var(--pf-duration-fast) var(--pf-ease-press),
+      box-shadow var(--pf-duration-fast) var(--pf-ease-press),
+      opacity var(--pf-duration-fast) var(--pf-ease-press),
+      transform 460ms var(--pf-spring);
   }
+  .pf-button:active:not(:disabled) {
+    transition-duration: var(--pf-duration-fast);
+    transition-timing-function: var(--pf-ease-press);
+  }
+  /* Ползунок тумблера перепрыгивает пружиной; растяжение под пальцем — быстрое. */
   .pf-switch-thumb {
     transition:
-      transform 260ms var(--pf-ease),
-      scale 160ms var(--pf-ease);
+      transform 480ms var(--pf-spring),
+      scale 180ms var(--pf-ease);
   }
 }
 /* Нажатие растягивает ползунок в сторону хода — масштабом, а не шириной (ширину не анимируем).
@@ -104,12 +148,41 @@
 .pf-switch:active:not(:disabled) .pf-switch-thumb {
   scale: 1.15 1;
 }
-/* Подложку активной вкладки двигает скрипт: координаты из getBoundingClientRect уходят в
-   transform (сдвиг), ширина ставится сразу, поэтому переезд — только transform. */
+/* Кнопка «Отправить»: неактивная чуть меньше, самолётик опущен; как только есть что
+   отправить — кнопка дорастает пружиной, а самолётик разворачивается «к взлёту».
+   Сами состояния (масштаб) видны всем, их смена пружиной — только без reduce. Нажатие —
+   общее для кнопок (globals.css, scale 0.97). */
+.pf-send-button:disabled {
+  scale: 0.92;
+}
 @media (prefers-reduced-motion: no-preference) {
-  .pf-tab-indicator {
-    transition: transform 260ms var(--pf-ease);
+  .pf-send-button {
+    transition:
+      color 200ms var(--pf-ease),
+      background-color 200ms var(--pf-ease),
+      border-color 200ms var(--pf-ease),
+      box-shadow 200ms var(--pf-ease),
+      scale 480ms var(--pf-spring);
   }
+  .pf-send-button:active:not(:disabled) {
+    transition-duration: var(--pf-duration-fast);
+    transition-timing-function: var(--pf-ease-press);
+  }
+  .pf-send-button .pf-send-icon {
+    transition:
+      transform 200ms var(--pf-ease),
+      rotate 560ms var(--pf-spring),
+      scale 560ms var(--pf-spring);
+  }
+  .pf-send-button:disabled .pf-send-icon {
+    rotate: -24deg;
+    scale: 0.86;
+  }
+}
+/* Подложку активной вкладки ведут пружины (lib/liquidIndicator) — покадрово, поэтому своего
+   transition у неё нет: он бы догонял каждый кадр и смазывал ход. Появление — прозрачностью. */
+.pf-tab-indicator {
+  transition: opacity 160ms var(--pf-ease);
 }
 [data-pf-motion-surface] {
   animation-timing-function: var(--pf-ease);
@@ -140,7 +213,8 @@
   *::after {
     scroll-behavior: auto !important;
   }
-  .pf-content-reveal {
+  .pf-content-reveal,
+  .pf-tab-content {
     animation: none;
   }
 }
@@ -148,7 +222,8 @@ html.pf-no-motion .pf-skeleton::after {
   animation: none;
   display: none;
 }
-html.pf-no-motion .pf-content-reveal {
+html.pf-no-motion .pf-content-reveal,
+html.pf-no-motion .pf-tab-content {
   animation: none;
 }
 html.pf-no-motion .pf-button:active:not(:disabled) {
