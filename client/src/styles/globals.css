@@ -1237,6 +1237,8 @@ html[data-pf-modality='pointer'] :focus-visible {
     background-color: color-mix(in oklch, oklch(var(--primary)) 6%, oklch(var(--muted)));
   }
   .pf-comment-composer-card:focus-within {
+    /* В фокусе капсула светлеет к цвету карточки — «поле ожило», ореол — ниже. */
+    background-color: color-mix(in oklch, oklch(var(--muted)) 45%, oklch(var(--card)));
     box-shadow: 0 0 0 2px oklch(var(--primary) / 0.28);
   }
 
@@ -1498,5 +1500,46 @@ html[data-pf-modality='pointer'] :focus-visible {
   @keyframes pf-ai-enter {
     from { transform: rotate(-90deg) scale(0.4); opacity: 0; }
     to { transform: none; opacity: 1; }
+  }
+}
+
+/* Фокус в поле ввода (комментарий, ИИ, поиск, формы): от рамки поля один раз расходится
+   и гаснет кольцо акцента — палец видит, что поле приняло ввод. Кольцо — outline, а не
+   box-shadow: свои кольца полей (Tailwind ring, ореол композера) остаются как есть и не
+   мигают. Капсулы с полем внутри (.pf-field-capsule, композер комментария) реагируют на
+   :focus-within; редактор описания и ячейки таблицы — нет, там поле занимает пол-экрана.
+   Движение — только при prefers-reduced-motion: no-preference; «Анимации: выкл» в профиле
+   глушит его через html.pf-no-motion. */
+@layer components {
+  .pf-field-capsule {
+    transition: background-color 200ms var(--pf-ease);
+  }
+  :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea)::placeholder {
+    transition: opacity 160ms ease-out;
+  }
+  :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea):focus::placeholder {
+    opacity: 0.55;
+  }
+  :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea) {
+    caret-color: oklch(var(--primary));
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea):not(.pf-field-capsule *, .pf-comment-composer-card *):focus,
+    .pf-field-capsule:focus-within,
+    .pf-comment-composer-card:focus-within {
+      animation: pf-field-focus 520ms var(--pf-ease);
+    }
+  }
+
+  @keyframes pf-field-focus {
+    from {
+      outline: 2px solid oklch(var(--primary) / 0.5);
+      outline-offset: 0px;
+    }
+    to {
+      outline: 2px solid oklch(var(--primary) / 0);
+      outline-offset: 7px;
+    }
   }
 }

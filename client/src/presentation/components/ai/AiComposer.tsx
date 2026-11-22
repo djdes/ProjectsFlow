@@ -250,7 +250,7 @@ export function AiComposer({
   return (
     <div className={cn(
       // Поле ИИ — залитая капсула без рамки, как в приложении Claude; фокус — мягкий ореол.
-      'rounded-3xl bg-muted transition-shadow focus-within:ring-2 focus-within:ring-ring/30',
+      'pf-field-capsule rounded-3xl bg-muted transition-shadow focus-within:ring-2 focus-within:ring-ring/30',
       compact ? 'pbe-2' : 'pbe-3',
     )}>
       {/* Выделенная зона — над полем ввода, как бейдж в отправленном пузыре. Показываем

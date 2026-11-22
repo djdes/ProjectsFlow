@@ -2863,7 +2863,7 @@ function CommentComposer({
   };
 
   return (
-    <div className="relative rounded-2xl bg-muted transition-shadow focus-within:ring-2 focus-within:ring-ring/25">
+    <div className="pf-field-capsule relative rounded-2xl bg-muted transition-shadow focus-within:ring-2 focus-within:ring-ring/25">
       {preview ? (
         <div className="min-h-[2.75rem] px-3 py-2">
           {body.trim().length > 0 ? (
