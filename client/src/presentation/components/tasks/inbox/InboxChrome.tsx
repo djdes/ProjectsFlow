@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { useLiquidIndicator } from '@/presentation/components/motion/useLiquidIndicator';
+import { RollingNumber } from '@/presentation/components/motion/RollingNumber';
 import { AtSign, CalendarClock, Check, ChevronLeft, ChevronRight, MessagesSquare, Play, Search, ShieldCheck, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
@@ -312,6 +314,9 @@ export function InboxSectionSwitch({
   nowAttention: boolean;
   className?: string;
 }): React.ReactElement {
+  const railRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLSpanElement>(null);
+  useLiquidIndicator({ containerRef: railRef, indicatorRef: pillRef, activeSelector: '[aria-pressed="true"]', activeKey: value });
   const item = (key: InboxSection, label: string, count: number, attention = false): React.ReactElement => {
     const on = value === key;
     return (
@@ -322,16 +327,16 @@ export function InboxSectionSwitch({
         onClick={() => onChange(key)}
         className={cn(
           // ≤359px рядом стоят поиск, фильтры и выделение — подписи мельче и плотнее.
-          'relative flex min-h-0 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 text-ui whitespace-nowrap transition-colors active:bg-active max-[359px]:gap-0.5 max-[359px]:px-1 max-[359px]:text-2xs',
-          on
-            ? 'bg-background font-semibold text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none'
-            : 'font-medium text-muted-foreground',
+          // Подложка выбранного раздела — общая, перетекает между кнопками (ниже); у самой
+          // кнопки только подпись.
+          'relative z-[1] flex min-h-0 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 text-ui whitespace-nowrap transition-colors max-[359px]:gap-0.5 max-[359px]:px-1 max-[359px]:text-2xs',
+          on ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground active:bg-active',
         )}
       >
         <span className="min-w-0 truncate">{label}</span>
         {/* Число и индикатор в одной ячейке фиксированной ширины: подпись не сдвигается. */}
         <span className="grid shrink-0 place-items-center tabular-nums text-muted-foreground">
-          <span className={cn('col-start-1 row-start-1', on && pending && 'invisible')}>{count}</span>
+          <RollingNumber value={count} className={cn('col-start-1 row-start-1', on && pending && 'invisible')} />
           {on && pending && <Loader2 aria-label="Загрузка" className="col-start-1 row-start-1 size-3.5 motion-safe:animate-spin" />}
         </span>
         {attention && (
@@ -342,10 +347,18 @@ export function InboxSectionSwitch({
   };
   return (
     <div
+      ref={railRef}
       role="group"
       aria-label="Раздел"
-      className={cn('flex h-12 rounded-lg bg-foreground/[0.06] p-0.5 dark:bg-panel', className)}
+      className={cn('relative isolate flex h-12 rounded-lg bg-foreground/[0.06] p-0.5 dark:bg-panel', className)}
     >
+      {/* Подложка выбранного раздела перетекает на двух пружинах: передний край убегает к
+          новому разделу, задний догоняет (lib/liquidIndicator). */}
+      <span
+        ref={pillRef}
+        aria-hidden
+        className="pointer-events-none absolute start-0 top-0 rounded-md bg-background opacity-0 shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
+      />
       {item('now', 'В работе', nowCount, nowAttention)}
       {item('queue', 'Очередь', queueCount)}
     </div>

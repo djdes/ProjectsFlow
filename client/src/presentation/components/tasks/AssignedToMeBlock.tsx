@@ -7,7 +7,7 @@ import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
 import { useRememberSkeletonSize } from '@/presentation/hooks/useRememberSkeletonSize';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -74,6 +74,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { DIALOG_CLOSE_MS, playTaskExit } from '@/lib/taskExitFx';
+import { swapIn } from '@/lib/liquidIndicator';
+import { useLiquidIndicator } from '@/presentation/components/motion/useLiquidIndicator';
+import { RollingNumber } from '@/presentation/components/motion/RollingNumber';
 import { projectToneClass } from '@/lib/tone';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
@@ -1663,6 +1666,35 @@ export function AssignedToMeBlock({
   const inboxHeadRef = useRef<HTMLDivElement>(null);
   const inboxReady = !(loading || membersLoading || boardTasks === null);
   useRememberSkeletonSize('inbox', 'inbox-head', [inboxHeadRef], [isWide, inboxReady, loadError]);
+  // Телефон: при смене вкладки «Мои / Все / человек» папка перелетает от прежней вкладки к
+  // новой на двух пружинах (передний край убегает, задний догоняет) и срастается с панелью;
+  // у вкладок своя подложка — индикатор виден только в полёте (glide).
+  const folderGlideRef = useRef<HTMLSpanElement>(null);
+  const whoKey = [inboxReady, isWide, tab, focusedMemberId ?? '', filterTo ?? ''].join('|');
+  useLiquidIndicator({
+    containerRef: inboxHeadRef,
+    indicatorRef: folderGlideRef,
+    activeSelector: '.pf-folder-tab[data-active]',
+    activeKey: whoKey,
+    glide: true,
+  });
+  // Содержимое под лентой при смене вкладки или раздела входит с коротким размытием и
+  // сдвигом по ходу переключения (влево/вправо — куда ушла вкладка).
+  const phoneContentRef = useRef<HTMLDivElement>(null);
+  const swapOrderRef = useRef<{ who: number; section: string } | null>(null);
+  const personId = focusedMemberId ?? (tab === 'byMe' ? filterTo : null);
+  const whoIndex = personId ? 2 + Math.max(0, members.findIndex((m) => m.id === personId)) : tab === 'byMe' ? 1 : 0;
+  useLayoutEffect(() => {
+    if (isWide || !inboxReady) {
+      swapOrderRef.current = null;
+      return;
+    }
+    const previous = swapOrderRef.current;
+    swapOrderRef.current = { who: whoIndex, section };
+    if (!previous) return;
+    if (previous.who !== whoIndex) swapIn(phoneContentRef.current, whoIndex > previous.who ? 1 : -1);
+    else if (previous.section !== section) swapIn(phoneContentRef.current, section === 'queue' ? 1 : -1);
+  }, [isWide, inboxReady, whoIndex, section]);
 
   // Пока грузится — заголовок страницы уже на месте, под ним скелетон доски: при появлении
   // данных строка заголовка не «прыгает».
@@ -2037,7 +2069,8 @@ export function AssignedToMeBlock({
       )}
       {hasAny && (
         // Имена висят под аватарами: «Мои / Все» и аватары — по верхнему краю, на одной оси.
-        <div ref={inboxHeadRef} className="flex min-h-11 min-w-0 items-start gap-0.5">
+        <div ref={inboxHeadRef} className="relative isolate flex min-h-11 min-w-0 items-start gap-0.5">
+          <span ref={folderGlideRef} aria-hidden className="pf-folder-glide" />
           <div className="shrink-0">{tabsOrFocus}</div>
           {/* Без разделителя: заливка «Мои / Все» и аватары и так читаются как две группы, а
               8px на 393px — это ещё один человек с именем в ленте. */}
@@ -2597,6 +2630,7 @@ export function AssignedToMeBlock({
             // Пока новый раздел строится, прежний приглушён и не нажимается — видно, что нажатие
             // принято; min-h держит место, чтобы подписи и полоса фильтров не прыгали.
             <div
+              ref={phoneContentRef}
               className={cn('min-h-[60dvh] transition-opacity duration-150', sectionPending && 'pointer-events-none opacity-40')}
               aria-busy={sectionPending || undefined}
             >
@@ -4486,6 +4520,8 @@ function AssigneeTabs({
 // аватар человека в ленте (UserCube compact): квадрат 44px со скруглением 28% и подпись под
 // ним. Выбранная вкладка заливается цветом папки и перетекает в серую панель под лентой,
 // квадрат на ней — белый.
+const formatScopeCount = (n: number): string => (n > 999 ? '999+' : String(n));
+
 function ScopeTile({
   active,
   label,
@@ -4517,7 +4553,7 @@ function ScopeTile({
             : 'bg-panel text-foreground active:bg-active',
         )}
       >
-        {count > 999 ? '999+' : count}
+        <RollingNumber value={count} format={formatScopeCount} />
       </span>
       <span className={cn('max-w-full truncate text-2xs leading-tight', active ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
         {label}

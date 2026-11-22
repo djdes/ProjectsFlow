@@ -38,7 +38,7 @@ type Props = {
 
 // Вкладка-«текст с подчёркиванием» (Notion): без пилюли-фона, у активной — чёрная линия снизу.
 const UNDERLINE_TAB =
-  'relative -mbe-px rounded-none border-be-2 border-transparent bg-transparent px-0 pbe-2 pbs-1 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
+  'relative -mbe-px rounded-none border-be-2 border-transparent bg-transparent px-0 pbe-2 pbs-1 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none';
 
 const DEFAULT_WINDOW_DAYS = 28;
 const initial = (name: string | null): string => (name?.trim()[0] ?? '?').toUpperCase();
@@ -350,7 +350,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
         </div>
 
         <Tabs defaultValue="activity" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 mbs-2 h-auto shrink-0 justify-start gap-4 rounded-none border-be border-border bg-transparent p-0">
+          <TabsList indicator="underline" className="mx-4 mbs-2 h-auto shrink-0 justify-start gap-4 rounded-none border-be border-border bg-transparent p-0">
             <TabsTrigger value="activity" className={UNDERLINE_TAB}>Активность</TabsTrigger>
             <TabsTrigger value="analytics" className={UNDERLINE_TAB}>Аналитика</TabsTrigger>
           </TabsList>

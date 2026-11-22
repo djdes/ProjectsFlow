@@ -1,69 +1,49 @@
 import * as React from 'react';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { cn } from '@/lib/utils';
+import type { IndicatorBox } from '@/lib/liquidIndicator';
+import { useLiquidIndicator } from '@/presentation/components/motion/useLiquidIndicator';
 
 export const Tabs = TabsPrimitive.Root;
 
 
+// Подчёркивание: линия 2px по низу выбранной вкладки (вкладки окна задачи, активности) —
+// на месте её прежней нижней рамки, той же ширины.
+const underline = (box: IndicatorBox): IndicatorBox => ({
+  left: box.left,
+  top: box.top + box.height - 2,
+  width: box.width,
+  height: 2,
+});
+
 export function TabsList({
   className,
   children,
+  indicator = 'pill',
   ...props
-}: React.ComponentPropsWithoutRef<
-  typeof TabsPrimitive.List
->): React.ReactElement {
+}: React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & {
+  // pill — подложка под выбранной вкладкой (по умолчанию), underline — линия под ней.
+  indicator?: 'pill' | 'underline';
+}): React.ReactElement {
   const list = React.useRef<HTMLDivElement>(null);
-  const [indicator, setIndicator] = React.useState<{
-    left: number;
-    width: number;
-    top: number;
-    height: number;
-  } | null>(null);
-  React.useLayoutEffect(() => {
-    const element = list.current;
-    if (!element) return;
-    const update = (): void => {
-      const active = element.querySelector<HTMLElement>(
-        '[role="tab"][data-state="active"]',
-      );
-      if (!active) {
-        setIndicator(null);
-        return;
-      }
-      const rect = active.getBoundingClientRect(),
-        parent = element.getBoundingClientRect();
-      const next = {
-        left: rect.left - parent.left + element.scrollLeft,
-        width: rect.width,
-        top: rect.top - parent.top + element.scrollTop,
-        height: rect.height,
-      };
-      setIndicator((previous) =>
-        previous &&
-        Object.keys(next).every(
-          (key) =>
-            previous[key as keyof typeof next] ===
-            next[key as keyof typeof next],
-        )
-          ? previous
-          : next,
-      );
-    };
-    update();
-    const resize = new ResizeObserver(update);
-    resize.observe(element);
-    const mutation = new MutationObserver(update);
-    mutation.observe(element, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ['data-state'],
-    });
-    return () => {
-      resize.disconnect();
-      mutation.disconnect();
-    };
-  }, []);
+  const indicatorRef = React.useRef<HTMLSpanElement>(null);
+  // Подложка перетекает к выбранной вкладке на двух пружинах: передний край убегает,
+  // задний догоняет (lib/liquidIndicator). Выбор живёт в data-state у Radix.
+  useLiquidIndicator({
+    containerRef: list,
+    indicatorRef,
+    activeSelector: '[role="tab"][data-state="active"]',
+    watchAttributes: ['data-state'],
+    ...(indicator === 'underline' ? { shape: underline } : {}),
+    // Содержимое новой вкладки въезжает со стороны, где она стоит в ряду (TabsContent,
+    // .pf-tab-content): направление кладём на корень Tabs как --pf-tab-dir (−1 / 1).
+    onActiveChange: (previous, next) => {
+      const tabs = Array.from(list.current?.querySelectorAll('[role="tab"]') ?? []);
+      const direction = Math.sign(tabs.indexOf(next) - tabs.indexOf(previous));
+      const root = list.current?.parentElement?.closest<HTMLElement>('[data-orientation]');
+      root?.style.setProperty('--pf-tab-dir', String(direction));
+    },
+  });
   return (
     <TabsPrimitive.List
       ref={list}
@@ -78,20 +58,17 @@ export function TabsList({
       )}
       {...props}
     >
-      {indicator && (
-        <span
-          aria-hidden="true"
-          className="pf-tab-indicator pointer-events-none absolute rounded-md bg-background shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none"
-          // Ширина и высота ставятся сразу, переезжает только transform: left/width не анимируем.
-          style={{
-            left: 0,
-            top: 0,
-            width: indicator.width,
-            height: indicator.height,
-            transform: `translate(${indicator.left}px, ${indicator.top}px)`,
-          }}
-        />
-      )}
+      <span
+        ref={indicatorRef}
+        aria-hidden="true"
+        data-pf-indicator={indicator}
+        className={cn(
+          'pf-tab-indicator pointer-events-none absolute start-0 top-0 opacity-0',
+          indicator === 'underline'
+            ? 'rounded-full bg-foreground'
+            : 'rounded-md bg-background shadow-[0_1px_2px_oklch(16.84%_0_none/0.12)] dark:bg-raised dark:shadow-none',
+        )}
+      />
       {children}
     </TabsPrimitive.List>
   );
@@ -123,7 +100,7 @@ export function TabsContent({
   return (
     <TabsPrimitive.Content
       className={cn(
-        'pf-content-reveal ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'pf-tab-content ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         className,
       )}
       {...props}
