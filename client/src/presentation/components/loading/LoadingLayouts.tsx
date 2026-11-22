@@ -56,20 +56,24 @@ export function InboxLoadingLayout({
       <Skeleton className="h-11 w-[132px] shrink-0 rounded-lg md:h-7 md:w-[126px]" />
       <PeopleSkeleton />
     </div>
-    <div className="flex h-12 items-center gap-1.5 md:hidden">
-      <Skeleton className="h-12 flex-1 rounded-lg" /><Skeleton className="size-12 rounded-lg" />
-      {compactHeading && <><Skeleton className="size-11 rounded-lg" /><Skeleton className="size-11 rounded-lg" /></>}
-    </div>
-    {/* Desktop: search and page actions sit at the end of the due-chips row. Phone: the chips
-        share the sticky strip with the section switch — 8px apart, not the 12px of the column. */}
-    <div className="grid grid-cols-3 gap-1.5 max-md:-mbs-1 md:flex md:flex-wrap md:items-center">
-      {['md:w-[115px]', 'md:w-[89px]', 'md:w-[98px]'].map((w) => <Skeleton key={w} className={cn('h-11 rounded-lg md:h-7', w)} />)}
-      <div className="hidden items-center gap-1 md:ms-auto md:flex">
-        <Skeleton className="me-1 h-8 w-44 2xl:w-60" />
-        <Skeleton className="h-8 w-[87px] shrink-0" /><Skeleton className="h-8 w-[97px] shrink-0" />
+    {/* Phone: everything under the «who» ribbon lies in the grey folder (AssignedToMeBlock,
+        .pf-folder) — full width, right under the tabs. Desktop: plain rows. */}
+    <div className="-mx-4 -mbs-3 flex flex-col gap-3 bg-folder px-4 pbe-3 pbs-3 sm:-mx-6 sm:px-6 md:mx-0 md:mbs-0 md:bg-transparent md:px-0 md:pbe-0 md:pbs-0">
+      <div className="flex h-12 items-center gap-1.5 md:hidden">
+        <Skeleton className="h-12 flex-1 rounded-lg" /><Skeleton className="size-12 rounded-lg" />
+        {compactHeading && <><Skeleton className="size-11 rounded-lg" /><Skeleton className="size-11 rounded-lg" /></>}
       </div>
+      {/* Desktop: search and page actions sit at the end of the due-chips row. Phone: the chips
+          share the sticky strip with the section switch — 8px apart, not the 12px of the column. */}
+      <div className="grid grid-cols-3 gap-1.5 max-md:-mbs-1 md:flex md:flex-wrap md:items-center">
+        {['md:w-[115px]', 'md:w-[89px]', 'md:w-[98px]'].map((w) => <Skeleton key={w} className={cn('h-11 rounded-lg md:h-7', w)} />)}
+        <div className="hidden items-center gap-1 md:ms-auto md:flex">
+          <Skeleton className="me-1 h-8 w-44 2xl:w-60" />
+          <Skeleton className="h-8 w-[87px] shrink-0" /><Skeleton className="h-8 w-[97px] shrink-0" />
+        </div>
+      </div>
+      <BoardSkeleton shelf={false} now folder />
     </div>
-    <BoardSkeleton shelf={false} now />
   </div>;
 }
 
@@ -101,11 +105,14 @@ export function BoardSkeleton({
   shelf = true,
   now = false,
   columns = 3,
+  folder = false,
 }: {
   className?: string;
   shelf?: boolean;
   now?: boolean;
   columns?: number;
+  // Inside the grey folder of the inbox on a phone: the «now» column has no panel of its own.
+  folder?: boolean;
 }): React.ReactElement {
   return (
     <LoadingRegion
@@ -123,7 +130,7 @@ export function BoardSkeleton({
       )}
       <div className="flex flex-col gap-2.5 overflow-hidden md:flex-row">
         {now && (
-          <div className="w-full shrink-0 space-y-[5px] rounded-xl bg-panel p-[7px] md:w-[284px]">
+          <div className={cn('w-full shrink-0 space-y-[5px] rounded-xl bg-panel p-[7px] md:w-[284px]', folder && 'max-md:bg-transparent')}>
             {[0, 1].map((group) => (
               <div key={group} className="space-y-[5px]">
                 <div className="flex h-7 items-center px-[3px]">

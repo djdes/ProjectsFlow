@@ -63,6 +63,9 @@
        приподнятая плашка (быстрые действия на карточке, тост). */
     --sidebar: 96.9% 0.006 95;
     --panel: 96.9% 0.006 95;
+    /* Папка «Входящих» на телефоне: выбранная вкладка «Мои / Все / человек» и серая панель под
+       ней — один лист. Заметно темнее листа и колонок, белые карточки на нём читаются. */
+    --folder: 95.4% 0.006 95;
     --panel-divider: 92.9% 0.005 91.5;
     --field: 100% 0 none;
     --raised: 100% 0 none;
@@ -170,6 +173,7 @@
 
     --sidebar: 22.3% 0.004 75;
     --panel: 23.6% 0.005 75;
+    --folder: 23.6% 0.005 75;
     --panel-divider: 29.3% 0.006 75;
     --field: 23.6% 0.005 75;
     --raised: 29.85% 0.006 75;
@@ -1541,5 +1545,51 @@ html[data-pf-modality='pointer'] :focus-visible {
       outline: 2px solid oklch(var(--primary) / 0);
       outline-offset: 7px;
     }
+  }
+}
+
+/* Телефон: «Мои / Все / люди» — вкладки-папки (вариант A, утверждён 22.11). Выбранная вкладка
+   заливается цветом папки и перетекает в серую панель с содержимым под лентой: снизу у неё
+   вогнутые «плечи» (радиальный градиент цвета папки), как у вкладки картотеки. Панель — на всю
+   ширину экрана, поэтому плечи есть у любой вкладки, и у первой тоже. */
+@layer components {
+  .pf-folder-tab {
+    position: relative;
+    padding-block: 0.5rem 0.625rem;
+    padding-inline: 0.25rem;
+    border-start-start-radius: 16px;
+    border-start-end-radius: 16px;
+    transition: background-color 180ms var(--pf-ease);
+  }
+  .pf-folder-tab::before,
+  .pf-folder-tab::after {
+    content: '';
+    position: absolute;
+    inset-block-end: 0;
+    inline-size: 10px;
+    block-size: 10px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 180ms var(--pf-ease);
+  }
+  .pf-folder-tab::before {
+    inset-inline-start: -10px;
+    background: radial-gradient(circle at 0 0, transparent 10px, oklch(var(--folder)) 10.5px);
+  }
+  .pf-folder-tab::after {
+    inset-inline-end: -10px;
+    background: radial-gradient(circle at 100% 0, transparent 10px, oklch(var(--folder)) 10.5px);
+  }
+  .pf-folder-tab[data-active] {
+    background-color: oklch(var(--folder));
+  }
+  .pf-folder-tab[data-active]::before,
+  .pf-folder-tab[data-active]::after {
+    opacity: 1;
+  }
+  /* Внутри папки свои серые подложки полок и групп не нужны: заголовки и белые карточки
+     лежат прямо на папке. Подсветка цели броска (bg-drop) остаётся. */
+  .pf-folder [data-pf-folder-flat]:not(.bg-drop) {
+    background-color: transparent;
   }
 }

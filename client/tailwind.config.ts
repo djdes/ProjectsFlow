@@ -162,6 +162,7 @@ const config: Config = {
           divider: 'oklch(var(--panel-divider) / <alpha-value>)',
         },
         field: 'oklch(var(--field) / <alpha-value>)',
+        folder: 'oklch(var(--folder) / <alpha-value>)',
         raised: 'oklch(var(--raised) / <alpha-value>)',
         // Статусы задачи — один цвет на смысл по всему продукту (см. globals.css).
         approval: {
