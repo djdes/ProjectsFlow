@@ -1,4 +1,5 @@
 import { selectInboxView } from './inbox/selectInboxView';
+import { useHideOnScroll } from '@/presentation/hooks/useHideOnScroll';
 import { EmptyState } from '@/presentation/components/empty/EmptyState';
 import { filterFromGroups, isFromGroup } from '@/domain/task/groupOriginFilter';
 import { WorkerActivityBadge } from './WorkerActivityBadge';
@@ -6,7 +7,7 @@ import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
 import { useRememberSkeletonSize } from '@/presentation/hooks/useRememberSkeletonSize';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -99,7 +100,7 @@ import {
   type AssignedGrouping,
 } from '@/domain/user/UiPrefs';
 import { UserAvatar } from '@/presentation/components/user/UserAvatar';
-import { SteppedRibbon } from '@/presentation/components/layout/EdgeFadeScroller';
+import { EdgeFadeScroller, SteppedRibbon } from '@/presentation/components/layout/EdgeFadeScroller';
 import { shortUserLabels } from '@/domain/user/shortUserLabels';
 import { UserAvatarHover } from '@/presentation/components/user/UserAvatarHover';
 import { userLabel } from '@/domain/user/userLabel';
@@ -467,13 +468,20 @@ export function AssignedToMeBlock({
   // Метка прямо над липким переключателем разделов: по ней видно, что страницу уже
   // прокрутили ниже него.
   const sectionTopRef = useRef<HTMLDivElement>(null);
+  // Переключение раздела отвечает сразу: нажатая кнопка и индикатор — мгновенно, а сам
+  // раздел (в «Очереди» бывают сотни карточек) строится в фоне через transition. Раньше
+  // нажатие «Очередь» замораживало экран на секунды без всякого отклика (жалоба 22.11).
+  const [sectionPending, startSectionTransition] = useTransition();
+  const fabHidden = useHideOnScroll(!isWide);
+  const [sectionTarget, setSectionTarget] = useState<InboxSection | null>(null);
   const setMobileSection = useCallback((next: InboxSection): void => {
     try {
       localStorage.setItem(MOBILE_SECTION_KEY, next);
     } catch {
       /* ignore */
     }
-    setMobileSectionState(next);
+    setSectionTarget(next);
+    startSectionTransition(() => setMobileSectionState(next));
     // Переключились, пролистав раздел далеко вниз, — новый раздел открываем с начала, а не
     // с середины (или с пустоты под коротким списком). Пока переключатель на своём месте,
     // прокрутку не трогаем.
@@ -1839,7 +1847,23 @@ export function AssignedToMeBlock({
             'Все подходящие задачи выполнены и скрыты («Скрыть выполненные»)';
 
   // «Мои / Все» или заголовок чужой доски (режим руководителя).
-  const tabsOrFocus = focusedMember ? (
+  // Телефон: «Мои / Все» — плитки той же геометрии, что аватары людей (44px и подпись под
+  // ними), и стоят на месте всегда. Выбранный человек отмечается обводкой своего аватара;
+  // широкий чип «Задачи · Имя ×» на месте вкладок сдвигал всю ленту (жалоба владельца 22.11).
+  // Вернуться к своим — нажать «Мои» или «Все».
+  const tabsOrFocus = !isWide ? (
+    <AssigneeTabs
+      className="shrink-0"
+      compact
+      tab={focusedMember ? null : tab}
+      onChange={(next) => {
+        if (focusedMember) setFocusedMember(null);
+        handleTabChange(next);
+      }}
+      toMeCount={toMeVisible.length}
+      byMeCount={byMeVisible.length}
+    />
+  ) : focusedMember ? (
     // Режим чужой доски заменяет вкладки заголовком с именем: вкладки «Мои/Для всех»
     // тут не про что — показывается одна конкретная доска. Возврат — ×.
     <div className={cn(SCOPE_CHIP_CLASS, SCOPE_CHIP_ON_CLASS, 'max-w-full gap-1 pe-0 md:pe-0.5')}>
@@ -1975,7 +1999,7 @@ export function AssignedToMeBlock({
       {hasAny && (
         // Имена висят под аватарами: «Мои / Все» и аватары — по верхнему краю, на одной оси.
         <div ref={inboxHeadRef} className="flex min-h-11 min-w-0 items-start gap-2">
-          <div className={cn('shrink-0', focusedMember && 'min-w-0 max-w-[62%]')}>{tabsOrFocus}</div>
+          <div className="shrink-0">{tabsOrFocus}</div>
           {/* Без разделителя: заливка «Мои / Все» и аватары и так читаются как две группы, а
               8px на 393px — это ещё один человек с именем в ленте. */}
           {/* «+N ›» at the cut edge: a fade alone did not read as «swipe for more». */}
@@ -2100,7 +2124,7 @@ export function AssignedToMeBlock({
   // «В работе»: полка приёмки сверху, «В работе» снизу — одна серая панель.
   const nowPanel = (
     <section
-      aria-label="Сейчас"
+      aria-label="В работе"
       className="flex w-full shrink-0 flex-col rounded-xl bg-panel md:w-[284px]"
     >
       {showApprovalZone && (
@@ -2441,14 +2465,8 @@ export function AssignedToMeBlock({
   // вместо доски — переключатель разделов и один раздел на всю ширину.
   // Сроки (и «Ответить»). Телефон: три равные колонки внутри липкой полосы; десктоп — строка
   // сроков с поиском и действиями у правого края.
-  const dueRow = (
-    <div
-      className={cn(
-        'flex items-center gap-x-2 gap-y-1.5',
-        // Телефон: три равные колонки, все фильтры доступны без прокрутки.
-        isWide ? 'flex-wrap' : 'min-w-0',
-      )}
-    >
+  const dueRowInner = (
+    <div className={cn('flex items-center gap-x-2 gap-y-1.5', isWide ? 'flex-wrap' : 'w-max gap-x-1.5')}>
       <DueFilterChips value={due} onChange={setDue} counts={dueCounts} wrap={isWide} />
       {!focusedMemberId && (replyFilterOn || awaitingReplyTasks.length > 0) && (
         <ReplyFilterChip
@@ -2477,6 +2495,9 @@ export function AssignedToMeBlock({
       {isWide && searchGroup}
     </div>
   );
+  // Телефон: строка сроков — лента вбок с растворением у обрезанного края (EdgeFadeScroller):
+  // каждый чип своей ширины, ничего не обрезается посреди подписи.
+  const dueRow = isWide ? dueRowInner : <EdgeFadeScroller className="min-w-0">{dueRowInner}</EdgeFadeScroller>;
   const body = (
     // Телефон: запас снизу под плавающую кнопку «Новая задача», чтобы последняя карточка
     // прокручивалась выше неё.
@@ -2495,7 +2516,8 @@ export function AssignedToMeBlock({
           <div className="flex min-w-0 items-center gap-1.5 max-[359px]:gap-1">
             <InboxSectionSwitch
               className="min-w-0 flex-1"
-              value={section}
+              value={sectionPending && sectionTarget ? sectionTarget : section}
+              pending={sectionPending}
               onChange={setMobileSection}
               nowCount={nowCount}
               queueCount={queueShown}
@@ -2545,7 +2567,7 @@ export function AssignedToMeBlock({
                 title="Развернуть «Сейчас»"
                 className="flex min-h-[200px] w-10 shrink-0 flex-col items-center gap-2.5 rounded-xl bg-panel py-2.5 text-meta font-semibold transition-colors hover:bg-active"
               >
-                <span className="[writing-mode:vertical-rl]">Сейчас</span>
+                <span className="[writing-mode:vertical-rl]">В работе</span>
                 <span className="tabular-nums text-approval">{approvalTasks.length}</span>
                 <span className="tabular-nums text-manual">{inProgressTasks.length}</span>
               </button>
@@ -2566,19 +2588,28 @@ export function AssignedToMeBlock({
             <SyncedStickyScrollbar target={rowEl} ctrlWheel />
           </section>
         </div>
-      ) : section === 'now' ? (
-        showNow ? (
-          nowPanel
-        ) : (
-          // Режим выделения прячет пустые полки — раздел не подменяем очередью молча.
-          <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
-            В «Сейчас» выбирать нечего
-          </p>
-        )
       ) : (
-        <section aria-label="Очередь" className="flex min-w-0 flex-col gap-2">
-          {mobileQueue}
-        </section>
+        // Пока новый раздел строится, прежний приглушён и не нажимается — видно, что нажатие
+        // принято; min-h держит место, чтобы подписи и полоса фильтров не прыгали.
+        <div
+          className={cn('min-h-[60dvh] transition-opacity duration-150', sectionPending && 'pointer-events-none opacity-40')}
+          aria-busy={sectionPending || undefined}
+        >
+          {section === 'now' ? (
+            showNow ? (
+              nowPanel
+            ) : (
+              // Режим выделения прячет пустые полки — раздел не подменяем очередью молча.
+              <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
+                В разделе «В работе» выбирать нечего
+              </p>
+            )
+          ) : (
+            <section aria-label="Очередь" className="flex min-w-0 flex-col gap-2">
+              {mobileQueue}
+            </section>
+          )}
+        </div>
       )}
 
       {/* Цели броска на время перетаскивания своей карточки. Десктоп — полоса «Готово» внизу
@@ -2601,9 +2632,15 @@ export function AssignedToMeBlock({
           type="button"
           onClick={openAddTask}
           aria-label="Новая задача"
+          data-pf-fab-hidden={fabHidden || undefined}
           // Уже 360px кнопка меньше (48px) и ближе к краю: на таком экране 56-пиксельный
-          // круг закрывал заметную часть карточки под собой.
-          className="fixed end-4 inset-be-[calc(5.25rem_+_env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-float transition-colors hover:bg-primary/90 max-[359px]:end-3 max-[359px]:size-12"
+          // круг закрывал заметную часть карточки под собой. При прокрутке вниз кнопка
+          // уезжает (useHideOnScroll) и возвращается при прокрутке вверх: иначе она лежит
+          // поверх правого края карточек. Движение — только без «уменьшения движения».
+          className={cn(
+            'fixed end-4 inset-be-[calc(5.25rem_+_env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-float transition-[background-color,opacity,transform] duration-200 hover:bg-primary/90 max-[359px]:end-3 max-[359px]:size-12',
+            fabHidden && 'pointer-events-none opacity-0 motion-safe:translate-y-24',
+          )}
         >
           <Plus className="size-6" />
         </button>
@@ -4395,31 +4432,84 @@ function AssigneeTabs({
   onChange,
   toMeCount,
   byMeCount,
+  compact = false,
   className,
 }: {
   className?: string;
-  tab: AssigneeTab;
+  /** null — открыта доска сотрудника: ни одна вкладка не выбрана, но обе на месте. */
+  tab: AssigneeTab | null;
   onChange: (t: AssigneeTab) => void;
   toMeCount: number;
   byMeCount: number;
+  /** Телефон: плитки как аватары людей (число в квадрате, подпись под ним). */
+  compact?: boolean;
 }): React.ReactElement {
   return (
     // Без role=tablist/tab: полный ARIA-паттерн табов требует roving tabindex и
     // стрелочной навигации — вместо ложной семантики честные toggle-кнопки (aria-pressed).
-    <div role="group" aria-label="Чьи задачи" className={cn('flex min-w-0 items-center gap-1.5', className)}>
-      <TabButton
-        active={tab === 'toMe'}
-        label="Мои"
-        count={toMeCount}
-        onClick={() => onChange('toMe')}
-      />
-      <TabButton
-        active={tab === 'byMe'}
-        label="Все"
-        count={byMeCount}
-        onClick={() => onChange('byMe')}
-      />
+    <div
+      role="group"
+      aria-label="Чьи задачи"
+      className={cn('flex min-w-0 gap-1.5', compact ? 'items-start gap-1' : 'items-center', className)}
+    >
+      {compact ? (
+        <>
+          {/* Открыта доска сотрудника — «Мои» и есть возврат к своим входящим. */}
+          <ScopeTile
+            active={tab === 'toMe'}
+            label="Мои"
+            count={toMeCount}
+            onClick={() => onChange('toMe')}
+            ariaLabel={tab === null ? 'Вернуться к своим входящим' : undefined}
+          />
+          <ScopeTile active={tab === 'byMe'} label="Все" count={byMeCount} onClick={() => onChange('byMe')} />
+        </>
+      ) : (
+        <>
+          <TabButton active={tab === 'toMe'} label="Мои" count={toMeCount} onClick={() => onChange('toMe')} />
+          <TabButton active={tab === 'byMe'} label="Все" count={byMeCount} onClick={() => onChange('byMe')} />
+        </>
+      )}
     </div>
+  );
+}
+
+// Плитка «Мои / Все» на телефоне — геометрия аватара в ленте людей (UserCube compact):
+// квадрат 44px со скруглением 28% и подпись под ним, ширина 52px.
+function ScopeTile({
+  active,
+  label,
+  count,
+  onClick,
+  ariaLabel,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+  ariaLabel?: string;
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={ariaLabel ?? `${label}: ${count}`}
+      onClick={onClick}
+      className="flex w-[3.25rem] shrink-0 flex-col items-center gap-1 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    >
+      <span
+        data-pf-who-tile
+        className={cn(
+          'grid size-11 place-items-center rounded-[28%] text-ui font-semibold tabular-nums transition-colors',
+          active ? 'bg-foreground text-background' : 'bg-panel text-foreground active:bg-active',
+        )}
+      >
+        {count > 999 ? '999+' : count}
+      </span>
+      <span className={cn('max-w-full truncate text-2xs leading-tight', active ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+        {label}
+      </span>
+    </button>
   );
 }
 

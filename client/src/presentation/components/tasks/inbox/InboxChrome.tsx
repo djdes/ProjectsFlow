@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { AtSign, CalendarClock, Check, ChevronLeft, ChevronRight, MessagesSquare, Play, Search, ShieldCheck, X } from 'lucide-react';
+import { AtSign, CalendarClock, Check, ChevronLeft, ChevronRight, MessagesSquare, Play, Search, ShieldCheck, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -122,7 +122,10 @@ export function DueFilterChips({
     <div
       role="group"
       aria-label="Срок"
-      className={cn('items-center gap-1.5', wrap ? 'flex flex-wrap' : 'grid w-full min-w-0 grid-cols-3')}
+      // Телефон (wrap=false): чипы своей ширины в ленте, которая листается вбок. Три равные
+      // колонки рядом с «@» и «комментариями» не вмещали «Просрочено 11» — подпись вылезала
+      // за край чипа и обрезалась (жалоба владельца 22.11).
+      className={cn('items-center gap-1.5', wrap ? 'flex flex-wrap' : 'flex w-max')}
     >
       {DUE_CHIPS.map((chip) => {
         const on = value === chip.key;
@@ -136,7 +139,7 @@ export function DueFilterChips({
             onClick={() => onChange(on ? null : chip.key)}
             data-pf-due-tinted={tinted ? '' : undefined}
             className={cn(
-              'inline-flex min-h-11 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-meta transition-colors active:bg-active max-[359px]:text-2xs md:min-h-7 md:px-2.5',
+              'inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-meta transition-colors active:bg-active md:min-h-7 md:gap-1 md:px-2.5',
               on
                 ? 'border-primary bg-primary-soft text-foreground'
                 : tinted
@@ -148,7 +151,7 @@ export function DueFilterChips({
                     ),
             )}
           >
-            <span aria-hidden className={cn('hidden size-1.5 shrink-0 rounded-full min-[360px]:inline-block', chip.dot, count === 0 && !on && 'opacity-50')} />
+            <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', chip.dot, count === 0 && !on && 'opacity-50')} />
             {chip.label}
             <span
               className={cn('shrink-0 tabular-nums', tinted ? 'font-semibold' : 'text-muted-foreground')}
@@ -285,6 +288,7 @@ export function ManualIcon({ className }: { className?: string }): React.ReactEl
 }
 
 // Переключатель разделов «Входящих» на телефоне: «В работе» (решить и делаю) и «Очередь».
+// Подпись раньше была «Сейчас» — непонятно, что внутри (22.11 переименовано).
 // На узком экране две колонки рядом не помещаются, а стопкой «В работе» уводит очередь далеко
 // вниз — поэтому один раздел за раз, с числом задач в каждом. Липнет к верху при прокрутке.
 export type InboxSection = 'now' | 'queue';
@@ -295,12 +299,15 @@ export function InboxSectionSwitch({
   nowCount,
   queueCount,
   nowAttention,
+  pending = false,
   className,
 }: {
   value: InboxSection;
   onChange: (value: InboxSection) => void;
   nowCount: number;
   queueCount: number;
+  /** Раздел ещё строится — у выбранной кнопки крутится индикатор вместо числа. */
+  pending?: boolean;
   // В «В работе» есть сданная работа, которую ждут решения, — фиолетовая точка на разделе.
   nowAttention: boolean;
   className?: string;
@@ -322,7 +329,11 @@ export function InboxSectionSwitch({
         )}
       >
         <span className="min-w-0 truncate">{label}</span>
-        <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
+        {/* Число и индикатор в одной ячейке фиксированной ширины: подпись не сдвигается. */}
+        <span className="grid shrink-0 place-items-center tabular-nums text-muted-foreground">
+          <span className={cn('col-start-1 row-start-1', on && pending && 'invisible')}>{count}</span>
+          {on && pending && <Loader2 aria-label="Загрузка" className="col-start-1 row-start-1 size-3.5 motion-safe:animate-spin" />}
+        </span>
         {attention && (
           <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-approval" />
         )}
@@ -335,7 +346,7 @@ export function InboxSectionSwitch({
       aria-label="Раздел"
       className={cn('flex h-12 rounded-lg bg-foreground/[0.06] p-0.5 dark:bg-panel', className)}
     >
-      {item('now', 'Сейчас', nowCount, nowAttention)}
+      {item('now', 'В работе', nowCount, nowAttention)}
       {item('queue', 'Очередь', queueCount)}
     </div>
   );

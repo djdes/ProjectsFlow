@@ -943,41 +943,21 @@ html[data-pf-modality='pointer'] :focus-visible {
     }
   }
 
-  /* Непрочитанная задача (UnreadTasksProvider): назначена на меня и ещё не открыта.
-     Синий неон по контуру — задача должна поймать взгляд занятого человека, но не
-     мигать: постоянная анимация в списке из десятка карточек превращается в шум.
-     Поэтому свечение статичное, а «живость» даёт один медленный вдох-выдох. */
+  /* Непрочитанная задача — заливка и точка, как непрочитанное письмо (22.11). Прежний
+     синий ореол по контуру читался как «что-то светится», а не «не прочитано»: фон и
+     точка понятны без подсказки. Точка нарисована фоном (radial-gradient), а не
+     псевдоэлементом: у карточек overflow:hidden, и ::after срезался бы по краю. */
   .pf-unread {
-    border-color: oklch(75.35% 0.139 232.66 / 0.75) !important;
-    box-shadow:
-      0 0 0 1px oklch(75.35% 0.139 232.66 / 0.5),
-      0 0 13px -1px oklch(75.35% 0.139 232.66 / 0.6),
-      inset 0 0 14px -6px oklch(75.35% 0.139 232.66 / 0.5);
-    animation: pf-unread-breathe 6s ease-in-out infinite;
+    background-color: color-mix(in oklch, oklch(var(--primary)) 8%, oklch(var(--card))) !important;
+    background-image: radial-gradient(
+      circle at calc(100% - 0.75rem) 0.75rem,
+      oklch(var(--primary)) 0.25rem,
+      transparent calc(0.25rem + 0.5px)
+    );
+    background-repeat: no-repeat;
   }
-  /* Геометрия свечения в обоих кадрах ОДИНАКОВАЯ (блюр 13px, spread -1px) — меняется
-     только прозрачность, и та в узком диапазоне. Свечение, которое дышит размером,
-     в периферийном зрении читается как мигание и тянет взгляд на себя; подсветка
-     должна напоминать о задаче, а не мешать работать. */
-  @keyframes pf-unread-breathe {
-    0%,
-    100% {
-      box-shadow:
-        0 0 0 1px oklch(75.35% 0.139 232.66 / 0.42),
-        0 0 13px -1px oklch(75.35% 0.139 232.66 / 0.48),
-        inset 0 0 14px -6px oklch(75.35% 0.139 232.66 / 0.42);
-    }
-    50% {
-      box-shadow:
-        0 0 0 1px oklch(75.35% 0.139 232.66 / 0.6),
-        0 0 13px -1px oklch(75.35% 0.139 232.66 / 0.72),
-        inset 0 0 14px -6px oklch(75.35% 0.139 232.66 / 0.58);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .pf-unread {
-      animation: none;
-    }
+  .dark .pf-unread {
+    background-color: color-mix(in oklch, oklch(var(--primary)) 13%, oklch(var(--card))) !important;
   }
 
   /* Срочная задача (приоритет 1): красное свечение по контуру. Приём тот же, что у
