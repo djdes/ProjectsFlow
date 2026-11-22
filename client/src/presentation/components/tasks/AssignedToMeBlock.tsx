@@ -127,7 +127,12 @@ import {
   type SwipeAction,
 } from './inbox/InboxChrome';
 import { useAddTaskDialog } from '@/presentation/components/forms/AddTaskDialogProvider';
-import { CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS, ColumnPreviewList } from './ColumnPreview';
+import {
+  CARD_STACK_GAP_CLASS,
+  COLUMN_SCROLL_CLASS,
+  ColumnPreviewList,
+  UNREAD_GLOW_GUTTER_CLASS,
+} from './ColumnPreview';
 import { SyncedStickyScrollbar } from './SyncedStickyScrollbar';
 import { InlineNewCard, type InlineTaskSettings } from './InlineNewCard';
 import { matchesInboxQuery } from './inbox/searchTasks';
@@ -2293,7 +2298,7 @@ export function AssignedToMeBlock({
                       </ColumnHead>
                       <div
                         onPointerDown={columnSelection ? dragSelect.onPointerDown : undefined}
-                        className={cn('flex flex-col', CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS)}
+                        className={cn('flex flex-col', CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS, UNREAD_GLOW_GUTTER_CLASS)}
                       >
                         {composer(group.key)}
                         {group.items.length === 0 && composingProject !== group.key && (
@@ -3187,7 +3192,7 @@ function TimeBucketColumn({
           <div
             // Хук пассивен вне режима выделения, но лишний слушатель на обычной колонке не вешаем.
             onPointerDown={selection ? onCardsPointerDown : undefined}
-            className={cn('flex min-h-[3rem] flex-col', CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS)}
+            className={cn('flex min-h-[3rem] flex-col', CARD_STACK_GAP_CLASS, COLUMN_SCROLL_CLASS, UNREAD_GLOW_GUTTER_CLASS)}
           >
             {children}
           </div>

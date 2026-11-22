@@ -186,15 +186,17 @@ const VERSIONED_KINDS: ReadonlySet<ActivityKind> = new Set([
   'task_status_changed',
 ]);
 
-// Строка 2 события без изменений и комментария: «Олег Боев создал задачу».
+// Строка 2 события без изменений и комментария: «Олег Боев создал(а) задачу». Пола
+// автора система не знает, поэтому глагол — в форме «(а)», как в уведомлениях
+// (NotificationItem): «Анна Орлова создал задачу» читалось как ошибка.
 const KIND_VERB: Partial<Record<ActivityKind, string>> = {
-  task_created: 'создал задачу',
-  task_status_changed: 'изменил статус',
-  task_updated: 'изменил задачу',
-  task_deleted: 'удалил задачу',
-  task_commented: 'прокомментировал',
-  project_created: 'создал проект',
-  project_updated: 'изменил проект',
+  task_created: 'создал(а) задачу',
+  task_status_changed: 'изменил(а) статус',
+  task_updated: 'изменил(а) задачу',
+  task_deleted: 'удалил(а) задачу',
+  task_commented: 'прокомментировал(а)',
+  project_created: 'создал(а) проект',
+  project_updated: 'изменил(а) проект',
 };
 
 // Строка ленты событий (дизайн C4, плотная): строка 1 — задача или проект и время, строка 2 —
@@ -300,14 +302,14 @@ export function ActivityItem({
     const verb = KIND_VERB[item.kind];
     meta =
       item.kind === 'member_added' ? (
-        'присоединился к проекту'
+        'теперь в проекте'
       ) : item.kind === 'member_removed' ? (
         <>
-          {who} удалил из проекта
+          {who} удалил(а) из проекта
         </>
       ) : item.kind === 'member_role_changed' ? (
         <>
-          {who} сменил роль
+          {who} сменил(а) роль
         </>
       ) : (
         <>
