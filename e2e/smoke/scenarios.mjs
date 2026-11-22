@@ -826,6 +826,27 @@ export const scenarios = [
         const unnamed = boxes.names.filter((n) => !n).length;
         t.assert(unnamed === 0, `без имени под аватаром: ${unnamed} из ${boxes.names.length}`);
       });
+      // Variant A (22.11): «Мои / Все / люди» are folder tabs — the selected one has the colour
+      // of the grey folder under the ribbon and stands right on it.
+      await t.check('лента «кто» — вкладки-папки: выбранная одного цвета с серой панелью и стоит на ней', async () => {
+        const r = await page.evaluate(() => {
+          const active = document.querySelector('[role="group"][aria-label="Чьи задачи"] .pf-folder-tab[data-active]');
+          const folder = document.querySelector('.pf-folder');
+          if (!active || !folder) return null;
+          const a = active.getBoundingClientRect();
+          const f = folder.getBoundingClientRect();
+          return {
+            tabBg: getComputedStyle(active).backgroundColor,
+            folderBg: getComputedStyle(folder).backgroundColor,
+            pageBg: getComputedStyle(document.body).backgroundColor,
+            gap: Math.round(f.top - a.bottom),
+          };
+        });
+        t.assert(r, 'нет выбранной вкладки .pf-folder-tab[data-active] или папки .pf-folder');
+        t.assert(r.tabBg === r.folderBg, `вкладка ${r.tabBg}, папка ${r.folderBg}`);
+        t.assert(r.folderBg !== r.pageBg, `папка не отличается от листа: ${r.folderBg}`);
+        t.assert(Math.abs(r.gap) <= 1, `между вкладкой и папкой ${r.gap}px`);
+      });
 
       const nowIds = [...approvalTasks(state), ...manualTasks(state)].map((x) => x.id);
       const queueIds = myQueueTasks(state).map((x) => x.id);

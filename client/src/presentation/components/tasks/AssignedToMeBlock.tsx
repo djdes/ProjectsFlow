@@ -1885,13 +1885,18 @@ export function AssignedToMeBlock({
   // ними), и стоят на месте всегда. Выбранный человек отмечается обводкой своего аватара;
   // широкий чип «Задачи · Имя ×» на месте вкладок сдвигал всю ленту (жалоба владельца 22.11).
   // Вернуться к своим — нажать «Мои» или «Все».
+  // Папка на телефоне — одна выбранная вкладка: открыт человек (доска сотрудника или фильтр
+  // «кому» на «Все») — выбрана его вкладка, а не «Мои / Все»; нажатие «Мои / Все» его снимает.
+  const personFolder = focusedMember !== null || (tab === 'byMe' && filterTo !== null);
   const tabsOrFocus = !isWide ? (
     <AssigneeTabs
       className="shrink-0"
       compact
-      tab={focusedMember ? null : tab}
+      memberBoard={focusedMember !== null}
+      tab={personFolder ? null : tab}
       onChange={(next) => {
         if (focusedMember) setFocusedMember(null);
+        if (filterTo !== null) setFilterTo(null);
         handleTabChange(next);
       }}
       toMeCount={toMeVisible.length}
@@ -1940,7 +1945,7 @@ export function AssignedToMeBlock({
         aria-label="Люди"
         className={cn(
           'flex items-center',
-          dragActive ? 'max-w-full flex-wrap gap-2' : isWide ? 'w-max gap-1.5' : 'w-max items-start gap-1',
+          dragActive ? 'max-w-full flex-wrap gap-2' : isWide ? 'w-max gap-1.5' : 'w-max items-start gap-0.5',
         )}
       >
         {user && dragActive && <SelfDropTile user={user} />}
@@ -2032,7 +2037,7 @@ export function AssignedToMeBlock({
       )}
       {hasAny && (
         // Имена висят под аватарами: «Мои / Все» и аватары — по верхнему краю, на одной оси.
-        <div ref={inboxHeadRef} className="flex min-h-11 min-w-0 items-start gap-2">
+        <div ref={inboxHeadRef} className="flex min-h-11 min-w-0 items-start gap-0.5">
           <div className="shrink-0">{tabsOrFocus}</div>
           {/* Без разделителя: заливка «Мои / Все» и аватары и так читаются как две группы, а
               8px на 393px — это ещё один человек с именем в ленте. */}
@@ -2159,6 +2164,7 @@ export function AssignedToMeBlock({
   const nowPanel = (
     <section
       aria-label="В работе"
+      data-pf-folder-flat
       className="flex w-full shrink-0 flex-col rounded-xl bg-panel md:w-[284px]"
     >
       {showApprovalZone && (
@@ -2223,7 +2229,7 @@ export function AssignedToMeBlock({
   const desktopQueue =
     visibleTasks.length === 0 ? (
       // Пустая активная вкладка при живой соседней: тихая строка вместо пустых колонок.
-      <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">{emptyText}</p>
+      <p data-pf-folder-flat className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">{emptyText}</p>
     ) : grouping === 'deadline' ? (
       // Группировка «Дедлайн» = 3 колонки по времени (Без срока / На сегодня / Будущее).
       // Drag между колонками меняет дедлайн; drag на аватар участника — назначает его.
@@ -2260,7 +2266,7 @@ export function AssignedToMeBlock({
         })}
       </div>
     ) : groups.length === 0 && !boardDragActive ? (
-      <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
+      <p data-pf-folder-flat className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
         {hasLocalFilters ? 'Под фильтры ничего не попадает' : 'Очередь пуста'}
       </p>
     ) : (
@@ -2397,9 +2403,9 @@ export function AssignedToMeBlock({
   );
   const mobileQueue =
     visibleTasks.length === 0 ? (
-      <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">{emptyText}</p>
+      <p data-pf-folder-flat className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">{emptyText}</p>
     ) : queueShown === 0 && !boardDragActive ? (
-      <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
+      <p data-pf-folder-flat className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
         {hasLocalFilters ? 'Под фильтры ничего не попадает' : 'Очередь пуста'}
       </p>
     ) : (
@@ -2536,112 +2542,126 @@ export function AssignedToMeBlock({
     <section id={regionId} className={cn('flex flex-col gap-3', !isWide && 'pbe-20')}>
       {headRow}
 
-      {/* Нулевая метка над переключателем; -mbe-3 гасит лишний зазор колонки. */}
-      {!isWide && <div ref={sectionTopRef} aria-hidden className="-mbe-3" />}
-      {!isWide && (
-        // Липнет к верху при прокрутке: раздел, сроки, поиск и фильтры — одна полоса, которая
-        // остаётся под пальцем, пока листаешь список (раньше сроки уезжали вверх вместе с
-        // шапкой, и чтобы сменить фильтр, приходилось возвращаться к началу).
-        // py-1.5 — воздух над переключателем, когда он прилип; -my-1.5 убирает эти же 6px
-        // из потока, чтобы зазоры до соседних строк остались теми же 12px, что везде.
-        <div className="sticky inset-bs-0 z-20 -mx-4 -my-1.5 flex flex-col gap-2 bg-background px-4 py-1.5 sm:-mx-6 sm:px-6">
-          <div className="flex min-w-0 items-center gap-1.5 max-[359px]:gap-1">
-            <InboxSectionSwitch
-              className="min-w-0 flex-1"
-              value={sectionPending && sectionTarget ? sectionTarget : section}
-              pending={sectionPending}
-              onChange={setMobileSection}
-              nowCount={nowCount}
-              queueCount={queueShown}
-              nowAttention={isApprover && approvalTasks.some((t) => t.assignee.userId !== user?.id)}
-            />
-            <button
-              type="button"
-              aria-label={searchVisible ? 'Закрыть поиск' : 'Поиск по проектам и задачам'}
-              aria-expanded={searchVisible}
-              aria-controls={`${regionId}-mobile-search`}
-              onClick={() => {
-                setSearchOpen(!searchVisible);
-                if (searchVisible) setQuery('');
-              }}
-              className={cn(
-                'grid size-12 shrink-0 place-items-center rounded-lg bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-[359px]:size-11',
-                searchVisible && 'border-primary/30 bg-primary/10 text-primary-ink',
-              )}
-            >
-              {searchVisible ? <X className="size-4" /> : <Search className="size-4" />}
-            </button>
-            {toolsInSticky && phoneTools}
-          </div>
-          {searchVisible && (
-            <InboxSearch id={`${regionId}-mobile-search`} value={query} onChange={setQuery} autoFocus={searchOpen} />
-          )}
-          {dueRow}
-        </div>
-      )}
-
-      {isWide && dueRow}
-
-      {focusedError ? (
-        <div role="alert" className="space-y-3 rounded-xl p-4 text-sm bg-card shadow-card">
-          <p>{focusedError}</p><Button variant="outline" onClick={() => { setFocusedError(null); setFocusRetry((n) => n + 1); }}>Повторить</Button>
-        </div>
-      ) : focusedLoading ? <BoardSkeleton shelf={false} now columns={isWide ? 2 : 0} /> : isWide ? (
-        <div className="flex flex-row items-start gap-2.5">
-          {showNow &&
-            (nowExpanded ? (
-              nowPanel
-            ) : (
+      {!isWide ? (
+        // Телефон: всё под лентой «кто» — серая папка, в которую перетекает выбранная вкладка
+        // (вариант A, 22.11). Папка — на всю ширину экрана, как полотно под вкладками
+        // картотеки: содержимое сохраняет прежние поля, и переключатель разделов не теряет
+        // ширину. -mbs-3 гасит зазор колонки: вкладка стоит на папке вплотную.
+        <div className="pf-folder -mx-4 -mbs-3 flex flex-col gap-3 bg-folder px-4 pbe-3 pbs-3 sm:-mx-6 sm:px-6">
+          {/* Нулевая метка над переключателем; -mbe-3 гасит лишний зазор колонки. */}
+          <div ref={sectionTopRef} aria-hidden className="-mbe-3" />
+          {/* Липнет к верху при прокрутке: раздел, сроки, поиск и фильтры — одна полоса, которая
+              остаётся под пальцем, пока листаешь список. py-1.5 — воздух над переключателем,
+              когда он прилип; -my-1.5 убирает эти же 6px из потока. */}
+          <div className="sticky inset-bs-0 z-20 -mx-4 -my-1.5 flex flex-col gap-2 bg-folder px-4 py-1.5 sm:-mx-6 sm:px-6">
+            <div className="flex min-w-0 items-center gap-1.5 max-[359px]:gap-1">
+              <InboxSectionSwitch
+                className="min-w-0 flex-1"
+                value={sectionPending && sectionTarget ? sectionTarget : section}
+                pending={sectionPending}
+                onChange={setMobileSection}
+                nowCount={nowCount}
+                queueCount={queueShown}
+                nowAttention={isApprover && approvalTasks.some((t) => t.assignee.userId !== user?.id)}
+              />
               <button
                 type="button"
-                onClick={toggleNowCollapsed}
-                aria-label="Развернуть «Сейчас»"
-                title="Развернуть «Сейчас»"
-                className="flex min-h-[200px] w-10 shrink-0 flex-col items-center gap-2.5 rounded-xl bg-panel py-2.5 text-meta font-semibold transition-colors hover:bg-active"
+                aria-label={searchVisible ? 'Закрыть поиск' : 'Поиск по проектам и задачам'}
+                aria-expanded={searchVisible}
+                aria-controls={`${regionId}-mobile-search`}
+                onClick={() => {
+                  setSearchOpen(!searchVisible);
+                  if (searchVisible) setQuery('');
+                }}
+                className={cn(
+                  'grid size-12 shrink-0 place-items-center rounded-lg bg-panel text-muted-foreground transition-colors hover:bg-hover active:bg-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-[359px]:size-11',
+                  searchVisible && 'border-primary/30 bg-primary/10 text-primary-ink',
+                )}
               >
-                <span className="[writing-mode:vertical-rl]">В работе</span>
-                <span className="tabular-nums text-approval">{approvalTasks.length}</span>
-                <span className="tabular-nums text-manual">{inProgressTasks.length}</span>
+                {searchVisible ? <X className="size-4" /> : <Search className="size-4" />}
               </button>
-            ))}
-
-          <section aria-label="Очередь" className="flex min-w-0 flex-1 flex-col gap-2">
-            <QueueHeader
-              label={QUEUE_LABEL[grouping]}
-              count={queueCountText}
-              onScroll={scrollColumns}
-              scrollTarget={rowEl}
-            />
-            {desktopQueue}
-            {/* Закреплённый снизу вьюпорта горизонтальный скролл ряда колонок — как на досках
-                проектов. Живёт внутри очереди, а не под всем блоком: ширина полосы обязана
-                совпадать с шириной ряда, иначе её ход короче на ширину полки «В работе» и
-                последние колонки до неё не докручиваются. */}
-            <SyncedStickyScrollbar target={rowEl} ctrlWheel />
-          </section>
-        </div>
-      ) : (
-        // Пока новый раздел строится, прежний приглушён и не нажимается — видно, что нажатие
-        // принято; min-h держит место, чтобы подписи и полоса фильтров не прыгали.
-        <div
-          className={cn('min-h-[60dvh] transition-opacity duration-150', sectionPending && 'pointer-events-none opacity-40')}
-          aria-busy={sectionPending || undefined}
-        >
-          {section === 'now' ? (
-            showNow ? (
-              nowPanel
-            ) : (
-              // Режим выделения прячет пустые полки — раздел не подменяем очередью молча.
-              <p className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
-                В разделе «В работе» выбирать нечего
-              </p>
-            )
+              {toolsInSticky && phoneTools}
+            </div>
+            {searchVisible && (
+              <InboxSearch id={`${regionId}-mobile-search`} value={query} onChange={setQuery} autoFocus={searchOpen} />
+            )}
+            {dueRow}
+          </div>
+          {focusedError ? (
+            <div role="alert" className="space-y-3 rounded-xl p-4 text-sm bg-card shadow-card">
+              <p>{focusedError}</p><Button variant="outline" onClick={() => { setFocusedError(null); setFocusRetry((n) => n + 1); }}>Повторить</Button>
+            </div>
+          ) : focusedLoading ? (
+            <BoardSkeleton shelf={false} now columns={0} folder />
           ) : (
-            <section aria-label="Очередь" className="flex min-w-0 flex-col gap-2">
-              {mobileQueue}
-            </section>
+            // Пока новый раздел строится, прежний приглушён и не нажимается — видно, что нажатие
+            // принято; min-h держит место, чтобы подписи и полоса фильтров не прыгали.
+            <div
+              className={cn('min-h-[60dvh] transition-opacity duration-150', sectionPending && 'pointer-events-none opacity-40')}
+              aria-busy={sectionPending || undefined}
+            >
+              {section === 'now' ? (
+                showNow ? (
+                  nowPanel
+                ) : (
+                  // Режим выделения прячет пустые полки — раздел не подменяем очередью молча.
+                  <p data-pf-folder-flat className="rounded-xl bg-panel px-3 py-6 text-center text-ui text-muted-foreground">
+                    В разделе «В работе» выбирать нечего
+                  </p>
+                )
+              ) : (
+                <section aria-label="Очередь" className="flex min-w-0 flex-col gap-2">
+                  {mobileQueue}
+                </section>
+              )}
+            </div>
           )}
         </div>
+      ) : (
+        <>
+          {dueRow}
+          {focusedError ? (
+            <div role="alert" className="space-y-3 rounded-xl p-4 text-sm bg-card shadow-card">
+              <p>{focusedError}</p><Button variant="outline" onClick={() => { setFocusedError(null); setFocusRetry((n) => n + 1); }}>Повторить</Button>
+            </div>
+          ) : focusedLoading ? (
+            <BoardSkeleton shelf={false} now columns={2} />
+          ) : (
+            <div className="flex flex-row items-start gap-2.5">
+              {showNow &&
+                (nowExpanded ? (
+                  nowPanel
+                ) : (
+                  <button
+                    type="button"
+                    onClick={toggleNowCollapsed}
+                    aria-label="Развернуть «Сейчас»"
+                    title="Развернуть «Сейчас»"
+                    className="flex min-h-[200px] w-10 shrink-0 flex-col items-center gap-2.5 rounded-xl bg-panel py-2.5 text-meta font-semibold transition-colors hover:bg-active"
+                  >
+                    <span className="[writing-mode:vertical-rl]">В работе</span>
+                    <span className="tabular-nums text-approval">{approvalTasks.length}</span>
+                    <span className="tabular-nums text-manual">{inProgressTasks.length}</span>
+                  </button>
+                ))}
+
+              <section aria-label="Очередь" className="flex min-w-0 flex-1 flex-col gap-2">
+                <QueueHeader
+                  label={QUEUE_LABEL[grouping]}
+                  count={queueCountText}
+                  onScroll={scrollColumns}
+                  scrollTarget={rowEl}
+                />
+                {desktopQueue}
+                {/* Закреплённый снизу вьюпорта горизонтальный скролл ряда колонок — как на досках
+                    проектов. Живёт внутри очереди, а не под всем блоком: ширина полосы обязана
+                    совпадать с шириной ряда, иначе её ход короче на ширину полки «В работе» и
+                    последние колонки до неё не докручиваются. */}
+                <SyncedStickyScrollbar target={rowEl} ctrlWheel />
+              </section>
+            </div>
+          )}
+        </>
       )}
 
       {/* Цели броска на время перетаскивания своей карточки. Десктоп — полоса «Готово» внизу
@@ -3052,6 +3072,7 @@ function MobileQueueGroup({
   return (
     <div
       ref={setNodeRef}
+      data-pf-folder-flat
       className={cn(
         'rounded-xl bg-panel transition-[background-color,outline-color] duration-150',
         dropData !== null && highlight && (isOver ? DROP_OVER_CLASS : DROP_TARGET_CLASS),
@@ -4077,29 +4098,30 @@ function UserCube({
         aria-describedby={load ? loadId : undefined}
         title={tooltip}
         data-pf-who-person
+        // Вкладка-папка (как «Мои / Все»): выбранный человек — залитая вкладка, перетекающая
+        // в серую панель его задач, а не обводка вокруг аватара.
+        data-active={filterActive || undefined}
         className={cn(
-          'flex w-[3.25rem] shrink-0 flex-col items-center gap-1 rounded-lg',
+          'pf-folder-tab flex w-[3.75rem] shrink-0 flex-col items-center gap-1',
           clickable &&
             'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         )}
       >
         <span
           data-pf-who-avatar
-          className={cn(
-            'relative grid size-11 place-items-center rounded-[28%] transition-shadow',
-            filterActive && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
-          )}
+          className="relative grid size-11 place-items-center rounded-[28%]"
         >
           <UserAvatar displayName={name} avatarUrl={member.avatarUrl} className="size-11 text-ui" />
           {hasApproval && (
-            <span aria-hidden className="absolute -end-0.5 -inset-be-0.5 size-3 rounded-full bg-approval ring-2 ring-background" />
+            <span aria-hidden className={cn('absolute -end-0.5 -inset-be-0.5 size-3 rounded-full bg-approval ring-2', filterActive ? 'ring-folder' : 'ring-background')} />
           )}
           {burning > 0 && (
             <span
               aria-hidden
               data-pf-who-load
               className={cn(
-                'absolute -end-1.5 -inset-bs-1.5 grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums ring-2 ring-background',
+                'absolute -end-1.5 -inset-bs-1.5 grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums ring-2',
+                filterActive ? 'ring-folder' : 'ring-background',
                 burningTone,
               )}
             >
@@ -4416,16 +4438,19 @@ function AssigneeTabs({
   toMeCount,
   byMeCount,
   compact = false,
+  memberBoard = false,
   className,
 }: {
   className?: string;
-  /** null — открыта доска сотрудника: ни одна вкладка не выбрана, но обе на месте. */
+  /** null — открыт человек (доска сотрудника или фильтр «кому»): ни одна вкладка не выбрана. */
   tab: AssigneeTab | null;
   onChange: (t: AssigneeTab) => void;
   toMeCount: number;
   byMeCount: number;
   /** Телефон: плитки как аватары людей (число в квадрате, подпись под ним). */
   compact?: boolean;
+  /** Открыта доска сотрудника (руководитель): «Мои» — возврат к своим входящим. */
+  memberBoard?: boolean;
 }): React.ReactElement {
   return (
     // Без role=tablist/tab: полный ARIA-паттерн табов требует roving tabindex и
@@ -4433,7 +4458,7 @@ function AssigneeTabs({
     <div
       role="group"
       aria-label="Чьи задачи"
-      className={cn('flex min-w-0 gap-1.5', compact ? 'items-start gap-1' : 'items-center', className)}
+      className={cn('flex min-w-0 gap-1.5', compact ? 'items-start gap-0.5' : 'items-center', className)}
     >
       {compact ? (
         <>
@@ -4443,7 +4468,7 @@ function AssigneeTabs({
             label="Мои"
             count={toMeCount}
             onClick={() => onChange('toMe')}
-            ariaLabel={tab === null ? 'Вернуться к своим входящим' : undefined}
+            ariaLabel={memberBoard ? 'Вернуться к своим входящим' : undefined}
           />
           <ScopeTile active={tab === 'byMe'} label="Все" count={byMeCount} onClick={() => onChange('byMe')} />
         </>
@@ -4457,8 +4482,10 @@ function AssigneeTabs({
   );
 }
 
-// Плитка «Мои / Все» на телефоне — геометрия аватара в ленте людей (UserCube compact):
-// квадрат 44px со скруглением 28% и подпись под ним, ширина 52px.
+// Плитка «Мои / Все» на телефоне — вкладка-папка (.pf-folder-tab) той же геометрии, что
+// аватар человека в ленте (UserCube compact): квадрат 44px со скруглением 28% и подпись под
+// ним. Выбранная вкладка заливается цветом папки и перетекает в серую панель под лентой,
+// квадрат на ней — белый.
 function ScopeTile({
   active,
   label,
@@ -4478,13 +4505,16 @@ function ScopeTile({
       aria-pressed={active}
       aria-label={ariaLabel ?? `${label}: ${count}`}
       onClick={onClick}
-      className="flex w-[3.25rem] shrink-0 flex-col items-center gap-1 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      data-active={active || undefined}
+      className="pf-folder-tab flex w-[3.75rem] shrink-0 flex-col items-center gap-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
     >
       <span
         data-pf-who-tile
         className={cn(
-          'grid size-11 place-items-center rounded-[28%] text-ui font-semibold tabular-nums transition-colors',
-          active ? 'bg-foreground text-background' : 'bg-panel text-foreground active:bg-active',
+          'grid size-11 place-items-center rounded-[28%] text-ui font-semibold tabular-nums transition-[background-color,box-shadow] duration-150',
+          active
+            ? 'bg-card text-foreground shadow-[0_1px_2px_oklch(16.84%_0_none/0.08)] dark:bg-raised dark:shadow-none'
+            : 'bg-panel text-foreground active:bg-active',
         )}
       >
         {count > 999 ? '999+' : count}
