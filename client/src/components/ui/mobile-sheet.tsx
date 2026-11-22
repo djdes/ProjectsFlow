@@ -121,18 +121,24 @@ export function useMobileSheetSurface(
       const dismiss =
         !cancelled &&
         shouldDismissSheet(current.distance, velocity, node.clientHeight);
-      node.style.setProperty(
-        '--pf-sheet-release-y',
-        dismiss ? `${current.distance}px` : '0px',
-      );
-      node.style.setProperty('--pf-sheet-y', '0px');
       if (dismiss) {
+        // The sheet stays exactly where the finger let it go until it is closed, and the
+        // exit animation starts from that point. Resetting --pf-sheet-y here first made the
+        // open sheet glide back up for a frame before the close re-rendered it: a fast swipe
+        // flashed the whole sheet («мигает», «открывается сверху»).
+        node.style.setProperty('--pf-sheet-release-y', `${current.distance}px`);
+        node.setAttribute('data-pf-sheet-dragging', '');
         closeRef.current?.click();
-        // A controlled form may reject dismissal. Do not reuse its old drag offset later.
+        // A controlled form may reject dismissal: then glide back and forget the offset.
         requestAnimationFrame(() => {
-          if (node.dataset.state === 'open')
-            node.style.setProperty('--pf-sheet-release-y', '0px');
+          if (node.dataset.state !== 'open') return;
+          node.removeAttribute('data-pf-sheet-dragging');
+          node.style.setProperty('--pf-sheet-release-y', '0px');
+          node.style.setProperty('--pf-sheet-y', '0px');
         });
+      } else {
+        node.style.setProperty('--pf-sheet-release-y', '0px');
+        node.style.setProperty('--pf-sheet-y', '0px');
       }
       suppressClickUntil = performance.now() + 400;
     };
@@ -174,6 +180,15 @@ export function useMobileSheetSurface(
         e.stopImmediatePropagation();
       }
     };
+    // A surface kept mounted between close and reopen must not come back at the offset it
+    // was swiped away from.
+    const stateObserver = new MutationObserver(() => {
+      if (node.dataset.state !== 'open' || gesture) return;
+      node.removeAttribute('data-pf-sheet-dragging');
+      node.style.setProperty('--pf-sheet-y', '0px');
+      node.style.setProperty('--pf-sheet-release-y', '0px');
+    });
+    stateObserver.observe(node, { attributes: true, attributeFilter: ['data-state'] });
     node.addEventListener('touchstart', touchStart, { passive: true });
     node.addEventListener('touchmove', touchMove, { passive: false });
     node.addEventListener('touchend', touchEnd, { passive: false });
@@ -183,6 +198,7 @@ export function useMobileSheetSurface(
     document.addEventListener('pointerup', pointerUp);
     node.addEventListener('click', click, true);
     return () => {
+      stateObserver.disconnect();
       viewport?.removeEventListener('resize', resize);
       viewport?.removeEventListener('scroll', resize);
       window.removeEventListener('resize', resize);

@@ -35,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { revealNewItem } from '@/lib/revealNewItem';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { type Task } from '@/domain/task/Task';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
@@ -2351,7 +2352,9 @@ export function TaskDrawer({
                         onNavigateToComment={flashComment}
                         onCommentCreated={(c) => {
                           onCommentCreatedRef.current?.(c);
-                          scrollBodyToBottom();
+                          // Свой комментарий — сразу на виду: докручиваем тот контейнер, что
+                          // реально скроллится (на телефоне это окно целиком, а не тело).
+                          revealNewItem(`comment-${c.id}`, bodyRef.current);
                           notifyChanged();
                         }}
                         onTaskChanged={() => notifyChanged()}
@@ -2709,6 +2712,8 @@ function TaskCommentsSection({
 
   const handleCreated = (created: TaskComment): void => {
     setComments((prev) => [...prev, created]);
+    // Ответ или комментарий из встроенного композера — тоже сразу на виду.
+    revealNewItem(`comment-${created.id}`);
   };
 
   // Expose for external composer (footer of TaskDrawer).

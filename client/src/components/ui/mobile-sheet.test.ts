@@ -71,3 +71,49 @@ test('swipe uses the existing close callback, preserves a rejected close, and ca
     host.remove();
   }
 });
+
+test('a fast swipe that closes the sheet leaves it where the finger let go (no glide back up)', async () => {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  function Harness() {
+    const [open, setOpen] = React.useState(true);
+    const { ref: surfaceRef, closeRef } = useMobileSheetSurface(true);
+    return React.createElement(
+      'div',
+      { ref: surfaceRef, 'data-pf-mobile-sheet': 'true', 'data-state': open ? 'open' : 'closed' },
+      React.createElement(
+        'button',
+        { ref: closeRef, 'data-pf-sheet-handle': '', onClick: () => setOpen(false) },
+        'Закрыть',
+      ),
+    );
+  }
+  await act(async () => root.render(React.createElement(Harness)));
+  const sheet = host.firstElementChild as HTMLElement;
+  const handle = sheet.querySelector('button')!;
+  const touch = (type: string, x: number, y: number, count = 1): void => {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'touches', {
+      value: Array.from({ length: count }, () => ({ clientX: x, clientY: y })),
+    });
+    handle.dispatchEvent(event);
+  };
+  try {
+    await act(async () => {
+      touch('touchstart', 100, 100);
+      touch('touchmove', 100, 180);
+      touch('touchmove', 100, 320);
+      touch('touchend', 100, 320, 0);
+    });
+    await act(async () => new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))));
+    assert.equal(sheet.dataset.state, 'closed');
+    // The exit animation starts from the release point, and the base transform stays there.
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-release-y'), '220px');
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-y'), '220px');
+    assert.equal(sheet.hasAttribute('data-pf-sheet-dragging'), true);
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});

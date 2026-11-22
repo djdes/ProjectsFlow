@@ -1391,6 +1391,56 @@ export const scenarios = [
   },
 
   {
+    id: 'task-comment-reveal',
+    title: 'Комментарий: свой виден над полем ввода, ссылка с «/» не открывает меню',
+    matrix: [['phone', 'light']],
+    async run(t) {
+      const { page } = t;
+      await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/t-home`, { ready: () => page.locator('[data-pf-comment-composer]:visible') });
+      const composer = page.locator('[data-pf-comment-composer]:visible');
+      const editor = composer.locator('.ProseMirror').first();
+      const menus = () => page.evaluate(() => [...document.querySelectorAll('.shadow-menu')].map((m) => m.textContent ?? ''));
+      // 22.11: the «/» menu fired on any «/», a link «…/download/MagChef.apk» in a description
+      // showed «Ничего не найдено» when the task opened. Now «/» works at a line start only.
+      await t.check('ссылка с «/» в поле не открывает меню, «/» в начале строки — открывает', async () => {
+        await editor.tap();
+        await page.keyboard.type('Сборка https://example.com/latest/download/App.apk');
+        await page.waitForTimeout(250);
+        const afterUrl = await menus();
+        t.assert(!afterUrl.some((m) => m.includes('Ничего не найдено')), `меню на ссылке: ${afterUrl.join(' | ')}`);
+        await page.keyboard.press('Control+A');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('/');
+        await t.waitFor(async () => (await menus()).some((m) => m.includes('Заголовок')), 'меню «/» не открылось в начале строки');
+        await page.keyboard.press('Escape');
+        await page.keyboard.press('Backspace');
+      });
+      // 22.11: after sending, the new comment was left under the composer — the phone scrolls
+      // the whole window, not the task body that used to be scrolled.
+      await t.check('после отправки свой комментарий целиком виден над полем ввода', async () => {
+        for (let i = 1; i <= 5; i += 1) {
+          await editor.tap();
+          await page.keyboard.type(`Проверка прокрутки ${i}: комментарий должен остаться на виду`);
+          await composer.getByRole('button', { name: /^Отправить/ }).first().tap();
+          await t.waitFor(() => page.getByText(`Проверка прокрутки ${i}:`).isVisible(), `комментарий ${i} не появился`);
+          await page.waitForTimeout(400);
+          const box = await page.evaluate((n) => {
+            const items = [...document.querySelectorAll('[id^="comment-"]')];
+            const last = items[items.length - 1];
+            const comp = [...document.querySelectorAll('[data-pf-comment-composer]')].map((e) => e.getBoundingClientRect()).find((r) => r.height > 0);
+            return last && comp ? { text: last.textContent ?? '', bottom: Math.round(last.getBoundingClientRect().bottom), top: Math.round(last.getBoundingClientRect().top), composerTop: Math.round(comp.top) } : null;
+          }, i);
+          t.assert(box, 'нет комментария или поля ввода');
+          t.assert(box.text.includes(`Проверка прокрутки ${i}:`), `последний в ленте — не новый комментарий ${i}`);
+          t.assert(box.bottom <= box.composerTop + 1, `комментарий ${i} под полем ввода: низ ${box.bottom}, поле с ${box.composerTop}`);
+          t.assert(box.top >= 0, `комментарий ${i} ушёл вверх за край: ${box.top}`);
+        }
+      });
+      await t.pageChecks('окно задачи после пяти комментариев');
+    },
+  },
+
+  {
     id: 'visual-rules',
     title: 'Вид: мало цветов рамок, шапка и нижняя навигация без линий',
     matrix: [['phone', 'light'], ['phone', 'dark']],

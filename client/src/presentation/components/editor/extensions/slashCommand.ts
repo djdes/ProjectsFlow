@@ -209,8 +209,13 @@ export const SlashCommand = Extension.create({
     const suggestion: Omit<SuggestionOptions<SlashItem>, 'editor'> = {
       char: '/',
       startOfLine: false,
-      // null — не ограничивать префикс перед «/» (иначе «/» в некоторых позициях не триггерит меню).
-      allowedPrefixes: null,
+      // «/» открывает меню в начале строки и после пробела (или скобки/кавычки), но не
+      // внутри слова: раньше (allowedPrefixes: null) меню срабатывало на любой «/» — и на
+      // ссылке вида «…/download/MagChef.apk» в описании показывало «Ничего не найдено».
+      allowedPrefixes: [' ', '\u00a0', '(', '«', '"'],
+      // Меню — только пока в поле печатают: курсор в конце описания при открытии задачи
+      // (не в фокусе) не должен его открывать.
+      allow: ({ editor }) => editor.isFocused,
       items: ({ query }) =>
         SLASH_ITEMS.filter((i) => i.label.toLowerCase().includes(query.toLowerCase())),
       command: ({ editor, range, props }) => {
