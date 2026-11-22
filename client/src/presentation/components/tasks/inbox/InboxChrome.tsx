@@ -69,7 +69,7 @@ export function InboxSearch({
             onChange('');
           }
         }}
-        className="h-11 min-w-0 w-full rounded-md border border-input bg-field pe-11 ps-8 text-base transition-colors placeholder:text-muted-foreground/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:h-8 md:pe-9 md:text-ui [&::-webkit-search-cancel-button]:hidden"
+        className="h-11 min-w-0 w-full text-ellipsis rounded-md border border-input bg-field pe-11 ps-8 text-base transition-colors placeholder:text-muted-foreground/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:h-8 md:pe-9 md:text-ui [&::-webkit-search-cancel-button]:hidden"
       />
       {value ? (
         <button

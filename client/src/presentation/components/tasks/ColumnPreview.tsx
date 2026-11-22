@@ -7,8 +7,20 @@ import { useExitingListItems } from '@/presentation/hooks/useExitingListItems';
 // Карточки за пределами видимой области пропускают вёрстку и отрисовку через
 // content-visibility — так длинная колонка не «вешает» скролл на слабых устройствах
 // (ровно тот сценарий, ради которого раньше существовало скрытие).
+//
+// content-visibility:auto включает paint-containment: всё, что карточка рисует СНАРУЖИ
+// своей рамки, срезается по краю обёртки. Так пропадало кольцо и ореол .pf-unread /
+// .pf-urgent (box-shadow) — непрочитанная задача во «Входящих» получала синюю черту только
+// в углах. overflow-clip-margin отодвигает край среза на ширину ореола.
 export const COLUMN_SCROLL_CLASS =
-  'max-h-[calc(100dvh-14rem)] overflow-y-auto overscroll-contain pf-scroll-thin [&>*]:[content-visibility:auto] [&>*]:[contain-intrinsic-size:auto_7rem]';
+  'max-h-[calc(100dvh-14rem)] overflow-y-auto overscroll-contain pf-scroll-thin [&>*]:[content-visibility:auto] [&>*]:[contain-intrinsic-size:auto_7rem] [&>*]:[overflow-clip-margin:6px]';
+
+// Поля для свечения карточки внутри прокручиваемой колонки: overflow-y-auto режет и
+// горизонталь, а ореол .pf-unread/.pf-urgent лежит СНАРУЖИ карточки. Без полей внутри
+// прокрутки он срезался по бокам. Отрицательный отступ съедает p-1.5 самой колонки,
+// так что карточки остаются на прежнем месте. На доске (KanbanColumn) поля p-1.5 и так
+// стоят внутри прокрутки.
+export const UNREAD_GLOW_GUTTER_CLASS = '-mx-1.5 px-1.5';
 
 // Зазор между карточками в стопке: колонки доски и «Входящих», полки «На утверждении» и
 // «В работе», группы раздела «Сейчас». Дизайн C4 — 5px на десктопе. На телефоне карточки
