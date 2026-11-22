@@ -28,7 +28,7 @@ import {
 import { getEventCoordinates } from '@dnd-kit/utilities';
 import { STATUS_LABEL, canSendToWorker, canTakeToManual } from './statusLabels';
 import { WorkerHandoffMenu } from './WorkerHandoffMenu';
-import { WorkerHandoffIcon, useWorkerHandoffAvailable } from './workerHandoff';
+import { useWorkerHandoffAvailable } from './workerHandoff';
 import {
   applyPatches,
   settledPatchIds,
@@ -56,7 +56,6 @@ import {
   ImageIcon,
   Inbox as InboxIcon,
   ListFilter,
-  Loader2,
   ShieldCheck,
   MessageSquare,
   Paperclip,
@@ -65,7 +64,6 @@ import {
   RotateCcw,
   Search,
   Sparkles,
-  Trash2,
   Users,
   X,
   type LucideIcon,
@@ -75,11 +73,12 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
+import { DIALOG_CLOSE_MS, playTaskExit } from '@/lib/taskExitFx';
 import { projectToneClass } from '@/lib/tone';
 import { useContainer } from '@/infrastructure/di/container';
 import { useCurrentUser } from '@/presentation/hooks/useCurrentUser';
 import { useCompletedToday } from '@/presentation/hooks/CompletedTodayProvider';
-import { useFlashExitPhase, EXIT_MS } from '@/presentation/hooks/useFlashExitPhase';
+import { EXIT_MS } from '@/presentation/hooks/useFlashExitPhase';
 import { useExitingListItems } from '@/presentation/hooks/useExitingListItems';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
 import { useFocusedInbox } from '@/presentation/hooks/FocusedInboxProvider';
@@ -153,6 +152,7 @@ import { OPEN_TASK_CARD_CLASS, TASK_CARD_BODY_CLASS, taskCardTitleClass } from '
 import { splitTitleBody, plainTaskTitle } from '@/lib/taskTitleBody';
 import { Markdown } from '@/presentation/components/markdown/Markdown';
 import { InboxCheckbox } from './InboxCheckbox';
+import { TaskActionButton, TaskActionIcon, taskActionClass } from './TaskActionButton';
 import { TaskGroupOriginBadge } from './TaskGroupOriginBadge';
 import { AssigneeBadge } from './AssigneeBadge';
 import { PriorityBadge } from './PriorityBadge';
@@ -170,6 +170,7 @@ import {
   buildToMeInboxBlockTasks,
   canOpenMemberBoard,
   canSendToApproval,
+  isHandWork,
   selectApprovalTasks,
   selectBoardTasks,
   type InboxBlockTask,
@@ -771,12 +772,14 @@ export function AssignedToMeBlock({
   const confirmDelete = async (): Promise<void> => {
     if (!deleteTarget || deleting) return;
     const target = deleteTarget;
-    // Карточка уходит СРАЗУ, диалог закрывается сразу — сеть догоняет фоном. Раньше здесь
+    // Диалог закрывается сразу, карточка разлетается на осколки и её место схлопывается
+    // (lib/taskExitFx), затем она уходит из данных — сеть догоняет фоном. Раньше здесь
     // ждали и ответ сервера, и следующий за ним refresh(): секунда с лишним, за которую
     // казалось, что удаление не сработало.
-    setPatches((prev) => withPatch(prev, target.id, { kind: 'hidden' }));
     setDeleteTarget(null);
     setDeleting(true);
+    const fx = await playTaskExit(target.id, 'delete', { delay: DIALOG_CLOSE_MS });
+    setPatches((prev) => withPatch(prev, target.id, { kind: 'hidden' }));
     try {
       // projectId берём у самой задачи: в блоке лежат задачи из РАЗНЫХ проектов,
       // а не только из инбокса.
@@ -785,6 +788,7 @@ export function AssignedToMeBlock({
       handleToggled();
     } catch (err) {
       // Сеть подвела уже ПОСЛЕ того, как карточка исчезла — возвращаем её на место.
+      fx.restore();
       dropPatch(target.id);
       toast.error(`Не удалось удалить: ${(err as Error).message}`);
     } finally {
@@ -1534,8 +1538,8 @@ export function AssignedToMeBlock({
   // и открываем диалог, вместо мгновенного переноса.
   const [rejectTarget, setRejectTarget] = useState<InboxBlockTask | null>(null);
 
-  // Сама сетевая мутация, БЕЗ конфетти/анимации — их ведёт ApprovalItemCard (flash→exit,
-  // тот же паттерн, что и AcceptedCard.completePhase). Раньше конфетти и тост стреляли
+  // Сама сетевая мутация, БЕЗ конфетти/анимации — их ведёт ApprovalItemCard (уход карточки
+  // через lib/taskExitFx, тот же, что у «выполнено» на AcceptedCard). Раньше конфетти и тост стреляли
   // сразу по ответу сервера, а карточка ждала ещё refresh() (3 GET) + onChanged() (ещё
   // GET) — ощущалось как «нажал, и ничего не произошло». Теперь карточка скрывается
   // локально ДО того, как эта функция вообще вызвана (после 500мс анимации), а refresh()
@@ -1681,13 +1685,12 @@ export function AssignedToMeBlock({
   const canTake = (item: InboxBlockTask): boolean => item.canModify && canTakeToManual(item.status);
   const takeToWorkAction = (item: InboxBlockTask): React.ReactNode =>
     canTake(item) ? (
-      <QuickAction
+      <TaskActionButton
+        icon="play"
+        tone="manual"
         label="Взять в работу"
-        className="text-manual"
         onClick={() => void setWorkStatus(item, 'manual')}
-      >
-        <Play className="size-3 fill-current" />
-      </QuickAction>
+      />
     ) : null;
   // «Передать воркеру» — только проектные задачи очереди: полки «В работе»/«На утверждении»
   // рендерят свои действия, а в «Личных» колонка «Воркер» не для этого.
@@ -1697,10 +1700,11 @@ export function AssignedToMeBlock({
     canHandOff(item) ? (
       <WorkerHandoffMenu
         runMode={item.runMode}
-        className={cn(QUICK_ACTION_CLASS, 'text-primary')}
+        className={taskActionClass()}
+        tone="primary"
         onPick={(mode) => void setWorkStatus(item, 'todo', mode)}
       >
-        <WorkerHandoffIcon className="size-3.5" />
+        <TaskActionIcon name="worker" />
       </WorkerHandoffMenu>
     ) : null;
   // Свайп вправо на тач-экране — «дальше по процессу»: карточка очереди → в работу; карточка
@@ -1717,10 +1721,19 @@ export function AssignedToMeBlock({
       : null;
   const manualSwipe = (item: InboxBlockTask): SwipeAction | null => {
     if (selectionActive || !item.canModify) return null;
+    // Карточка уходит с полки «В работе»: та же анимация ухода, что у кнопки «готово».
     if (approvalEnabled && canSendToApproval(item, user?.id ?? null)) {
-      return { label: 'На утверждение', tone: 'approval', onCommit: () => void sendToApproval(item) };
+      return {
+        label: 'На утверждение',
+        tone: 'approval',
+        onCommit: () => void playTaskExit(item.id, 'complete').then(() => sendToApproval(item)),
+      };
     }
-    return { label: 'Готово', tone: 'done', onCommit: () => void completeTask(item) };
+    return {
+      label: 'Готово',
+      tone: 'done',
+      onCommit: () => void playTaskExit(item.id, 'complete').then(() => completeTask(item)),
+    };
   };
   // Карточка очереди — одна разметка для колонок на десктопе и групп на телефоне.
   const renderQueueCard = (
@@ -1785,6 +1798,27 @@ export function AssignedToMeBlock({
   // фильтры ответственного/проекта (только вкладка «Для всех»).
   const hasLocalFilters =
     normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null || replyFilterOn || groupOnly;
+  // «Ответить» и чипы срока — взаимоисключающие быстрые срезы. Раньше «@» включался поверх
+  // выбранного «Просрочено»: вопрос в непросроченной задаче прятался сроком, а чип честно
+  // показывал «1» — «ответить нужно, а отвечать некому». Теперь «@» сбрасывает срок, а на
+  // телефоне открывает раздел, где эти задачи лежат; выбор срока выключает «@».
+  const toggleReplyOnly = (): void => {
+    if (replyOnly) {
+      setReplyOnly(false);
+      return;
+    }
+    setReplyOnly(true);
+    setDue(null);
+    if (isWide) return;
+    const inNow = awaitingReplyTasks.some((t) => t.status === 'pending_approval' || isHandWork(t, workerEnabled));
+    const inQueue = awaitingReplyTasks.some((t) => t.status !== 'pending_approval' && !isHandWork(t, workerEnabled));
+    if (section === 'now' && !inNow && inQueue) setMobileSection('queue');
+    else if (section === 'queue' && !inQueue && inNow) setMobileSection('now');
+  };
+  const changeDue = (next: DueKind | null): void => {
+    setDue(next);
+    if (next !== null) setReplyOnly(false);
+  };
   const resetFilters = (): void => {
     setQuery('');
     setSearchOpen(false);
@@ -2161,13 +2195,11 @@ export function AssignedToMeBlock({
           renderActions={(t) => (
             <>
               {t.canModify && (
-                <QuickAction
+                <TaskActionButton
+                  icon="rotate"
                   label="Вернуть в очередь"
-                  className="text-muted-foreground hover:text-foreground"
                   onClick={() => void setWorkStatus(t, 'backlog')}
-                >
-                  <RotateCcw className="size-3.5" />
-                </QuickAction>
+                />
               )}
             </>
           )}
@@ -2467,12 +2499,12 @@ export function AssignedToMeBlock({
   // сроков с поиском и действиями у правого края.
   const dueRowInner = (
     <div className={cn('flex items-center gap-x-2 gap-y-1.5', isWide ? 'flex-wrap' : 'w-max gap-x-1.5')}>
-      <DueFilterChips value={due} onChange={setDue} counts={dueCounts} wrap={isWide} />
+      <DueFilterChips value={due} onChange={changeDue} counts={dueCounts} wrap={isWide} />
       {!focusedMemberId && (replyFilterOn || awaitingReplyTasks.length > 0) && (
         <ReplyFilterChip
           active={replyFilterOn}
           count={awaitingReplyTasks.length}
-          onToggle={() => setReplyOnly((on) => !on)}
+          onToggle={toggleReplyOnly}
         />
       )}
       {(groupOnly || groupTaskCount > 0) && (
@@ -2969,38 +3001,6 @@ function SwipeWrap({
     <SwipeToAct action={action} disabled={disabled}>
       {children}
     </SwipeToAct>
-  );
-}
-
-// Кнопка в плашке быстрых действий карточки (взять в работу, сдать, вернуть). Нажатие не
-// проваливается в карточку и не стартует перетаскивание.
-const QUICK_ACTION_CLASS =
-  'grid size-6 shrink-0 place-items-center rounded-[5px] transition-colors hover:bg-hover max-sm:size-8';
-function QuickAction({
-  label,
-  className,
-  onClick,
-  children,
-}: {
-  label: string;
-  className?: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      onPointerDown={(e) => e.stopPropagation()}
-      className={cn(QUICK_ACTION_CLASS, className)}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -3618,10 +3618,10 @@ function ApprovalShelf({
   );
 }
 
-// Карточка полки «На утверждении»: кнопка «Принять» проигрывает тот же паттерн, что и
-// AcceptedCard.completePhase (flash 200мс → collapse 300мс → сеть после), только триггером
-// служит явная кнопка, а не жест по самой карточке. Раньше конфетти/тост стреляли сразу
-// после ответа сервера, а карточка висела до конца refresh() — казалось, что клик не сработал.
+// Карточка полки «На утверждении»: «Принять» играет тот же уход карточки, что и «выполнено»
+// на AcceptedCard (lib/taskExitFx: штамп галки → зелёная волна → уход вправо → схлопывание),
+// и только потом сеть. Раньше конфетти/тост стреляли сразу после ответа сервера, а карточка
+// висела до конца refresh() — казалось, что клик не сработал.
 function ApprovalItemCard({
   item,
   open = false,
@@ -3650,55 +3650,52 @@ function ApprovalItemCard({
   onSelectToggle?: (taskId: string, mods: SelectModifiers) => void;
 }): React.ReactElement {
   const { celebrate, forget } = useCompletedToday();
-  // Общий движок фаз (useFlashExitPhase, см. AcceptedCard.completePhase ниже и сам хук):
-  // в зависимостях его эффекта — только item.id, а onAccept/onError уходят через ref
-  // внутри хука. Это важно именно здесь — полка рендерит НЕСКОЛЬКО таких карточек сразу,
-  // и refresh() от соседней (свой же после её приёмки, SSE-эхо, mount/visibilitychange)
-  // пересобирает approvalTasks и меняет ссылку на item у ВСЕХ смонтированных карточек.
-  const { phase, start: startPhase } = useFlashExitPhase(
-    item.id,
-    () => onAccept(item),
-    (err) => {
+  // «Принять»: галка штампуется на кнопке, карточка заливается зелёным и уходит вправо, место
+  // на полке схлопывается (lib/taskExitFx) — и только потом сеть. Раньше конфетти/тост
+  // стреляли сразу после ответа сервера, а карточка висела до конца refresh().
+  const [accepting, setAccepting] = useState(false);
+  const startAccept = async (origin: Element | null = null): Promise<void> => {
+    if (accepting) return;
+    setAccepting(true);
+    // Конфетти — в момент нажатия, не после сети: это и есть мгновенный отклик. Если move
+    // всё же упадёт, forget() ниже откатит счётчик.
+    celebrate(item.id);
+    const fx = await playTaskExit(item.id, 'complete', { origin });
+    try {
+      await onAccept(item);
+    } catch (err) {
       // Сеть подвела уже ПОСЛЕ того, как карточка визуально исчезла — возвращаем её
       // и снимаем преждевременно засчитанный праздник (forget пересчитает цифру с
       // сервера, как и в rejectApproval/withdrawApproval).
+      fx.restore();
       forget(item.id);
       toast.error(`Не удалось принять: ${(err as Error).message}`);
-    },
-  );
-
-  const startAccept = (): void => {
-    // Конфетти — в момент клика, не после сети: это и есть мгновенный отклик. Если move
-    // всё же упадёт, forget() выше откатит счётчик. start() сам no-op'ает, если фаза уже
-    // не idle (кнопка и так disabled, это подстраховка).
-    celebrate(item.id);
-    startPhase();
+    } finally {
+      setAccepting(false);
+    }
   };
-
-  const accepting = phase !== 'idle';
 
   // Явные кнопки внутри карточки, а не только чекбокс: приёмка — решение, а не отметка.
   // В режиме выделения их прячем: решение принимают по одной задаче, а не пачкой.
   const footer = selecting ? null : isApprover ? (
     <div className="flex gap-1.5">
+      {/* Высота — тач-минимум 44px на телефоне, 26px на десктопе; галка — тот же глиф, что
+          у «выполнено» на карточках, и так же прорисовывается при наведении. */}
       <button
         type="button"
-        onClick={startAccept}
+        // Штамп галки ложится на галку самой кнопки.
+        onClick={(e) => void startAccept(e.currentTarget.querySelector('svg') ?? e.currentTarget)}
         disabled={accepting}
-        className="inline-flex h-9 items-center gap-1.5 rounded-md bg-done-soft px-2.5 text-meta font-semibold text-done-ink transition-colors hover:bg-done-soft-hover disabled:cursor-not-allowed disabled:opacity-70 sm:h-[26px]"
+        className="pf-ai-hover inline-flex h-11 items-center gap-1.5 rounded-[10px] bg-done-soft ps-3 pe-3.5 text-meta font-semibold text-done-ink transition-[background-color,transform] duration-150 hover:bg-done-soft-hover disabled:cursor-not-allowed disabled:opacity-70 motion-safe:active:scale-95 sm:h-[26px] sm:rounded-md sm:ps-2 sm:pe-2.5"
       >
-        {accepting ? (
-          <Loader2 className="size-3 motion-safe:animate-spin" />
-        ) : (
-          <Check className="size-3.5" strokeWidth={2.6} />
-        )}
+        <TaskActionIcon name="check" className="size-[18px] [stroke-width:2.4] sm:size-3.5" />
         Принять
       </button>
       <button
         type="button"
         onClick={onReject}
         disabled={accepting}
-        className="inline-flex h-9 items-center rounded-md px-2.5 text-meta text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:h-[26px]"
+        className="inline-flex h-11 items-center rounded-[10px] px-3 text-meta text-muted-foreground transition-colors hover:bg-hover hover:text-foreground active:bg-active disabled:cursor-not-allowed disabled:opacity-50 sm:h-[26px] sm:rounded-md sm:px-2.5"
       >
         Вернуть
       </button>
@@ -3720,30 +3717,15 @@ function ApprovalItemCard({
   ) : null;
 
   return (
-    // Тот же коллапс-паттерн, что у AcceptedCard: схлопывание по высоте, соседи по стопке
-    // подтягиваются плавно. data-pf-collapse — едет даже при выключенных на тач анимациях
-    // (globals.css .pf-no-motion исключение), полка «На утверждении» видна и на телефоне.
-    <div
-      data-pf-collapse
-      className={cn(
-        'grid transition-opacity duration-300 ease-out motion-safe:transition-[grid-template-rows,opacity]',
-        phase === 'exit' && 'opacity-0',
-      )}
-      style={{ gridTemplateRows: phase === 'exit' ? '0fr' : '1fr' }}
-    >
-      <div className={cn('min-h-0 min-w-0', phase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
-        <div
-          className={cn(
-            'rounded-lg transition-[box-shadow] duration-200 motion-safe:transition-[transform,box-shadow]',
-            phase === 'flash' && 'scale-[1.02] ring-2 ring-done/60',
-            phase === 'exit' && 'scale-[0.96]',
-          )}
-        >
+    // Уход карточки играет lib/taskExitFx (см. startAccept) — здесь только разметка.
+    <div className="grid">
+      <div className="min-h-0 min-w-0">
+        <div className="rounded-lg">
           {/* Свайп вправо на тач-экране — «Принять» (тот же путь, что у кнопки). */}
           <SwipeWrap
             action={
               isApprover && !selecting && !accepting
-                ? { label: 'Принять', tone: 'done', onCommit: startAccept }
+                ? { label: 'Принять', tone: 'done', onCommit: () => void startAccept() }
                 : null
             }
           >
@@ -4841,12 +4823,16 @@ function AcceptedCard({
   footer = null,
   showAssignee = false,
   dueOnTop = false,
+  doneLeaves = true,
 }: {
   item: InboxBlockTask;
   open?: boolean;
   onOpen: () => void;
   onChanged: () => void;
   onDelete: () => void;
+  // Отмеченная выполненной карточка уходит из списка (выполненные скрыты) — анимация ухода;
+  // false — остаётся на месте зачёркнутой, только штамп галки и зелёная вспышка.
+  doneLeaves?: boolean;
   // При сортировке «по дате создания» показываем дату создания в нижней строке.
   showCreatedAt?: boolean;
   // При сортировке «по проекту» колонка уже названа проектом — метка на карточке не нужна.
@@ -4872,19 +4858,15 @@ function AcceptedCard({
   const { user: currentUser } = useCurrentUser();
   const { celebrate } = useCompletedToday();
   const { isUnread } = useUnreadTasks();
-  // ПКМ по карточке = «выполнить»: карточка мигает зелёным, затем плавно схлопывается и
-  // исчезает, и только после анимации коммитим move→done (визуально её уже нет — рефетч
-  // ниже не даёт скачка). Фазы: idle → flash (вспышка) → exit (коллапс+затухание). Движок
-  // фаз — общий хук useFlashExitPhase (см. его же в ApprovalItemCard выше): в зависимостях
-  // его внутреннего эффекта только item.id, а не сторонние onChanged/onCommit — иначе
-  // посторонний refresh() посреди анимации сбрасывал бы уже тикающий таймер.
-  // Держать ли серую вуаль во время анимации. true только для Ctrl-пути, где она уже видна
-  // под курсором: снять её на клике — из-под неё на миг проступит текст. Для ПКМ остаётся
-  // false, иначе вуаль резко «выпрыгнет» на пустом месте.
-  const [completeVeiled, setCompleteVeiled] = useState(false);
-  const { phase: completePhase, start: startCompletePhase } = useFlashExitPhase(
-    item.id,
-    async () => {
+  // ПКМ или Ctrl/⌘+клик по карточке = «выполнить»: галка штампуется в точке нажатия,
+  // карточка заливается зелёным и уходит вправо, место схлопывается (lib/taskExitFx), и только
+  // потом move→done — визуально её уже нет, рефетч не даёт скачка.
+  const [completing, setCompleting] = useState(false);
+  const startComplete = async (origin: { x: number; y: number }): Promise<void> => {
+    if (completing) return;
+    setCompleting(true);
+    const fx = await playTaskExit(item.id, 'complete', { origin, leave: doneLeaves });
+    try {
       await taskRepository.move(item.projectId, item.id, {
         targetStatus: 'done',
         beforeTaskId: null,
@@ -4892,32 +4874,26 @@ function AcceptedCard({
       });
       celebrate(item.id);
       onChanged();
-    },
-    (err) => {
-      setCompleteVeiled(false);
+    } catch (err) {
+      fx.restore();
       toast.error(`Не удалось выполнить: ${(err as Error).message}`);
-    },
-  );
-
-  // Единая точка запуска для обоих жестов: withVeil — оставлять ли серую вуаль на анимацию.
-  const startComplete = (withVeil: boolean): void => {
-    setCompleteVeiled(withVeil);
-    startCompletePhase();
+    } finally {
+      setCompleting(false);
+    }
   };
 
   const completeByContextMenu = (e: React.MouseEvent): void => {
     // Только для своих задач, не в режиме выделения и не по уже выполненной — иначе
     // отдаём браузерное контекстное меню (preventDefault не зовём).
-    if (selecting || !item.canModify || isDone || completePhase !== 'idle') return;
+    if (selecting || !item.canModify || isDone || completing) return;
     e.preventDefault();
-    startComplete(false);
+    void startComplete({ x: e.clientX, y: e.clientY });
   };
 
   // Второй способ — Ctrl/⌘ + ЛКМ. При зажатом модификаторе на наведённой карточке
   // показываем серый оверлей с галочкой (аффорданс), а клик по ней — выполняет.
   const ctrlHeld = useCtrlOrMetaHeld();
-  const completeArmed = ctrlHeld && item.canModify && !isDone && !selecting && completePhase === 'idle';
-  const completing = completePhase !== 'idle';
+  const completeArmed = ctrlHeld && item.canModify && !isDone && !selecting && !completing;
 
   // Выделять можно ЛЮБУЮ карточку, в том числе без прав на изменение: пользователь хочет
   // собирать пачку свободно. Действие по такой задаче честно попадёт в «не удалось» —
@@ -4942,29 +4918,40 @@ function AcceptedCard({
 
   const showActions = !selecting && !hideQuickActions;
   // Кнопки действий: свои (extraActions) + «выполнено» + «удалить». Рендерятся в ДВУХ
-  // раскладках: десктоп — плавающая плашка по hover, мобила — ряд под текстом.
+  // раскладках: десктоп — плавающая плашка по hover, мобила — ряд под текстом. Размеры —
+  // общие .pf-task-action (TaskActionButton): одна коробка и один глиф у всех кнопок.
+  const doneAction = (
+    <InboxCheckbox
+      key="done"
+      task={item}
+      lastDoneTaskId={null}
+      lastTodoTaskId={null}
+      onChanged={onChanged}
+      disabled={!item.canModify}
+      variant="toolbar"
+      exit={doneLeaves ? 'leave' : 'pulse'}
+    />
+  );
+  // Удаление показываем только при правах — кнопка, которая заведомо упадёт, хуже её
+  // отсутствия. Чекбокс же остаётся видимым (disabled) как индикатор статуса.
+  const deleteAction = item.canModify ? (
+    <TaskActionButton key="delete" icon="trash" tone="danger" label="Удалить" onClick={onDelete} />
+  ) : null;
+  // Десктоп: «готово» первым после своих действий, корзина — последней. Телефон — зеркально,
+  // как на карточке доски: «готово» у правого края, корзина ближе к середине карточки (промах
+  // по ней только спросит подтверждение).
   const actions = showActions ? (
     <>
       {extraActions}
-      <InboxCheckbox
-        task={item}
-        lastDoneTaskId={null}
-        lastTodoTaskId={null}
-        onChanged={onChanged}
-        disabled={!item.canModify}
-        variant="toolbar"
-      />
-      {/* Удаление показываем только при правах — кнопка, которая заведомо упадёт, хуже её
-          отсутствия. Чекбокс же остаётся видимым (disabled) как индикатор статуса. */}
-      {item.canModify && (
-        <QuickAction
-          label="Удалить"
-          className="text-muted-foreground hover:text-destructive"
-          onClick={onDelete}
-        >
-          <Trash2 className="size-3.5" />
-        </QuickAction>
-      )}
+      {doneAction}
+      {deleteAction}
+    </>
+  ) : null;
+  const mobileActions = showActions ? (
+    <>
+      {deleteAction}
+      {extraActions}
+      {doneAction}
     </>
   ) : null;
 
@@ -5018,25 +5005,15 @@ function AcceptedCard({
   ].filter(Boolean);
 
   return (
-    // Обёртка-аниматор: плавный коллапс высоты (grid 1fr→0fr) + затухание при «выполнено».
-    // overflow скрываем ТОЛЬКО на фазе exit — иначе на вспышке обрезался бы зелёный ring.
-    // data-pf-collapse — исключение из pf-no-motion (globals.css): едет даже когда анимации
-    // на тач выключены по умолчанию (MotionProvider), иначе на телефоне карточка исчезала бы
-    // скачком и соседи снизу прыгали бы на её место без анимации.
-    <div
-      data-pf-collapse
-      className={cn(
-        // grid-cols-[minmax(0,1fr)] — не косметика: у единственной неявной колонки размер
-        // `auto`, а её минимум = min-content содержимого. Карточка с неразрывным куском шире
-        // колонки (длинное имя проекта, ряд nowrap-бейджей на узком экране) раздвигала трек.
-        'grid grid-cols-[minmax(0,1fr)] transition-opacity duration-300 ease-out motion-safe:transition-[grid-template-rows,opacity]',
-        completePhase === 'exit' && 'opacity-0',
-      )}
-      style={{ gridTemplateRows: completePhase === 'exit' ? '0fr' : '1fr' }}
-    >
+    // Уход карточки (выполнена / удалена) играет lib/taskExitFx поверх этой разметки и сам
+    // схлопывает её место — здесь только сетка.
+    // grid-cols-[minmax(0,1fr)] — не косметика: у единственной неявной колонки размер
+    // `auto`, а её минимум = min-content содержимого. Карточка с неразрывным куском шире
+    // колонки (длинное имя проекта, ряд nowrap-бейджей на узком экране) раздвигала трек.
+    <div className="grid grid-cols-[minmax(0,1fr)]">
       {/* min-w-0 к min-h-0: у grid-элемента min-width по умолчанию auto (= min-content) и
           без сброса он сам распирает колонку — второй замок на ту же дверь. */}
-      <div className={cn('min-h-0 min-w-0', completePhase === 'exit' ? 'overflow-hidden' : 'overflow-visible')}>
+      <div className="min-h-0 min-w-0">
         <div
           // data-pf-task-id — по нему протяжка резолвит карточку под указателем (useDragSelect).
           data-pf-task-id={item.id}
@@ -5058,11 +5035,7 @@ function AcceptedCard({
             // Срочная: красное свечение. Перебивает синее — «сделай сейчас» важнее «посмотри».
             !open && !selecting && item.priority === 1 && 'pf-urgent',
             selected && 'ring-2 ring-primary',
-            open && completePhase === 'idle' && OPEN_TASK_CARD_CLASS,
-            // Вспышка «выполнено»: мягкий зелёный + лёгкий pop.
-            completePhase === 'flash' && 'scale-[1.02] bg-done-soft ring-2 ring-done/60',
-            // Уход: сжимаемся внутрь, обёртка коллапсит высоту и гасит opacity.
-            completePhase === 'exit' && 'scale-[0.96]',
+            open && !completing && OPEN_TASK_CARD_CLASS,
           )}
           onClick={(e) => {
             if (selecting) {
@@ -5072,9 +5045,9 @@ function AcceptedCard({
               return;
             }
             // Ctrl/⌘ + ЛКМ = выполнить (вместо открытия дравера).
-            if ((e.ctrlKey || e.metaKey) && item.canModify && !isDone && completePhase === 'idle') {
+            if ((e.ctrlKey || e.metaKey) && item.canModify && !isDone && !completing) {
               e.preventDefault();
-              startComplete(true);
+              void startComplete({ x: e.clientX, y: e.clientY });
               return;
             }
             onOpen();
@@ -5094,25 +5067,9 @@ function AcceptedCard({
           {/* Аффорданс «Ctrl+клик = выполнить»: серый оверлей с зелёной галочкой поверх
               карточки, виден только при зажатом Ctrl и наведении. pointer-events-none — клик
               идёт в карточку. */}
-          {(completeArmed || (completing && completeVeiled)) && (
-            <div
-              className={cn(
-                'pointer-events-none absolute inset-0 z-30 items-center justify-center rounded-lg bg-foreground/15 backdrop-blur-[1px] transition-opacity duration-150 dark:bg-black/40',
-                // Во время выполнения вуаль видна безусловно — не завязана на hover: при коллапсе
-                // карточка уезжает из-под курсора, и hover-условие сняло бы её на полпути.
-                completing
-                  ? 'flex opacity-100'
-                  : 'hidden opacity-0 group-hover:flex group-hover:opacity-100',
-              )}
-            >
-              <span
-                className={cn(
-                  'flex size-9 items-center justify-center rounded-full bg-done text-background shadow-float ring-2 ring-background/70 duration-200 motion-safe:transition-transform',
-                  // Галочка на вспышке слегка «подпрыгивает», на уходе — сжимается с карточкой.
-                  completePhase === 'flash' && 'scale-110',
-                  completePhase === 'exit' && 'scale-90',
-                )}
-              >
+          {completeArmed && (
+            <div className="pointer-events-none absolute inset-0 z-30 hidden items-center justify-center rounded-lg bg-foreground/15 opacity-0 backdrop-blur-[1px] transition-opacity duration-150 group-hover:flex group-hover:opacity-100 dark:bg-black/40">
+              <span className="flex size-9 items-center justify-center rounded-full bg-done text-background shadow-float ring-2 ring-background/70">
                 <Check className="size-5" strokeWidth={3} />
               </span>
             </div>
@@ -5212,15 +5169,15 @@ function AcceptedCard({
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-muted-foreground">
                 {bottomMeta}
               </div>
-              {/* Тач-размер 40px у всех кнопок ряда (как в мобильном ряду карточки доски):
-                  в 32px пальцем промахивались. */}
+              {/* Тач-размер 40px у всех кнопок ряда — задаёт .pf-task-action (как в мобильном
+                  ряду карточки доски). Порядок — зеркальный десктопному (см. mobileActions). */}
               <div
-                className="flex shrink-0 items-center gap-0.5 [&>button]:size-10 [&>button]:rounded-md [&_svg]:size-4"
+                className="flex shrink-0 items-center"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
               >
-                {actions}
+                {mobileActions}
               </div>
             </div>
           )}

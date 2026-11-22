@@ -530,8 +530,9 @@
        типа size-6/size-7 продолжают работать корректно — у них height задан явно).
        ИСКЛЮЧЕНИЯ: элементы с ФИКСИРОВАННОЙ формой, которым 44px ломает вид —
        переключатель (role=switch: h-6 w-11 → 44px делал из него 44×44 круг) и крестик
-       закрытия тоста (data-close-button: растягивался в овал). */
-    button:not([class*='size-']):not([role='switch']):not([data-close-button]) {
+       закрытия тоста (data-close-button: растягивался в овал) и кнопки-действия карточки
+       задачи (.pf-task-action — квадрат 40×40 одного размера у всего ряда, см. ниже). */
+    button:not([class*='size-']):not([role='switch']):not([data-close-button]):not(.pf-task-action) {
       min-height: 44px;
     }
   }
@@ -1359,5 +1360,143 @@ html[data-pf-modality='pointer'] :focus-visible {
   .ProseMirror ul[data-type='taskList'] li[data-checked='true'] > div {
     color: oklch(var(--muted-foreground));
     text-decoration: line-through;
+  }
+}
+
+/* Быстрые действия карточки задачи (TaskActionButton): одна коробка, один глиф, одна толщина
+   линии. Десктоп — 24px/14px в плашке по наведению, телефон — 40px/18px в ряду под текстом.
+   Цвет — смысл действия (выполнено, в работу, воркер, удалить), размер и вес у всех одинаковые.
+   «Живая» часть иконки (крышка, галка, антенна…) двигается при наведении, фокусе и нажатии;
+   движение — только при prefers-reduced-motion: no-preference, нажатие — короткое сжатие. */
+@layer components {
+  .pf-task-action {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    border-radius: 6px;
+    color: oklch(var(--muted-foreground));
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background-color 150ms ease-out,
+      color 150ms ease-out,
+      transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 150ms ease-out;
+  }
+  .pf-task-action > svg {
+    inline-size: 14px;
+    block-size: 14px;
+    stroke-width: 2.25;
+    overflow: visible;
+  }
+  .pf-task-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+  .pf-task-action:focus-visible {
+    outline: 2px solid oklch(var(--ring));
+    outline-offset: 1px;
+  }
+
+  .pf-task-action[data-tone='done'] { color: oklch(var(--done)); }
+  .pf-task-action[data-tone='manual'] { color: oklch(var(--manual)); }
+  .pf-task-action[data-tone='primary'] { color: oklch(var(--primary)); }
+
+  .pf-task-action:not(:disabled):active,
+  .pf-task-action[data-state='open'] {
+    background-color: var(--active);
+  }
+  .pf-task-action[data-tone='neutral']:not(:disabled):active { color: oklch(var(--foreground)); }
+  .pf-task-action[data-tone='danger']:not(:disabled):active {
+    color: oklch(var(--destructive));
+    background-color: var(--destructive-soft);
+  }
+  .pf-task-action[data-tone='done']:not(:disabled):active { background-color: var(--done-soft); }
+  .pf-task-action[data-tone='manual']:not(:disabled):active { background-color: var(--manual-soft); }
+  .pf-task-action[data-tone='primary']:not(:disabled):active { background-color: var(--primary-soft); }
+
+  @media (hover: hover) {
+    .pf-task-action:not(:disabled):hover { background-color: var(--hover); }
+    .pf-task-action[data-tone='neutral']:not(:disabled):hover { color: oklch(var(--foreground)); }
+    .pf-task-action[data-tone='danger']:not(:disabled):hover {
+      color: oklch(var(--destructive));
+      background-color: var(--destructive-soft);
+    }
+    .pf-task-action[data-tone='done']:not(:disabled):hover { background-color: var(--done-soft); }
+    .pf-task-action[data-tone='manual']:not(:disabled):hover { background-color: var(--manual-soft); }
+    .pf-task-action[data-tone='primary']:not(:disabled):hover { background-color: var(--primary-soft); }
+  }
+
+  /* Телефон: тач-коробка 40px и глиф 18px — у всех кнопок ряда одинаково. */
+  @media not all and (min-width: 640px) {
+    .pf-task-action {
+      inline-size: 2.5rem;
+      block-size: 2.5rem;
+      border-radius: 10px;
+    }
+    .pf-task-action > svg {
+      inline-size: 18px;
+      block-size: 18px;
+      stroke-width: 2;
+    }
+  }
+
+  /* Части иконок двигаются в координатах viewBox (24×24). */
+  .pf-ai .pf-ai-lid,
+  .pf-ai .pf-ai-spin,
+  .pf-ai .pf-ai-nudge,
+  .pf-ai .pf-ai-antenna {
+    transform-box: view-box;
+  }
+  .pf-ai .pf-ai-lid { transform-origin: 21px 6px; }
+  .pf-ai .pf-ai-spin { transform-origin: 12px 12px; }
+  .pf-ai .pf-ai-antenna { transform-origin: 12px 8px; }
+  .pf-ai .pf-ai-draw { stroke-dasharray: 1; stroke-dashoffset: 0; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .pf-task-action:not(:disabled):active { transform: scale(0.88); }
+
+    .pf-ai .pf-ai-lid,
+    .pf-ai .pf-ai-spin,
+    .pf-ai .pf-ai-nudge,
+    .pf-ai .pf-ai-antenna {
+      transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .pf-ai[data-pf-ai='check'] { transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+    /* Наведение мышью, фокус с клавиатуры и само нажатие пальцем — одинаковый «ответ». */
+    .pf-task-action:not(:disabled):is(:focus-visible, :active) .pf-ai-lid { transform: translateY(-1.5px) rotate(14deg); }
+    .pf-task-action:not(:disabled):is(:focus-visible, :active) [data-pf-ai='undo'] .pf-ai-spin,
+    .pf-task-action:not(:disabled):is(:focus-visible, :active) [data-pf-ai='rotate'] .pf-ai-spin { transform: rotate(-50deg); }
+    .pf-task-action:not(:disabled):is(:focus-visible, :active) .pf-ai-nudge { transform: translateX(2px); }
+    .pf-task-action:not(:disabled):is(:focus-visible, :active) .pf-ai-antenna { transform: rotate(-14deg); }
+    .pf-task-action:not(:disabled):is(:focus-visible, :active) [data-pf-ai='check'] { transform: scale(1.18); }
+
+    @media (hover: hover) {
+      .pf-task-action:not(:disabled):hover .pf-ai-lid { transform: translateY(-1.5px) rotate(14deg); }
+      .pf-task-action:not(:disabled):hover [data-pf-ai='undo'] .pf-ai-spin,
+      .pf-task-action:not(:disabled):hover [data-pf-ai='rotate'] .pf-ai-spin { transform: rotate(-50deg); }
+      .pf-task-action:not(:disabled):hover .pf-ai-nudge { transform: translateX(2px); }
+      .pf-task-action:not(:disabled):hover .pf-ai-antenna { transform: rotate(-14deg); }
+      .pf-task-action:not(:disabled):hover [data-pf-ai='check'] { transform: scale(1.12); }
+      /* Галка заново прорисовывается при наведении. */
+      .pf-task-action:not(:disabled):hover .pf-ai-draw { animation: pf-ai-draw 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+      .pf-ai-hover:hover .pf-ai-draw { animation: pf-ai-draw 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+    }
+
+    /* Иконка, пришедшая на смену другой (галка ↔ «вернуть»), появляется с поворотом,
+       а не подменой: тот же объект меняет состояние. */
+    .pf-ai-enter { animation: pf-ai-enter 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+    .pf-ai-enter .pf-ai-draw { animation: pf-ai-draw 300ms cubic-bezier(0.22, 1, 0.36, 1) 60ms both; }
+  }
+
+  @keyframes pf-ai-draw {
+    from { stroke-dashoffset: 1; }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes pf-ai-enter {
+    from { transform: rotate(-90deg) scale(0.4); opacity: 0; }
+    to { transform: none; opacity: 1; }
   }
 }

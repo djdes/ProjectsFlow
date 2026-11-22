@@ -39,6 +39,7 @@ import {
 } from '@/domain/task/Task';
 import { DeadlinePicker } from './DeadlinePicker';
 import { RecipientPickerDialog } from './RecipientPickerDialog';
+import { DIALOG_CLOSE_MS, playTaskExit } from '@/lib/taskExitFx';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { copyTextFromPromise } from './copyToClipboard';
 import type { DigestChannel, DigestRecipient } from '@/application/task/TaskRepository';
@@ -224,7 +225,14 @@ export function BulkActionBar({
 
   const confirmDelete = (): void => {
     setConfirmDeleteOpen(false);
-    void run('Удалено', () => bulk.remove(selectedIds));
+    const ids = [...selectedIds];
+    void run('Удалено', async () => {
+      // Выбранные карточки разлетаются по очереди, места схлопываются — потом запрос.
+      const fx = await playTaskExit(ids, 'delete', { delay: DIALOG_CLOSE_MS, stagger: 60 });
+      const res = await bulk.remove(ids);
+      if (res.failed > 0) fx.restore();
+      return res;
+    });
   };
 
   const disabled = busy || exporting;

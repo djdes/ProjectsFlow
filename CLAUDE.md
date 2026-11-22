@@ -104,6 +104,10 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
   border-bs/be/rounded-bs/be` из плагина в tailwind.config), не `mt/pl/top/border-b`; движение
   (сдвиг, масштаб, вращение) — только под `motion-safe:`/`prefers-reduced-motion: no-preference`;
   `transition-all` не используем; размеры текста — шкала (`text-2xs` = 11px … `text-title`).
+- Быстрые действия карточки задачи (удалить, выполнено, в работу, воркеру) — `TaskActionButton`
+  (`.pf-task-action`: 24/14px на десктопе, 40/18px на телефоне, анимированные иконки). Уход карточки
+  при «принять/выполнено» и «удалить» — `lib/taskExitFx` (`playTaskExit`, затем мутация; при ошибке
+  `restore()`). Движение — по скиллу stageshow (`npx skills add benjitaylor/skills --skill stageshow`).
 - Шрифты подключаются через `@fontsource-variable/*` в `main.tsx`, без CDN.
 - `/llms.txt` (описание сайта для ИИ-помощников, llmstxt.org) — `landing/src/pages/llms.txt.ts`: собирается при
   сборке лендинга из `data/site.ts`, `data/pricing.ts`, `data/faq.ts` и коллекции блога; своего текста не содержит.

@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { DIALOG_CLOSE_MS, playTaskExit } from '@/lib/taskExitFx';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1097,12 +1098,17 @@ export function KanbanBoard({
   };
   const confirmDelete = async (): Promise<void> => {
     if (!deleteTarget || deleting) return;
+    const target = deleteTarget;
+    // Окно закрывается сразу, карточка разлетается на осколки, её место схлопывается
+    // (lib/taskExitFx) — и только потом запрос: список перерисуется без скачка.
+    setDeleteTarget(null);
     setDeleting(true);
+    const fx = await playTaskExit(target.id, 'delete', { delay: DIALOG_CLOSE_MS });
     try {
-      await remove(deleteTarget.id);
+      await remove(target.id);
       toast.success('Задача удалена');
-      setDeleteTarget(null);
     } catch (err) {
+      fx.restore();
       toast.error(`Не удалось удалить: ${(err as Error).message}`);
     } finally {
       setDeleting(false);
