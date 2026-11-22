@@ -144,7 +144,7 @@ export function MobileBottomNav(): React.ReactElement {
             ),
           );
           restore(index);
-          navigate(items[index]!.path, { viewTransition: wantsViewTransition() });
+          navigate(items[index]!.path, { viewTransition: wantsViewTransition(items[index]!.path, pathname) });
         }}
         onPointerCancel={() => {
           suppressClickRef.current = true;
@@ -180,7 +180,7 @@ export function MobileBottomNav(): React.ReactElement {
             data-pf-route={item.path}
             aria-label={item.label}
             aria-current={item.active ? 'page' : undefined}
-            onClick={() => pathname === item.path ? scrollMainToTop(animations) : navigate(item.path, { viewTransition: wantsViewTransition() })}
+            onClick={() => pathname === item.path ? scrollMainToTop(animations) : navigate(item.path, { viewTransition: wantsViewTransition(item.path, pathname) })}
             className={cn(
               'relative z-10 flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-2xs min-[360px]:px-2 leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
               item.active

@@ -4,7 +4,7 @@ import { useAppNavigation } from '@/presentation/components/experience/useAppNav
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Menu, Sparkles, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -42,7 +42,7 @@ import { AwaitingReplyProvider } from '@/presentation/hooks/AwaitingReplyProvide
 import { FocusedInboxProvider } from '@/presentation/hooks/FocusedInboxProvider';
 import { OPEN_INBOX_TASK_EVENT } from '@/presentation/components/tasks/AssignedTaskToast';
 import { SPOTLIGHT_TASK_EVENT } from '@/presentation/hooks/useSpotlightTask';
-import { CompletedTodayPill } from '@/presentation/components/stats/CompletedTodayPill';
+import { NotificationsBell } from '@/presentation/notifications/NotificationsBell';
 import { CompletionCelebration } from '@/presentation/components/stats/CompletionCelebration';
 import { ResizeHandleHint } from '@/presentation/components/layout/ResizeHandleHint';
 import { SidebarCollapsedContext } from './sidebarCollapsedContext';
@@ -438,16 +438,10 @@ function WorkspaceShell(): React.ReactElement {
                 <Menu className="size-5" />
               </Button>
               <QuickWorkspaceSwitcher />
-              <CompletedTodayPill />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="shrink-0 rounded-lg text-muted-foreground"
-                aria-label="Открыть ИИ и поддержку"
-                onClick={() => window.dispatchEvent(new CustomEvent('pf:open-help'))}
-              >
-                <Sparkles className="size-5" />
-              </Button>
+              {/* Справа — только уведомления. Счётчик «сделано сегодня» здесь читался как фоновый
+                  процесс и не нажимался, а ИИ уже есть в нижней навигации — второй вход
+                  с другим поведением путал (решение владельца 22.11). */}
+              <NotificationsBell />
             </header>
             <InstallAppPrompt variant="banner" />
             <main

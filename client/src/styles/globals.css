@@ -698,6 +698,34 @@ main[data-pf-scrolled='true'] .pf-sticky-surface {
     animation: none !important;
   }
 }
+/* Вкладка «ИИ» выезжает снизу, как лист, и уезжает вниз при уходе (lib/viewTransition). */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-pf-vt='ai-open']::view-transition-old(root) {
+    animation: pf-vt-out 180ms var(--pf-ease) both;
+  }
+  html[data-pf-vt='ai-open']::view-transition-new(root) {
+    animation: pf-vt-sheet-in 360ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+  html[data-pf-vt='ai-close']::view-transition-old(root) {
+    animation: pf-vt-sheet-out 280ms cubic-bezier(0.32, 0.72, 0, 1) both;
+    z-index: 1;
+  }
+  html[data-pf-vt='ai-close']::view-transition-new(root) {
+    animation: none;
+  }
+}
+@keyframes pf-vt-sheet-in {
+  from {
+    translate: 0 40%;
+    opacity: 0;
+  }
+}
+@keyframes pf-vt-sheet-out {
+  to {
+    translate: 0 40%;
+    opacity: 0;
+  }
+}
 @keyframes pf-vt-out {
   to {
     opacity: 0;

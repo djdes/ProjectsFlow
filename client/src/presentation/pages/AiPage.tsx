@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Sparkles } from 'lucide-react';
+import { LifeBuoy, Plus, Sparkles } from 'lucide-react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -112,6 +112,16 @@ export function AiPage(): React.ReactElement {
             >
               <Plus className="size-4" />
               Открыть пустой чат
+            </Button>
+            {/* Поддержка жила в шторке кнопки ИИ в шапке; кнопки больше нет — вход здесь. */}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => window.dispatchEvent(new CustomEvent('pf:open-help', { detail: { tab: 'support' } }))}
+              className="gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <LifeBuoy className="size-4" />
+              Написать в поддержку
             </Button>
           </div>
         </div>}
