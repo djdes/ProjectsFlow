@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronDown, Plus, Settings } from 'lucide-react';
+import { Building2, Check, ChevronsUpDown, Plus, Settings } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
@@ -35,9 +35,13 @@ export function QuickWorkspaceSwitcher(): React.ReactElement {
         title="Сменить пространство"
         className="flex min-h-11 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-1 text-start text-sm font-semibold transition-colors active:bg-accent data-[state=open]:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring [@media(hover:hover)_and_(pointer:fine)]:hover:bg-hover"
       >
-        <WorkspaceIcon name={workspace.name} icon={workspace.icon} className="size-5 shrink-0 text-2xs" />
+        {/* Общий значок «пространства» вместо буквы-аватара: буква читалась как проект или
+            профиль, а не как переключатель команды. Свои значки пространств — в списке ниже. */}
+        <span aria-hidden className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+          <Building2 className="size-4" />
+        </span>
         <span className="min-w-0 truncate">{workspace.name}</span>
-        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72" aria-label="Сменить пространство">
         <DropdownMenuLabel>Пространства</DropdownMenuLabel>

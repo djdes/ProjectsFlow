@@ -88,7 +88,7 @@ export const quickTaskSettingsScenarios = [
         const ws = t.state.workspaces.find((item) => item.id === target);
         await t.step(`шапка → ${ws.name}`, async () => {
           const trigger = page.getByRole('button', { name: /^Сменить пространство:/ });
-          t.assert(await trigger.locator('svg.lucide-chevron-down').isVisible(), 'стрелка переключения скрыта');
+          t.assert(await trigger.locator('svg.lucide-chevrons-up-down').isVisible(), 'стрелка переключения скрыта');
           const box = await trigger.boundingBox();
           t.assert(box && box.height >= 44, 'маленькая зона нажатия');
           await activate(t, trigger);

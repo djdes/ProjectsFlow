@@ -76,17 +76,19 @@ const INBOX_SECTION_SWITCH_REQUIRED = true;
 
 // ---------------------------------------------------------------- helpers ----
 
-const NOW = 'section[aria-label="Сейчас"]';
+const NOW = 'section[aria-label="В работе"]';
 const QUEUE = 'section[aria-label="Очередь"]';
 const card = (id) => `[data-pf-task-id="${id}"]`;
 
-// Tasks of the «Очередь» of my inbox: mine (projects + personal), without the two shelves.
+// Tasks of the «Очередь» of my inbox: mine (projects + personal), without the two shelves
+// and without finished ones — «Входящие» hide done tasks by default (lib/inboxDonePreference).
 const myQueueTasks = (state) =>
   state.tasks.filter(
     (task) =>
       task.assignee.userId === ME.id &&
       task.status !== 'manual' &&
-      task.status !== 'pending_approval',
+      task.status !== 'pending_approval' &&
+      task.status !== 'done',
   );
 const approvalTasks = (state) => state.tasks.filter((task) => task.status === 'pending_approval');
 const manualTasks = (state) =>
@@ -790,7 +792,10 @@ export const scenarios = [
       await t.check('лента «кто»: «Мои / Все» и аватары — в одну строку одной высоты, под аватарами имена', async () => {
         const boxes = await page.evaluate(() => {
           const rect = (el) => { const r = el.getBoundingClientRect(); return { top: Math.round(r.top), height: Math.round(r.height) }; };
-          const scope = [...document.querySelectorAll('[role="group"][aria-label="Чьи задачи"] button')].map(rect);
+          // Phone: «Мои / Все» are tiles like avatars — compare the square, not the label under it.
+          const scope = [...document.querySelectorAll('[role="group"][aria-label="Чьи задачи"] button')]
+            .map((el) => el.querySelector('[data-pf-who-tile]') ?? el)
+            .map(rect);
           const people = [...document.querySelectorAll('[role="group"][aria-label="Люди"] > *')];
           const avatars = people.map((el) => el.querySelector('[data-pf-who-avatar]')).filter(Boolean).map(rect);
           const names = people.map((el) => {
@@ -914,12 +919,8 @@ export const scenarios = [
           'нет POST /api/projects/p-shop/tasks/t-pay/move с targetStatus "done"',
         );
         await t.hidden(page.locator('[data-pf-dock-target]'), 'док целей после броска');
-        // «Скрыть выполненные» выключено — закрытая задача остаётся в очереди зачёркнутой,
-        // а её «выполнено» становится «снять отметку».
-        await t.visible(
-          queueCard.locator('button[aria-label="Снять отметку «выполнено»"]:visible'),
-          'карточка не стала выполненной',
-        );
+        // Выполненные во «Входящих» скрыты по умолчанию — закрытая задача уходит из очереди.
+        await t.hidden(queueCard, 'выполненная задача осталась в очереди');
       });
 
       await t.check('лупа раскрывает поиск, «домен» оставляет одну задачу, крестик закрывает', async () => {

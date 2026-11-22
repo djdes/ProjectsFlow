@@ -39,8 +39,12 @@ async function assertOnlyWorkspace(t, id) {
     return ids.length > 0 && ids.every((taskId) => t.state.projects.find((p) => p.id === t.state.tasks.find((task) => task.id === taskId)?.projectId)?.workspaceId === id);
   }, 'карточки другого пространства попали на экран');
   await t.waitFor(async () => t.journal.streamWorkspaces.includes(id), 'стрим уведомлений не привязан к новому пространству');
-  const count = t.state.completedByWorkspace[id];
-  await t.visible(t.page.locator(`[data-pf-completed-today][aria-label="Сегодня выполнено задач: ${count}"]`), 'счётчик текущего пространства');
+  // «Сделано сегодня» живёт в шапке только на десктопе: на телефоне справа в шапке —
+  // уведомления (22.11). Данные пространства на телефоне проверяют карточки и люди выше.
+  if (!t.isMobile) {
+    const count = t.state.completedByWorkspace[id];
+    await t.visible(t.page.locator(`[data-pf-completed-today][aria-label="Сегодня выполнено задач: ${count}"]`), 'счётчик текущего пространства');
+  }
   t.assert(t.journal.reads.some((r) => r.workspaceId === id && r.path === '/me/shared-members'), 'участники не перезагружены');
   t.assert(t.journal.reads.some((r) => r.workspaceId === id && r.path === '/assignees/mine'), 'задачи не перезагружены');
 }
@@ -282,11 +286,17 @@ export const workspaceIsolationScenarios = [
       }
       await t.page.locator(due('late')).click();
       if (t.isMobile) await t.check('единая геометрия мобильных фильтров', async () => {
-        const boxes = await Promise.all(['late', 'today', 'none'].map((f) => t.page.locator(due(f)).locator('..').boundingBox()));
+        // Чипы своей ширины в ленте, которая листается вбок: подпись целиком внутри чипа
+        // (раньше «Просрочено 11» вылезала за край равной колонки), высота одна — 44px.
+        const chips = ['late', 'today', 'none'].map((f) => t.page.locator(due(f)).locator('..'));
+        const boxes = await Promise.all(chips.map((chip) => chip.boundingBox()));
         t.assert(boxes.every(Boolean), 'нет фильтра');
+        for (const b of boxes) t.assert(b.height >= 44, 'фильтр слишком мал');
+        t.assert(Math.max(...boxes.map((b) => b.height)) - Math.min(...boxes.map((b) => b.height)) < 2, 'фильтры разной высоты');
+        for (const chip of chips) {
+          t.assert(await chip.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), 'подпись фильтра вылезает за край');
+        }
         const width = t.page.viewportSize().width;
-        for (const b of boxes) t.assert(b.x >= 0 && b.x + b.width <= width + 1 && b.height >= 44, 'фильтр обрезан или слишком мал');
-        t.assert(Math.max(...boxes.map((b) => b.width)) - Math.min(...boxes.map((b) => b.width)) < 2, 'фильтры разной ширины');
         const reset = await t.page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).boundingBox();
         t.assert(reset && reset.x >= 0 && reset.x + reset.width <= width && reset.height >= 44, 'сброс обрезан');
         const search = await t.page.getByRole('button', { name: 'Поиск по проектам и задачам', exact: true }).boundingBox();
