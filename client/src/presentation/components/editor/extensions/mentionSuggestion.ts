@@ -16,6 +16,9 @@ export function createMentionSuggestion(
 ): MentionOptions['suggestion'] {
   return {
     char: '@',
+    // Меню — только пока в поле печатают. Иначе оно открывалось само при открытии задачи:
+    // курсор стоит в конце описания, а там «@имя» из текста.
+    allow: ({ editor }) => editor.isFocused,
     items: ({ query }): SuggestionItem[] => {
       const q = query.toLowerCase();
       return members
