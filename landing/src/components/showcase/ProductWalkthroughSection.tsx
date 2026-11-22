@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Check,
   Copy,
@@ -13,6 +13,9 @@ import {
   DESKTOP_WORKFLOW_STEPS,
   type StackLayerId,
 } from '../../data/showcaseData';
+import { LiquidGroup, liquidItem } from './LiquidGroup';
+import { liquidMix } from '../../lib/liquid';
+import { useSwap } from './motionPresets';
 
 interface ProductWalkthroughSectionProps {
   onSelectLayer?: (layerId: StackLayerId) => void;
@@ -25,6 +28,7 @@ export const ProductWalkthroughSection: React.FC<ProductWalkthroughSectionProps>
   const [copied, setCopied] = useState<boolean>(false);
 
   const activeStep = DESKTOP_WORKFLOW_STEPS[activeIdx] ?? DESKTOP_WORKFLOW_STEPS[0]!;
+  const swap = useSwap(4);
 
   const handleSelectStep = (idx: number) => {
     setActiveIdx(idx);
@@ -67,6 +71,13 @@ export const ProductWalkthroughSection: React.FC<ProductWalkthroughSectionProps>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         {/* Left 4 cols: 3 Clean Numbered Step Cards (NO duplicate text boxes) */}
         <div className="lg:col-span-4 space-y-3.5">
+          {/* Белая карточка шага перетекает по столбцу (lib/liquid), подписи темнеют под ней. */}
+          <LiquidGroup
+            activeKey={activeIdx}
+            pill="#ffffff"
+            indicatorClassName="rounded-[26px] shadow-[0_24px_60px_rgba(0,0,0,0.5)]"
+            className="flex flex-col gap-3.5"
+          >
           {DESKTOP_WORKFLOW_STEPS.map((step, idx) => {
             const isSelected = idx === activeIdx;
             return (
@@ -74,26 +85,26 @@ export const ProductWalkthroughSection: React.FC<ProductWalkthroughSectionProps>
                 key={step.id}
                 type="button"
                 onClick={() => handleSelectStep(idx)}
-                className={`w-full text-left p-5 rounded-[26px] border transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-white text-[#12061c] border-white shadow-[0_24px_60px_rgba(0,0,0,0.5)] translate-x-1.5'
-                    : 'bg-black/40 text-white border-white/15 hover:bg-white/10'
-                }`}
+                aria-pressed={isSelected}
+                {...liquidItem(isSelected, {
+                  color: liquidMix('#12061c', '#ffffff'),
+                  borderColor: liquidMix('#ffffff', 'rgba(255,255,255,0.15)'),
+                })}
+                className="relative z-[1] w-full text-left p-5 rounded-[26px] border cursor-pointer [--liquid-off-bg:rgba(0,0,0,0.4)] hover:[--liquid-off-bg:rgba(255,255,255,0.1)]"
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <span
-                    className={`font-display font-black text-2xl ${
-                      isSelected ? 'text-rose-600' : 'text-white/45'
-                    }`}
+                    className="font-display font-black text-2xl"
+                    style={{ color: liquidMix('#e11d48', 'rgba(255,255,255,0.45)') }}
                   >
                     {step.stepNum}
                   </span>
                   <span
-                    className={`font-mono text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full ${
-                      isSelected
-                        ? 'bg-[#12061c] text-white'
-                        : 'bg-white/10 text-white/75'
-                    }`}
+                    className="font-mono text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full"
+                    style={{
+                      background: liquidMix('#12061c', 'rgba(255,255,255,0.1)'),
+                      color: liquidMix('#ffffff', 'rgba(255,255,255,0.75)'),
+                    }}
                   >
                     {step.subtitle}
                   </span>
@@ -103,15 +114,15 @@ export const ProductWalkthroughSection: React.FC<ProductWalkthroughSectionProps>
                   {step.title}
                 </h3>
                 <p
-                  className={`text-xs sm:text-sm leading-relaxed ${
-                    isSelected ? 'text-[#12061c]/75' : 'text-white/65'
-                  }`}
+                  className="text-xs sm:text-sm leading-relaxed"
+                  style={{ color: liquidMix('rgba(18,6,28,0.75)', 'rgba(255,255,255,0.65)') }}
                 >
                   {step.description}
                 </p>
               </button>
             );
           })}
+          </LiquidGroup>
 
           {/* Compact 1-Line Command Copier */}
           <div className="rounded-2xl px-4 py-3 bg-black/55 border border-white/15 flex items-center justify-between gap-3">
@@ -126,8 +137,20 @@ export const ProductWalkthroughSection: React.FC<ProductWalkthroughSectionProps>
               onClick={handleCopyCommand}
               className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-mono font-bold text-white cursor-pointer"
             >
-              {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              <span>{copied ? 'Ок' : 'Копия'}</span>
+              {/* «Копия» → «Ок»: значок и подпись сменяются через короткое размытие. */}
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={copied ? 'ok' : 'copy'}
+                  initial={swap.initial}
+                  animate={swap.animate}
+                  exit={swap.exit}
+                  transition={swap.transition}
+                  className="inline-flex items-center gap-1"
+                >
+                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? 'Ок' : 'Копия'}</span>
+                </motion.span>
+              </AnimatePresence>
             </button>
           </div>
         </div>
@@ -154,7 +177,7 @@ export const ProductWalkthroughSection: React.FC<ProductWalkthroughSectionProps>
                   scale: isFront ? 1 : 0.9,
                   opacity: isFront ? 1 : 0.5,
                 }}
-                transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 32 }}
                 style={{ zIndex: 30 - Math.abs(offset) * 10 }}
                 className="absolute w-full max-w-[720px] cursor-pointer"
               >
