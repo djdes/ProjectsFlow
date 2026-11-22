@@ -171,10 +171,13 @@ export function ProjectViewsChart({
         <line x1={L} x2={W - geom.R} y1={T + plotH} y2={T + plotH} stroke="currentColor" strokeWidth="1" className="text-border" />
 
         {/* Области: всего (синяя) снизу, уникальные (янтарная) поверх нижней части */}
-        <path d={area('count')} fill="url(#pf-views-blue)" />
-        <path d={area('unique')} fill={AMBER} fillOpacity="0.35" />
-        <path d={line('count')} fill="none" stroke={BLUE} strokeWidth="1.75" />
-        <path d={line('unique')} fill="none" stroke={AMBER} strokeWidth="1.5" />
+        {/* Ряды рисуют себя слева направо (pf-chart-reveal, styles/motion.css). */}
+        <g className="pf-chart-reveal">
+          <path d={area('count')} fill="url(#pf-views-blue)" />
+          <path d={area('unique')} fill={AMBER} fillOpacity="0.35" />
+          <path d={line('count')} fill="none" stroke={BLUE} strokeWidth="1.75" />
+          <path d={line('unique')} fill="none" stroke={AMBER} strokeWidth="1.5" />
+        </g>
 
         {/* Чёрточки-дни по X */}
         {xTicks.map((i) => (

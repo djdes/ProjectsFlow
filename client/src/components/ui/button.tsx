@@ -1,8 +1,11 @@
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { haptic } from '@/lib/haptics';
+import { motionReduced } from '@/lib/liquidIndicator';
+import { springEasing } from '@/lib/springEasing';
 
 // Base-classes:
 //   - Отклик на нажатие и переходы живут в `.pf-button` (styles/motion.css): сжатие на
@@ -58,6 +61,61 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /** Идёт действие: перед подписью крутилка, кнопка помечена aria-busy. */
+  loading?: boolean;
+  ref?: React.Ref<HTMLButtonElement>;
+}
+
+// Подпись кнопки как строка: смена подписи («Войти» → «Входим…») — это смена состояния кнопки.
+function labelOf(node: React.ReactNode): string {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(labelOf).join('');
+  if (React.isValidElement(node)) return labelOf((node.props as { children?: React.ReactNode }).children);
+  return '';
+}
+
+/**
+ * Кнопка — одна фигура, которая меняет состояние (как в ролике движения): новая подпись
+ * проявляется из короткого размытия (.pf-button-label[data-pf-swap], styles/motion.css), а
+ * ширина перетекает от прежней к новой на пружине, если подпись стала длиннее или короче.
+ * Ширина до смены запоминается при монтировании, после каждой смены и в момент нажатия
+ * (подпись обычно меняется от нажатия: «Сохранить» → «Сохраняем…»).
+ */
+function useLabelMorph(el: React.RefObject<HTMLButtonElement | null>, label: string): { swapped: boolean; remember: () => void } {
+  const width = React.useRef<number | null>(null);
+  const shown = React.useRef(label);
+  const [swapped, setSwapped] = React.useState(false);
+  React.useLayoutEffect(() => {
+    const node = el.current;
+    if (!node) return;
+    if (shown.current === label) {
+      width.current ??= node.offsetWidth;
+      return;
+    }
+    shown.current = label;
+    setSwapped(true);
+    const before = width.current;
+    const after = node.offsetWidth;
+    width.current = after;
+    if (before == null || Math.abs(after - before) < 1.5 || motionReduced() || typeof node.animate !== 'function') return;
+    node.style.overflow = 'hidden';
+    const run = node.animate([{ width: `${before}px` }, { width: `${after}px` }], { duration: 440, easing: springEasing() });
+    const done = (): void => {
+      node.style.overflow = '';
+    };
+    run.onfinish = done;
+    run.oncancel = done;
+  }, [el, label]);
+  const remember = (): void => {
+    if (el.current) width.current = el.current.offsetWidth;
+  };
+  return { swapped, remember };
+}
+
+function assignRef<T>(ref: React.Ref<T> | undefined, value: T | null): void {
+  if (typeof ref === 'function') ref(value);
+  else if (ref) (ref as React.MutableRefObject<T | null>).current = value;
 }
 
 export function Button({
@@ -66,9 +124,15 @@ export function Button({
   size,
   asChild = false,
   onClick,
+  loading = false,
+  children,
+  ref,
   ...props
 }: ButtonProps): React.ReactElement {
   const Comp = asChild ? Slot : 'button';
+  const own = React.useRef<HTMLButtonElement | null>(null);
+  const label = `${labelOf(children)}${loading ? '\u0001' : ''}`;
+  const { swapped, remember } = useLabelMorph(own, label);
   // «Принять» / «Готово» подтверждаются короткой вибрацией на телефоне (lib/haptics).
   const handleClick: typeof onClick =
     variant === 'accept'
@@ -77,12 +141,34 @@ export function Button({
           onClick?.(event);
         }
       : onClick;
+  if (asChild) {
+    return (
+      <Comp ref={ref} className={cn('pf-button', buttonVariants({ variant, size, className }))} onClick={handleClick} {...props}>
+        {children}
+      </Comp>
+    );
+  }
   return (
-    <Comp
+    <button
+      ref={(node) => {
+        own.current = node;
+        assignRef(ref, node);
+      }}
       className={cn('pf-button', buttonVariants({ variant, size, className }))}
       onClick={handleClick}
       {...props}
-    />
+      aria-busy={loading || props['aria-busy'] || undefined}
+      onPointerDown={(event) => {
+        // Ширина прямо перед нажатием — от неё перетечёт подпись, сменённая этим нажатием.
+        remember();
+        props.onPointerDown?.(event);
+      }}
+    >
+      <span key={label} className="pf-button-label" data-pf-swap={swapped ? '' : undefined}>
+        {loading && <Loader2 aria-hidden className="pf-button-spinner motion-safe:animate-spin" />}
+        {children}
+      </span>
+    </button>
   );
 }
 

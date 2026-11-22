@@ -83,7 +83,7 @@ export function ForgotPasswordPage(): React.ReactElement {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+        <Button type="submit" size="lg" className="w-full" disabled={submitting} loading={submitting}>
           {submitting ? 'Отправляем…' : 'Отправить ссылку'}
         </Button>
       </form>

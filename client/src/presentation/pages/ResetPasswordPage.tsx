@@ -117,7 +117,7 @@ export function ResetPasswordPage(): React.ReactElement {
           />
         </div>
         {error && <ErrorNote>{error}</ErrorNote>}
-        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+        <Button type="submit" size="lg" className="w-full" disabled={submitting} loading={submitting}>
           {submitting ? 'Сохраняем…' : 'Сменить пароль'}
         </Button>
       </form>

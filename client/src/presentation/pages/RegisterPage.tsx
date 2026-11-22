@@ -107,7 +107,7 @@ export function RegisterPage(): React.ReactElement {
           <p className="text-xs text-muted-foreground">Минимум 8 символов.</p>
         </div>
         {error && <ErrorNote>{error}</ErrorNote>}
-        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+        <Button type="submit" size="lg" className="w-full" disabled={submitting} loading={submitting}>
           {submitting ? 'Создаём…' : 'Создать аккаунт'}
         </Button>
       </form>

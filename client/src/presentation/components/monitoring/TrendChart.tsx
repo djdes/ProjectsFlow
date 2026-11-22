@@ -76,8 +76,11 @@ export function TrendChart({
               <stop offset="100%" style={{ stopColor: color }} stopOpacity="0" />
             </linearGradient>
           </defs>
-          {area && <path d={area} fill={`url(#${gradId})`} />}
-          <path d={path} fill="none" style={{ stroke: color }} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+          {/* Линия рисует себя слева направо (pf-chart-reveal, styles/motion.css). */}
+          <g className="pf-chart-reveal">
+            {area && <path d={area} fill={`url(#${gradId})`} />}
+            <path d={path} fill="none" style={{ stroke: color }} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+          </g>
         </svg>
       ) : (
         <div className="grid h-11 place-items-center rounded-md bg-muted/60 text-2xs text-muted-foreground">

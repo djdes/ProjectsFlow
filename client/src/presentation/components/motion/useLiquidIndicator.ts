@@ -114,31 +114,33 @@ export function useLiquidIndicator({
     else engine.springTo(next);
   };
 
-  useLayoutEffect(() => {
-    sync(engineRef.current === null);
-    // sync reads everything through refs; it re-runs on the explicit key only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeKey]);
+  // Раскладка поменялась (ширина экрана, жирный шрифт выбранной, подгрузились счётчики):
+  // индикатор подстраивается к той же вкладке. В полёте — меняется только цель.
+  const relayout = (): void => {
+    const engine = engineRef.current;
+    const indicator = indicatorRef.current;
+    if (!engine || !indicator || optionsRef.current.paused?.()) return;
+    if (optionsRef.current.glide) return;
+    const next = measure(activeElRef.current);
+    if (!next) return;
+    // Ряд мог появиться только сейчас (смонтирован скрытым — в свёрнутой панели, на
+    // невидимой вкладке): тогда индикатор ещё прозрачный.
+    indicator.style.opacity = '1';
+    if (engine.moving) engine.springTo(next);
+    else engine.jump(next);
+  };
 
-  useEffect(() => {
+  // Наблюдатели цепляются к тому контейнеру, что есть сейчас: ряд может появиться позже хука
+  // (содержимое окна монтируется при открытии) и смениться при повторном открытии.
+  const observed = useRef<{ el: HTMLElement; resize: ResizeObserver; mutation: MutationObserver | null } | null>(null);
+  const observe = (): void => {
     const container = containerRef.current;
-    if (!container) return undefined;
-    // Раскладка поменялась (ширина экрана, жирный шрифт выбранной, подгрузились счётчики):
-    // индикатор подстраивается к той же вкладке. В полёте — меняется только цель.
-    const relayout = (): void => {
-      const engine = engineRef.current;
-      const indicator = indicatorRef.current;
-      if (!engine || !indicator || optionsRef.current.paused?.()) return;
-      if (optionsRef.current.glide) return;
-      const next = measure(activeElRef.current);
-      if (!next) return;
-      // Ряд мог появиться только сейчас (смонтирован скрытым — в свёрнутой панели, на
-      // невидимой вкладке): тогда индикатор ещё прозрачный.
-      indicator.style.opacity = '1';
-      if (engine.moving) engine.springTo(next);
-      else engine.jump(next);
-    };
-    const resize = new ResizeObserver(relayout);
+    if (observed.current?.el === container) return;
+    observed.current?.resize.disconnect();
+    observed.current?.mutation?.disconnect();
+    observed.current = null;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const resize = new ResizeObserver(() => relayout());
     resize.observe(container);
     for (const child of Array.from(container.children)) resize.observe(child);
     let mutation: MutationObserver | null = null;
@@ -150,10 +152,18 @@ export function useLiquidIndicator({
       });
       mutation.observe(container, { subtree: true, childList: true, attributes: true, attributeFilter: [...watchAttributes] });
     }
-    return () => {
-      resize.disconnect();
-      mutation?.disconnect();
-    };
+    observed.current = { el: container, resize, mutation };
+  };
+
+  useLayoutEffect(() => {
+    observe();
+    sync(engineRef.current === null);
+    // sync/observe read everything through refs; they re-run on the explicit key only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey]);
+
+  useEffect(() => {
+    observe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -163,6 +173,9 @@ export function useLiquidIndicator({
       engineRef.current?.destroy();
       engineRef.current = null;
       targetRef.current?.removeAttribute('data-pf-glide-target');
+      observed.current?.resize.disconnect();
+      observed.current?.mutation?.disconnect();
+      observed.current = null;
     },
     [],
   );
