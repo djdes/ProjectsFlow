@@ -23,6 +23,9 @@ import {
   type TariffOption,
 } from '../../data/showcaseData';
 import { ThreeProjectCoreStage } from './ThreeProjectCoreStage';
+import { LiquidGroup, liquidItem } from './LiquidGroup';
+import { liquidMix } from '../../lib/liquid';
+import { UI_SPRING, useSwap } from './motionPresets';
 
 interface HeroShowcaseProps {
   activeLayer: StackLayerSpec;
@@ -57,6 +60,8 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
   onScrollToSection,
 }) => {
   const activeIdx = STACK_LAYERS.findIndex((l) => l.id === activeLayer.id);
+  const swap = useSwap(10);
+  const swapSide = useSwap(16, 'x');
 
   const cycleLayer = (dir: -1 | 1) => {
     const next = (activeIdx + dir + STACK_LAYERS.length) % STACK_LAYERS.length;
@@ -74,8 +79,9 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
         <div className="lg:col-span-5 flex flex-col items-start text-left z-20">
           <motion.div
             key={`tag-${activeLayer.id}`}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={swap.initial}
+            animate={swap.animate}
+            transition={swap.transition}
             className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-xl mb-5"
           >
             <span
@@ -90,10 +96,10 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
           <AnimatePresence mode="wait">
             <motion.h1
               key={`h1-${activeLayer.id}`}
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ type: 'spring', stiffness: 340, damping: 24 }}
+              initial={swap.initial}
+              animate={swap.animate}
+              exit={swap.exit}
+              transition={swap.transition}
               className="font-display font-black uppercase text-[34px] sm:text-[46px] xl:text-[52px] leading-[0.96] tracking-[-0.03em] text-white mb-4"
             >
               {activeLayer.headline}
@@ -111,7 +117,14 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
           </p>
 
           {/* Compact 2x2 Architectural Layer Selector (Minimal text, instant visual feedback) */}
-          <div className="w-full grid grid-cols-2 gap-3 mb-7">
+          {/* Белая карточка выбранного слоя перетекает между клетками (lib/liquid): цвета
+              подписей идут за ней по --liquid-on. */}
+          <LiquidGroup
+            activeKey={activeLayer.id}
+            pill="#ffffff"
+            indicatorClassName="rounded-2xl shadow-[0_18px_45px_rgba(0,0,0,0.45)]"
+            className="w-full grid grid-cols-2 gap-3 mb-7"
+          >
             {STACK_LAYERS.map((layer) => {
               const isSelected = layer.id === activeLayer.id;
               return (
@@ -119,27 +132,27 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
                   key={layer.id}
                   type="button"
                   onClick={() => onSelectLayer(layer.id)}
-                  className={`group relative flex flex-col justify-between p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-white text-[#12061c] border-white shadow-[0_18px_45px_rgba(0,0,0,0.45)] -translate-y-0.5'
-                      : 'bg-black/35 text-white border-white/15 hover:bg-white/10 hover:border-white/30'
-                  }`}
+                  aria-pressed={isSelected}
+                  {...liquidItem(isSelected, {
+                    color: liquidMix('#12061c', '#ffffff'),
+                    borderColor: liquidMix('#ffffff', 'var(--liquid-off-border)'),
+                  })}
+                  className="group relative z-[1] flex flex-col justify-between p-4 rounded-2xl border text-left cursor-pointer [--liquid-off-bg:rgba(0,0,0,0.35)] [--liquid-off-border:rgba(255,255,255,0.15)] hover:[--liquid-off-bg:rgba(255,255,255,0.1)] hover:[--liquid-off-border:rgba(255,255,255,0.3)]"
                 >
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span
-                      className={`inline-flex items-center gap-1.5 font-mono text-[11px] font-extrabold uppercase ${
-                        isSelected ? 'text-rose-600' : 'text-white/65'
-                      }`}
+                      className="inline-flex items-center gap-1.5 font-mono text-[11px] font-extrabold uppercase"
+                      style={{ color: liquidMix('#e11d48', 'rgba(255,255,255,0.65)') }}
                     >
                       {LAYER_ICONS[layer.id]}
                       <span>{layer.code.split('·')[0]}</span>
                     </span>
                     <span
-                      className={`font-mono text-xs font-black px-2 py-0.5 rounded-md ${
-                        isSelected
-                          ? 'bg-[#12061c] text-white'
-                          : 'bg-white/10 text-white/90'
-                      }`}
+                      className="font-mono text-xs font-black px-2 py-0.5 rounded-md"
+                      style={{
+                        background: liquidMix('#12061c', 'rgba(255,255,255,0.1)'),
+                        color: liquidMix('#ffffff', 'rgba(255,255,255,0.9)'),
+                      }}
                     >
                       {layer.SlabSpec.centerMetric}
                     </span>
@@ -151,7 +164,7 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
                 </button>
               );
             })}
-          </div>
+          </LiquidGroup>
 
           {/* Primary & Secondary Action Row */}
           <div className="flex flex-wrap items-center gap-3 w-full">
@@ -159,6 +172,7 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
               href={isAuthed ? `${appBase}/projects` : `${appBase}/login`}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
+              transition={UI_SPRING}
               className="inline-flex items-center justify-center gap-3 px-7 py-4 rounded-2xl bg-white text-[#12061c] font-extrabold text-sm shadow-[0_20px_50px_rgba(0,0,0,0.5)] hover:bg-rose-50 transition-all cursor-pointer"
             >
               <Sparkles className="w-4 h-4 text-rose-600" />
@@ -172,6 +186,7 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
               type="button"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              transition={UI_SPRING}
               onClick={() => onScrollToSection('prompt-sandbox')}
               className="inline-flex items-center gap-2.5 px-5 py-4 rounded-2xl bg-black/35 hover:bg-black/55 border border-white/25 backdrop-blur-xl text-white font-bold text-sm transition-all cursor-pointer"
             >
@@ -191,7 +206,7 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
                 initial={{ opacity: 0, y: 32, scale: 0.9, filter: 'blur(10px)' }}
                 animate={{ opacity: 0.22, y: -24, scale: 1, filter: 'blur(0px)' }}
                 exit={{ opacity: 0, y: -32, scale: 1.06, filter: 'blur(10px)' }}
-                transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 32 }}
                 className="font-display font-black uppercase text-[44px] sm:text-[90px] xl:text-[116px] 2xl:text-[136px] leading-none tracking-[-0.05em] text-white whitespace-nowrap select-none"
               >
                 {activeLayer.giantWord}
@@ -214,9 +229,10 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
           <AnimatePresence mode="wait">
             <motion.div
               key={`sat-left-${activeLayer.id}`}
-              initial={{ opacity: 0, x: -16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -12 }}
+              initial={{ ...swapSide.initial, x: -16 }}
+              animate={swapSide.animate}
+              exit={{ ...swapSide.exit, x: -12 }}
+              transition={swapSide.transition}
               className="hidden sm:inline-flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-black/70 border border-white/25 backdrop-blur-xl shadow-2xl absolute top-10 left-4 z-20 pointer-events-none"
             >
               <span
@@ -260,7 +276,12 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
       {/* BOTTOM HUD: VisionOS Floating Magnetic Switcher Bar */}
       <div className="relative z-20 mt-4 rounded-[26px] p-2.5 sm:p-3 bg-black/55 border border-white/20 backdrop-blur-2xl shadow-[0_24px_60px_rgba(0,0,0,0.55)] flex flex-col xl:flex-row items-center justify-between gap-3">
         {/* 1. 3D Chassis Mode Switcher */}
-        <div className="flex items-center gap-1.5 bg-white/[0.06] p-1 rounded-2xl border border-white/10 w-full xl:w-auto justify-center">
+        <LiquidGroup
+          activeKey={chassisMode}
+          pill="#ffffff"
+          indicatorClassName="rounded-xl shadow-md"
+          className="flex items-center gap-1.5 bg-white/[0.06] p-1 rounded-2xl border border-white/10 w-full xl:w-auto justify-center"
+        >
           <span className="hidden sm:inline-block text-[11px] font-mono uppercase tracking-wider text-white/60 px-2.5">
             3D-вид:
           </span>
@@ -277,28 +298,24 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
                 key={item.id}
                 type="button"
                 onClick={() => onChangeChassisMode(item.id)}
-                className={`relative inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                  active ? 'text-[#12061c]' : 'text-white/80 hover:text-white'
-                }`}
+                aria-pressed={active}
+                {...liquidItem(active, { color: liquidMix('#12061c', 'var(--liquid-off-text)') })}
+                className="relative z-[1] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer [--liquid-off-text:rgba(255,255,255,0.8)] hover:[--liquid-off-text:#ffffff]"
               >
-                {active && (
-                  <motion.span
-                    layoutId="chassisModePill"
-                    transition={{ type: 'spring', stiffness: 340, damping: 24 }}
-                    className="absolute inset-0 rounded-xl bg-white shadow-md"
-                  />
-                )}
-                <span className="relative z-10 flex items-center gap-1.5">
-                  {item.icon}
-                  <span>{item.label}</span>
-                </span>
+                {item.icon}
+                <span>{item.label}</span>
               </button>
             );
           })}
-        </div>
+        </LiquidGroup>
 
         {/* 2. Tariff Switcher */}
-        <div className="flex items-center gap-1.5 bg-white/[0.06] p-1 rounded-2xl border border-white/10 w-full xl:w-auto justify-center">
+        <LiquidGroup
+          activeKey={activeTariff.id}
+          pill={activeLayer.accentColor}
+          indicatorClassName="rounded-xl shadow-md"
+          className="flex items-center gap-1.5 bg-white/[0.06] p-1 rounded-2xl border border-white/10 w-full xl:w-auto justify-center"
+        >
           <span className="hidden sm:inline-block text-[11px] font-mono uppercase tracking-wider text-white/60 px-2.5">
             Тариф:
           </span>
@@ -309,25 +326,15 @@ export const HeroShowcase: React.FC<HeroShowcaseProps> = ({
                 key={t.id}
                 type="button"
                 onClick={() => onSelectTariff(t)}
-                className={`relative px-3.5 py-2 rounded-xl text-xs font-extrabold transition-colors cursor-pointer ${
-                  isSelected ? 'text-[#12061c]' : 'text-white/80 hover:text-white'
-                }`}
+                aria-pressed={isSelected}
+                {...liquidItem(isSelected, { color: liquidMix('#12061c', 'var(--liquid-off-text)') })}
+                className="relative z-[1] px-3.5 py-2 rounded-xl text-xs font-extrabold cursor-pointer [--liquid-off-text:rgba(255,255,255,0.8)] hover:[--liquid-off-text:#ffffff]"
               >
-                {isSelected && (
-                  <motion.span
-                    layoutId="heroTariffPill"
-                    transition={{ type: 'spring', stiffness: 340, damping: 24 }}
-                    className="absolute inset-0 rounded-xl shadow-md"
-                    style={{ backgroundColor: activeLayer.accentColor }}
-                  />
-                )}
-                <span className="relative z-10">
-                  {t.name} · {t.priceFormatted}
-                </span>
+                {t.name} · {t.priceFormatted}
               </button>
             );
           })}
-        </div>
+        </LiquidGroup>
 
         {/* 3. Quick Layer Stepper */}
         <div className="flex items-center gap-2.5 w-full xl:w-auto justify-between xl:justify-end px-1">

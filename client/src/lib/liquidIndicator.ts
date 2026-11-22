@@ -49,6 +49,9 @@ export class LiquidIndicator {
   private readonly bottom: Axis = { pos: 0, vel: 0, target: 0 };
   private placed = false;
   private movingRight = true;
+  private movingDown = true;
+  // Вертикальный ход (список): тянутся верх и низ, а не левый и правый края.
+  private vertical = false;
   private frame = 0;
   private last = 0;
   private followAt = 0;
@@ -96,9 +99,11 @@ export class LiquidIndicator {
       this.onSettle?.();
       return;
     }
-    const center = this.left.pos + (this.right.pos - this.left.pos) / 2;
-    const nextCenter = box.left + box.width / 2;
-    if (Math.abs(nextCenter - center) > 0.5) this.movingRight = nextCenter > center;
+    const dx = box.left + box.width / 2 - (this.left.pos + this.right.pos) / 2;
+    const dy = box.top + box.height / 2 - (this.top.pos + this.bottom.pos) / 2;
+    if (Math.abs(dx) > 0.5) this.movingRight = dx > 0;
+    if (Math.abs(dy) > 0.5) this.movingDown = dy > 0;
+    this.vertical = Math.abs(dy) > Math.abs(dx);
     this.left.target = box.left;
     this.right.target = box.left + box.width;
     this.top.target = box.top;
@@ -150,21 +155,24 @@ export class LiquidIndicator {
   private readonly tick = (now: number): void => {
     let elapsed = Math.min(MAX_FRAME, Math.max(0, (now - this.last) / 1000));
     this.last = now;
-    const lead = this.movingRight ? this.right : this.left;
-    const trail = this.movingRight ? this.left : this.right;
+    const [lead, trail, crossA, crossB] = this.vertical
+      ? [this.movingDown ? this.bottom : this.top, this.movingDown ? this.top : this.bottom, this.left, this.right]
+      : [this.movingRight ? this.right : this.left, this.movingRight ? this.left : this.right, this.top, this.bottom];
     while (elapsed > 0) {
       const dt = Math.min(STEP, elapsed);
       stepAxis(lead, LEAD, dt);
       stepAxis(trail, TRAIL, dt);
-      stepAxis(this.top, CROSS, dt);
-      stepAxis(this.bottom, CROSS, dt);
+      stepAxis(crossA, CROSS, dt);
+      stepAxis(crossB, CROSS, dt);
       elapsed -= dt;
     }
     // A trailing edge must never pass the leading one: the pill would turn inside out.
-    if (this.right.pos < this.left.pos) {
-      const mid = (this.right.pos + this.left.pos) / 2;
-      this.left.pos = mid;
-      this.right.pos = mid;
+    for (const [a, b] of [[this.left, this.right], [this.top, this.bottom]] as const) {
+      if (b.pos < a.pos) {
+        const mid = (a.pos + b.pos) / 2;
+        a.pos = mid;
+        b.pos = mid;
+      }
     }
     if ([this.left, this.right, this.top, this.bottom].every(atRest)) {
       for (const axis of [this.left, this.right, this.top, this.bottom]) {
@@ -190,15 +198,21 @@ export class LiquidIndicator {
   }
 }
 
-/** Рамка элемента в координатах контейнера, в котором лежит индикатор (с учётом прокрутки). */
+/**
+ * Рамка элемента в координатах контейнера, в котором лежит индикатор (с учётом прокрутки).
+ * Масштаб предков (окно ещё «раскрывается» пружиной, кнопка нажата) вычитается: рамка — в
+ * раскладочных пикселях контейнера, а не экранных.
+ */
 export function boxIn(container: HTMLElement, el: Element): IndicatorBox {
   const c = container.getBoundingClientRect();
   const r = el.getBoundingClientRect();
+  const sx = container.offsetWidth > 0 ? c.width / container.offsetWidth : 1;
+  const sy = container.offsetHeight > 0 ? c.height / container.offsetHeight : 1;
   return {
-    left: r.left - c.left - container.clientLeft + container.scrollLeft,
-    top: r.top - c.top - container.clientTop + container.scrollTop,
-    width: r.width,
-    height: r.height,
+    left: (r.left - c.left) / sx - container.clientLeft + container.scrollLeft,
+    top: (r.top - c.top) / sy - container.clientTop + container.scrollTop,
+    width: r.width / sx,
+    height: r.height / sy,
   };
 }
 

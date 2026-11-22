@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 import Lenis from 'lenis';
 import { ArrowUpRight, Layers, Menu, X } from 'lucide-react';
 import {
@@ -16,6 +16,9 @@ import { SplitCapabilitiesSection } from './SplitCapabilitiesSection';
 import { GrowCalculatorSection } from './GrowCalculatorSection';
 import { ProductWalkthroughSection } from './ProductWalkthroughSection';
 import { CatalogFaqSection, type BlogTeaserItem } from './CatalogFaqSection';
+import { LiquidGroup, liquidItem } from './LiquidGroup';
+import { liquidMix } from '../../lib/liquid';
+import { HEIGHT_SPRING, useSwap } from './motionPresets';
 
 export interface ShowcaseAppProps {
   posts?: BlogTeaserItem[];
@@ -38,6 +41,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
 
   const activeLayer: StackLayerSpec =
     STACK_LAYERS.find((l) => l.id === activeLayerId) ?? STACK_LAYERS[0]!;
+  const swap = useSwap(6);
 
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia(
@@ -148,6 +152,8 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
   ];
 
   return (
+    // reducedMotion="user": под «уменьшить движение» framer не двигает и не масштабирует.
+    <MotionConfig reducedMotion="user">
     <div
       className="min-h-screen w-full text-white transition-all duration-700 relative overflow-x-clip bg-[#050811]"
       style={{ backgroundColor: '#050811', backgroundImage: activeLayer.stageGradient }}
@@ -188,9 +194,13 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
             </div>
           </a>
 
-          {/* Desktop Navigation Pills */}
-          <nav
+          {/* Desktop Navigation Pills: белая подложка раздела перетекает по мере прокрутки */}
+          <LiquidGroup
+            as="nav"
             aria-label="Основная навигация"
+            activeKey={activeNav}
+            pill="#ffffff"
+            indicatorClassName="rounded-xl shadow-md"
             className="hidden xl:flex items-center gap-1 p-1.5 rounded-2xl bg-white/[0.06] border border-white/15"
           >
             {navItems.map((item) => {
@@ -201,17 +211,14 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
                   type="button"
                   onClick={() => scrollToSection(item.id)}
                   aria-current={isActive ? 'location' : undefined}
-                  className={`relative px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
-                    isActive
-                      ? 'bg-white text-[#12061c] shadow-md scale-[1.02]'
-                      : 'text-white/75 hover:text-white hover:bg-white/[0.08]'
-                  }`}
+                  {...liquidItem(isActive, { color: liquidMix('#12061c', 'var(--liquid-off-text)') })}
+                  className="relative z-[1] px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer [--liquid-off-text:rgba(255,255,255,0.75)] hover:[--liquid-off-text:#ffffff] hover:[--liquid-off-bg:rgba(255,255,255,0.08)]"
                 >
-                  <span className="relative z-10">{item.label}</span>
+                  {item.label}
                 </button>
               );
             })}
-          </nav>
+          </LiquidGroup>
 
           {/* Right Auth / CTA Buttons */}
           <div className="flex items-center gap-2.5">
@@ -259,9 +266,16 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
+              transition={{ height: HEIGHT_SPRING, opacity: { duration: 0.18 } }}
               className="xl:hidden overflow-hidden bg-[#12061c]/95 border-b border-white/15 px-4 pb-4"
             >
-              <div className="grid grid-cols-2 gap-2 pt-2">
+              <motion.div
+                initial={swap.initial}
+                animate={swap.animate}
+                exit={swap.exit}
+                transition={swap.transition}
+                className="grid grid-cols-2 gap-2 pt-2"
+              >
                 {navItems.map((item) => (
                   <button
                     key={item.id}
@@ -276,7 +290,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
                     {item.label}
                   </button>
                 ))}
-              </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -351,6 +365,7 @@ export const ShowcaseApp: React.FC<ShowcaseAppProps> = ({
         </div>
       </footer>
     </div>
+    </MotionConfig>
   );
 };
 

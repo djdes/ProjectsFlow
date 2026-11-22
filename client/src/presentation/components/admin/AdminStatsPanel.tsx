@@ -275,12 +275,15 @@ function TrendChart({
             strokeDasharray="2 3"
           />
         )}
-        <g clipPath={`url(#${clipId})`}>
-          {band && <path d={band} fill="currentColor" fillOpacity={0.12} />}
-          <path d={histPath} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-          {fcPath && (
-            <path d={fcPath} fill="none" stroke="currentColor" strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round" />
-          )}
+        {/* Ряд рисует себя слева направо (pf-chart-reveal; своя обрезка — на внутренней группе). */}
+        <g className="pf-chart-reveal">
+          <g clipPath={`url(#${clipId})`}>
+            {band && <path d={band} fill="currentColor" fillOpacity={0.12} />}
+            <path d={histPath} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+            {fcPath && (
+              <path d={fcPath} fill="none" stroke="currentColor" strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round" />
+            )}
+          </g>
         </g>
         {point && hover !== null && (
           <g>

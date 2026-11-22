@@ -111,7 +111,9 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
 - Выбор вкладки / сегмента / раздела — «жидкий» индикатор на пружинах: `useLiquidIndicator`
   (`lib/liquidIndicator`; уже в `TabsList`, `SegmentedControl`, нижней навигации, «Мои / Все»,
   чипах колонок); меняющиеся счётчики — `RollingNumber`; пружинные кривые — `--pf-spring*`
-  в `motion.css`. Свой индикатор на `transition`/`layoutId` не заводим.
+  в `motion.css`. Свой индикатор на `transition`/`layoutId` не заводим. `Button` сам морфит смену
+  подписи (размытие + ширина на пружине), ожидание — проп `loading`; тумблер, окна, меню, тосты,
+  галочки и графики уже анимированы примитивами — в вызовах ничего не добавляем.
 - Шрифты подключаются через `@fontsource-variable/*` в `main.tsx`, без CDN.
 - `/llms.txt` (описание сайта для ИИ-помощников, llmstxt.org) — `landing/src/pages/llms.txt.ts`: собирается при
   сборке лендинга из `data/site.ts`, `data/pricing.ts`, `data/faq.ts` и коллекции блога; своего текста не содержит.

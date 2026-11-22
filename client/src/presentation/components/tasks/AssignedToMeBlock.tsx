@@ -74,6 +74,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { DIALOG_CLOSE_MS, playTaskExit } from '@/lib/taskExitFx';
+import { dropPoint, landFromDrop, rememberDrop } from '@/lib/dropLanding';
 import { swapIn } from '@/lib/liquidIndicator';
 import { useLiquidIndicator } from '@/presentation/components/motion/useLiquidIndicator';
 import { RollingNumber } from '@/presentation/components/motion/RollingNumber';
@@ -1618,6 +1619,8 @@ export function AssignedToMeBlock({
       void completeTask(item);
       return;
     }
+    // Карточка прилетит в новое место из точки, где её отпустили (lib/dropLanding).
+    rememberDrop(item.id, dropPoint(e.activatorEvent, e.delta));
     // Бросок на колонку другого проекта — перенести задачу в этот проект.
     if (data.type === 'group' && data.grouping === 'project' && data.projectId) {
       if (item.canModify && item.projectId !== data.projectId) {
@@ -4920,6 +4923,11 @@ function AcceptedCard({
   // Срок — в верхней строке справа (полка «В работе»), а не внизу.
   dueOnTop?: boolean;
 }): React.ReactElement {
+  // Перенесённая карточка прилетает в новое место из точки броска (lib/dropLanding).
+  const cardRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    landFromDrop(item.id, cardRef.current);
+  }, [item.id]);
   const isDone = item.status === 'done';
   const { taskRepository } = useContainer();
   const { user: currentUser } = useCurrentUser();
@@ -5083,6 +5091,7 @@ function AcceptedCard({
       <div className="min-h-0 min-w-0">
         <div
           // data-pf-task-id — по нему протяжка резолвит карточку под указателем (useDragSelect).
+          ref={cardRef}
           data-pf-task-id={item.id}
           data-pf-task-open={open || undefined}
           aria-current={open ? 'true' : undefined}

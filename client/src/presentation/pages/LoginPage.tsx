@@ -92,7 +92,7 @@ export function LoginPage(): React.ReactElement {
           />
         </div>
         {error && <ErrorNote>{error}</ErrorNote>}
-        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+        <Button type="submit" size="lg" className="w-full" disabled={submitting} loading={submitting}>
           {submitting ? 'Входим…' : 'Войти'}
         </Button>
         <p className="text-center text-ui">

@@ -1,4 +1,5 @@
-import { memo, useState } from 'react';
+import { memo, useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { landFromDrop } from '@/lib/dropLanding';
 import { useSortable } from '@dnd-kit/sortable';
 import { motion } from 'motion/react';
 import { useSidebarResizing } from '@/presentation/layout/sidebarResizingContext';
@@ -207,6 +208,20 @@ function KanbanCardImpl({
   // на мобиле только жрёт кадры при скролле, визуально она там почти не нужна.
   const Wrapper =
     preview || IS_COARSE_POINTER || disableLayoutAnimation ? PassthroughWrapper : MotionWrapper;
+  // Без layout-анимации (телефон) перенесённая карточка прилетает в новую колонку из точки,
+  // где её отпустили (lib/dropLanding); на десктопе её и так ведёт layoutId.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const setCardRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      setNodeRef(node);
+      cardRef.current = node;
+    },
+    [setNodeRef],
+  );
+  const lands = !preview && Wrapper === PassthroughWrapper;
+  useLayoutEffect(() => {
+    if (lands) landFromDrop(task.id, cardRef.current);
+  }, [lands, task.id]);
 
   // Гасим mousedown/touchstart на actions, чтобы нажатие по Edit/Delete/чекбоксу не
   // стартовало drag через активаторы dnd-kit (MouseSensor/TouchSensor) на родителе.
@@ -434,7 +449,7 @@ function KanbanCardImpl({
   return (
     <Wrapper layoutId={task.id}>
       <div
-        ref={setNodeRef}
+        ref={setCardRef}
         data-pf-task-id={task.id}
         data-pf-task-open={open && !preview || undefined}
         aria-current={open && !preview ? 'true' : undefined}

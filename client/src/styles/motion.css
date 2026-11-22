@@ -134,20 +134,36 @@
     transition-duration: var(--pf-duration-fast);
     transition-timing-function: var(--pf-ease-press);
   }
-  /* Ползунок тумблера перепрыгивает пружиной; растяжение под пальцем — быстрое. */
-  .pf-switch-thumb {
-    transition:
-      transform 480ms var(--pf-spring),
-      scale 180ms var(--pf-ease);
+}
+/* Подпись кнопки (components/ui/button.tsx) — в своей обёртке, которая повторяет раскладку
+   кнопки (направление, выравнивание, промежутки), поэтому вид кнопок не меняется. Новая
+   подпись («Войти» → «Входим…») проявляется из короткого размытия; ширину кнопки ведёт
+   пружина в самом компоненте. */
+.pf-button-label {
+  display: inline-flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: inherit;
+  flex-wrap: inherit;
+  align-items: inherit;
+  justify-content: inherit;
+  gap: inherit;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pf-button-label[data-pf-swap] {
+    animation: pf-label-in 300ms var(--pf-ease) both;
   }
 }
-/* Нажатие растягивает ползунок в сторону хода — масштабом, а не шириной (ширину не анимируем).
-   Точка масштаба стоит и в покое: на отпускании ползунок сжимается к тому же краю. */
-.pf-switch-thumb { transform-origin: left center; }
-.pf-switch[aria-checked="true"] .pf-switch-thumb { transform-origin: right center; }
-.pf-switch:active:not(:disabled) .pf-switch-thumb {
-  scale: 1.15 1;
+@keyframes pf-label-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    scale: 0.96;
+  }
 }
+/* Ползунок тумблера ведут пружины (components/ui/switch.tsx, lib/liquidIndicator) — покадрово,
+   своего transition у него нет. Нажатие тянет его в сторону хода там же. */
 /* Кнопка «Отправить»: неактивная чуть меньше, самолётик опущен; как только есть что
    отправить — кнопка дорастает пружиной, а самолётик разворачивается «к взлёту».
    Сами состояния (масштаб) видны всем, их смена пружиной — только без reduce. Нажатие —
@@ -206,6 +222,118 @@
 }
 [data-sonner-toast][data-type="success"] [data-icon] svg {
   animation: pf-content-reveal 220ms var(--pf-ease);
+}
+/* Окна, меню и всплывашки открываются пружиной (перелёт ~2%) и «собираются» из короткого
+   размытия — как смена состояний в ролике. Направление и масштаб берутся из переменных
+   tailwindcss-animate, которые ставят классы slide-in/zoom-in, поэтому центровка диалога
+   (translate -50%) сохраняется. Лист на телефоне — без перелёта, иначе его край на миг
+   отходит от низа экрана. Закрытие остаётся прежним, коротким. */
+@media (prefers-reduced-motion: no-preference) {
+  :is([data-pf-motion-surface='dialog'], [data-pf-motion-surface='popover'], [data-pf-motion-surface='menu'])[data-state='open'] {
+    animation-name: pf-surface-in;
+    animation-duration: 380ms;
+    animation-timing-function: var(--pf-spring);
+  }
+  [data-pf-motion-surface][data-pf-mobile-sheet][data-state='open'] {
+    animation-timing-function: var(--pf-spring-soft);
+  }
+}
+@keyframes pf-surface-in {
+  from {
+    opacity: var(--tw-enter-opacity, 0);
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0) scale(var(--tw-enter-scale, 0.97));
+    filter: blur(6px);
+  }
+}
+/* Тосты: въезд и перестановка стопки — на пружине, содержимое проявляется из размытия
+   по очереди (значок, текст, кнопка). У sonner свои правила в :where() — нулевая
+   специфичность, перебиваются без !important. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-sonner-toast][data-mounted='true']:not([data-removed='true']) {
+    transition-timing-function: var(--pf-spring);
+  }
+  [data-sonner-toast][data-mounted='true'] > :is([data-icon], [data-content], [data-button], [data-cancel]) {
+    animation: pf-toast-part-in 340ms var(--pf-ease) both;
+  }
+  [data-sonner-toast][data-mounted='true'] > [data-content] {
+    animation-delay: 40ms;
+  }
+  [data-sonner-toast][data-mounted='true'] > :is([data-button], [data-cancel]) {
+    animation-delay: 80ms;
+  }
+}
+@keyframes pf-toast-part-in {
+  from {
+    opacity: 0;
+    filter: blur(5px);
+    translate: 0 4px;
+  }
+}
+/* Строки выдачи палитры поиска (TaskSearchDialog) проявляются из короткого размытия одна за
+   другой — как фильтрация в ⌘K ролика; уже стоявшие строки (тот же ключ) не мигают. */
+@media (prefers-reduced-motion: no-preference) {
+  .pf-search-row {
+    animation: pf-row-in 260ms var(--pf-ease) both;
+    animation-delay: calc(min(var(--i, 0), 8) * 16ms);
+  }
+}
+@keyframes pf-row-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    translate: 0 4px;
+  }
+}
+/* Графики рисуют себя: ряды открываются слева направо, столбики вырастают на пружине по
+   очереди. Только при монтировании графика — новые данные в том же графике не перерисовывают. */
+@media (prefers-reduced-motion: no-preference) {
+  .pf-chart-reveal {
+    animation: pf-chart-reveal 900ms var(--pf-ease) both;
+  }
+  .pf-bar-grow {
+    transform-origin: bottom;
+    animation: pf-bar-grow 560ms var(--pf-spring) both;
+    animation-delay: calc(min(var(--i, 0), 30) * 16ms);
+  }
+}
+@keyframes pf-chart-reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes pf-bar-grow {
+  from {
+    scale: 1 0;
+  }
+}
+/* Галочка: квадрат «принимает» отметку пружиной, сама галка рисуется слева направо (путь
+   lucide идёт справа, поэтому смещение штриха — отрицательное). */
+.pf-checkbox[data-state='checked'] svg path {
+  stroke-dasharray: 24 24;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pf-checkbox[data-state='checked'] {
+    animation: pf-check-pop 380ms var(--pf-spring);
+  }
+  .pf-checkbox[data-state='checked'] svg path {
+    animation: pf-check-draw 300ms var(--pf-ease) 40ms both;
+  }
+}
+@keyframes pf-check-pop {
+  from {
+    scale: 0.8;
+  }
+}
+@keyframes pf-check-draw {
+  from {
+    stroke-dashoffset: -24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   *,

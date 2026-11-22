@@ -16,6 +16,9 @@ import {
   type PromptPreset,
   type StackLayerId,
 } from '../../data/showcaseData';
+import { LiquidGroup, liquidItem } from './LiquidGroup';
+import { liquidMix } from '../../lib/liquid';
+import { useSwap } from './motionPresets';
 
 interface SplitCapabilitiesSectionProps {
   onSelectLayer: (layerId: StackLayerId) => void;
@@ -33,6 +36,7 @@ export const SplitCapabilitiesSection: React.FC<SplitCapabilitiesSectionProps> =
 
   const activePreset: PromptPreset =
     PROMPT_PRESETS.find((p) => p.id === activePresetId) ?? PROMPT_PRESETS[0]!;
+  const swap = useSwap(16);
 
   const handleSelectPreset = (preset: PromptPreset) => {
     setActivePresetId(preset.id);
@@ -82,7 +86,13 @@ export const SplitCapabilitiesSection: React.FC<SplitCapabilitiesSectionProps> =
               </p>
 
               {/* 3 Large Tactile Scenario Pills (Clean, 1-line each) */}
-              <div className="w-full space-y-2.5 mb-7">
+              {/* Белая карточка выбранного примера перетекает по столбцу (lib/liquid). */}
+              <LiquidGroup
+                activeKey={activePreset.id}
+                pill="#ffffff"
+                indicatorClassName="rounded-2xl shadow-[0_16px_40px_rgba(255,46,99,0.28)]"
+                className="w-full flex flex-col gap-2.5 mb-7"
+              >
                 {PROMPT_PRESETS.map((preset) => {
                   const active = preset.id === activePreset.id;
                   return (
@@ -90,38 +100,43 @@ export const SplitCapabilitiesSection: React.FC<SplitCapabilitiesSectionProps> =
                       key={preset.id}
                       type="button"
                       onClick={() => handleSelectPreset(preset)}
-                      className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                        active
-                          ? 'bg-white text-[#14071e] border-white shadow-[0_16px_40px_rgba(255,46,99,0.28)] scale-[1.01]'
-                          : 'bg-white/[0.06] text-white border-white/15 hover:bg-white/[0.12]'
-                      }`}
+                      aria-pressed={active}
+                      {...liquidItem(active, {
+                        color: liquidMix('#14071e', '#ffffff'),
+                        borderColor: liquidMix('#ffffff', 'rgba(255,255,255,0.15)'),
+                      })}
+                      className="relative z-[1] w-full flex items-center justify-between px-5 py-4 rounded-2xl border text-left cursor-pointer [--liquid-off-bg:rgba(255,255,255,0.06)] hover:[--liquid-off-bg:rgba(255,255,255,0.12)]"
                     >
                       <span className="font-bold text-base">{preset.shortTab}</span>
                       <span
-                        className={`font-mono text-xs font-extrabold px-3 py-1 rounded-full ${
-                          active
-                            ? 'bg-rose-500 text-white'
-                            : 'bg-white/10 text-white/75'
-                        }`}
+                        className="font-mono text-xs font-extrabold px-3 py-1 rounded-full"
+                        style={{
+                          background: liquidMix('#f43f5e', 'rgba(255,255,255,0.1)'),
+                          color: liquidMix('#ffffff', 'rgba(255,255,255,0.75)'),
+                        }}
                       >
                         {preset.estimatedTime}
                       </span>
                     </button>
                   );
                 })}
-              </div>
+              </LiquidGroup>
 
               {/* Simple 2-way Mode Switcher + CTA */}
               <div className="w-full flex flex-wrap items-center gap-3">
-                <div className="inline-flex p-1 rounded-2xl bg-black/40 border border-white/15">
+                {/* Переключатель режима: подложка перетекает и перекрашивается (роза ↔ фиолет). */}
+                <LiquidGroup
+                  activeKey={executionMode}
+                  pill={executionMode === 'autopilot' ? '#f43f5e' : '#a855f7'}
+                  indicatorClassName="rounded-xl shadow"
+                  className="inline-flex p-1 rounded-2xl bg-black/40 border border-white/15"
+                >
                   <button
                     type="button"
                     onClick={() => setExecutionMode('autopilot')}
-                    className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      executionMode === 'autopilot'
-                        ? 'bg-rose-500 text-white shadow'
-                        : 'text-white/70 hover:text-white'
-                    }`}
+                    aria-pressed={executionMode === 'autopilot'}
+                    {...liquidItem(executionMode === 'autopilot', { color: liquidMix('#ffffff', 'var(--liquid-off-text)') })}
+                    className="relative z-[1] px-4 py-2.5 rounded-xl text-xs font-extrabold cursor-pointer flex items-center gap-1.5 [--liquid-off-text:rgba(255,255,255,0.7)] hover:[--liquid-off-text:#ffffff]"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     <span>Автопилот</span>
@@ -129,16 +144,14 @@ export const SplitCapabilitiesSection: React.FC<SplitCapabilitiesSectionProps> =
                   <button
                     type="button"
                     onClick={() => setExecutionMode('step')}
-                    className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      executionMode === 'step'
-                        ? 'bg-purple-500 text-white shadow'
-                        : 'text-white/70 hover:text-white'
-                    }`}
+                    aria-pressed={executionMode === 'step'}
+                    {...liquidItem(executionMode === 'step', { color: liquidMix('#ffffff', 'var(--liquid-off-text)') })}
+                    className="relative z-[1] px-4 py-2.5 rounded-xl text-xs font-extrabold cursor-pointer flex items-center gap-1.5 [--liquid-off-text:rgba(255,255,255,0.7)] hover:[--liquid-off-text:#ffffff]"
                   >
                     <Layers className="w-3.5 h-3.5" />
                     <span>Шаг за шагом</span>
                   </button>
-                </div>
+                </LiquidGroup>
 
                 <a
                   href={isAuthed ? `${appBase}/projects` : `${appBase}/login`}
@@ -155,10 +168,10 @@ export const SplitCapabilitiesSection: React.FC<SplitCapabilitiesSectionProps> =
               <AnimatePresence mode="wait">
                 <motion.div
                   key={`${activePreset.id}-${executionMode}`}
-                  initial={{ opacity: 0, y: 18, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -14, scale: 0.98 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                  initial={swap.initial}
+                  animate={swap.animate}
+                  exit={swap.exit}
+                  transition={swap.transition}
                   className="rounded-[32px] p-7 sm:p-9 bg-[#190b28]/90 border border-white/20 backdrop-blur-2xl shadow-2xl space-y-7"
                 >
                   {/* 1. Prompt Quote Bubble */}

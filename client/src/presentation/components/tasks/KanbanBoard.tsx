@@ -102,6 +102,7 @@ import { KanbanAddColumnButton } from './KanbanAddColumnButton';
 import { TaskDragPill, snapToCursor } from './AssignedToMeBlock';
 import { BoardWorkShelf } from './BoardWorkShelf';
 import { BoardColumnTabs } from './BoardColumnTabs';
+import { dropPoint, rememberDrop } from '@/lib/dropLanding';
 import { KanbanCard } from './KanbanCard';
 import { CardActionsSheet } from './CardActionsSheet';
 import { haptic } from '@/lib/haptics';
@@ -927,6 +928,7 @@ export function KanbanBoard({
     // не находится в targetList (он отфильтрован), insertIndex падает в конец, и
     // карточка «улетает в самый низ» (баг из фидбека).
     if (over.id === active.id) return;
+    rememberDrop(String(active.id), dropPoint(e.activatorEvent, e.delta));
 
     const activeTask = tasks.find((t) => t.id === active.id);
     if (!activeTask) return;

@@ -91,6 +91,27 @@ test('moving left, the left edge leads', () => {
   assert.ok(leftProgress > rightProgress, `left ${leftProgress} should lead right ${rightProgress}`);
 });
 
+test('moving down a list, the bottom edge leads and the pill stretches vertically', () => {
+  const { el, engine } = setup();
+  const ROW0: IndicatorBox = { left: 0, top: 0, width: 300, height: 40 };
+  const ROW3: IndicatorBox = { left: 0, top: 160, width: 300, height: 40 };
+  engine.jump(ROW0);
+  engine.springTo(ROW3);
+  let tallest = 0;
+  for (let i = 0; i < 3; i++) frame();
+  const box = painted(el);
+  const topProgress = (box.top - ROW0.top) / (ROW3.top - ROW0.top);
+  const bottomProgress = (box.top + box.height - 40) / (ROW3.top + 40 - 40);
+  assert.ok(bottomProgress > topProgress, `bottom ${bottomProgress} should lead top ${topProgress}`);
+  for (let i = 0; i < 400 && engine.moving; i++) {
+    frame();
+    tallest = Math.max(tallest, painted(el).height);
+    assert.equal(painted(el).width, 300, 'the cross axis does not stretch');
+  }
+  assert.ok(tallest > 60, `expected a vertical stretch, tallest was ${tallest}`);
+  assert.deepEqual(painted(el), ROW3);
+});
+
 test('a new target mid-flight is taken from the current position, without a jump', () => {
   const { el, engine } = setup();
   engine.jump(A);

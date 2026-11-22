@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { FAQ_ITEMS, type StackLayerId } from '../../data/showcaseData';
+import { HEIGHT_SPRING, useSwap } from './motionPresets';
 
 export interface BlogTeaserItem {
   slug: string;
@@ -36,6 +37,7 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
   onSelectLayer,
 }) => {
   const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(0);
+  const swap = useSwap(6);
 
   return (
     <div className="relative z-10 max-w-[1440px] mx-auto px-4 sm:px-8 py-14 space-y-20">
@@ -159,15 +161,22 @@ export const CatalogFaqSection: React.FC<CatalogFaqSectionProps> = ({
 
                   <AnimatePresence initial={false}>
                     {isOpen && (
+                      // Высота раскрывается пружиной без перелёта, ответ проявляется из размытия.
                       <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.22 }}
+                        transition={{ height: HEIGHT_SPRING, opacity: { duration: 0.18 } }}
                       >
-                        <div className="px-6 pb-5 text-sm text-white/75 leading-relaxed border-t border-white/10 pt-4">
+                        <motion.div
+                          initial={swap.initial}
+                          animate={swap.animate}
+                          exit={swap.exit}
+                          transition={swap.transition}
+                          className="px-6 pb-5 text-sm text-white/75 leading-relaxed border-t border-white/10 pt-4"
+                        >
                           {item.a}
-                        </div>
+                        </motion.div>
                       </motion.div>
                     )}
                   </AnimatePresence>

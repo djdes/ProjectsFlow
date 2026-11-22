@@ -22,6 +22,10 @@ import {
   type StackLayerSpec,
   type TariffOption,
 } from '../../data/showcaseData';
+import { LiquidGroup, liquidItem } from './LiquidGroup';
+import { RubberSlider } from './RubberSlider';
+import { liquidMix } from '../../lib/liquid';
+import { UI_SPRING, useSwap } from './motionPresets';
 
 interface GrowCalculatorSectionProps {
   activeLayer: StackLayerSpec;
@@ -176,6 +180,7 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
   );
 
   const doneCount = tasks.filter((t) => t.column === 'done').length + 6;
+  const swap = useSwap(6);
 
   const advanceTask = (taskId: string) => {
     setTasks((prev) =>
@@ -253,7 +258,12 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
             </div>
 
             {/* Project Filter Chips */}
-            <div className="flex flex-wrap items-center gap-1.5">
+            <LiquidGroup
+              activeKey={selectedProject}
+              pill="#ffffff"
+              indicatorClassName="rounded-xl shadow"
+              className="flex flex-wrap items-center gap-1.5"
+            >
               {projectFilters.map((proj) => {
                 const active = selectedProject === proj;
                 return (
@@ -261,17 +271,15 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
                     key={proj}
                     type="button"
                     onClick={() => setSelectedProject(proj)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      active
-                        ? 'bg-white text-[#12061c] shadow'
-                        : 'bg-white/[0.06] text-white/70 hover:text-white hover:bg-white/[0.12]'
-                    }`}
+                    aria-pressed={active}
+                    {...liquidItem(active, { color: liquidMix('#12061c', 'var(--liquid-off-text)') })}
+                    className="relative z-[1] px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer [--liquid-off-bg:rgba(255,255,255,0.06)] [--liquid-off-text:rgba(255,255,255,0.7)] hover:[--liquid-off-bg:rgba(255,255,255,0.12)] hover:[--liquid-off-text:#ffffff]"
                   >
                     {proj}
                   </button>
                 );
               })}
-            </div>
+            </LiquidGroup>
 
             {/* Right Status + Reset */}
             <div className="flex items-center gap-2.5">
@@ -324,10 +332,10 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
                           <motion.div
                             key={task.id}
                             layout
-                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.92 }}
-                            transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                            initial={{ ...swap.initial, scale: 0.95 }}
+                            animate={{ ...swap.animate, scale: 1 }}
+                            exit={{ ...swap.exit, scale: 0.94 }}
+                            transition={swap.transition}
                             className="rounded-2xl p-4 bg-[#1d0c2e]/95 border border-white/15 hover:border-white/35 shadow-lg transition-colors flex flex-col justify-between gap-3"
                           >
                             <div>
@@ -447,7 +455,19 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
             <div className="px-5 sm:px-7 py-3.5 bg-[#0d0416] border-t border-white/12 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2 text-white/85">
                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                <span className="font-medium">{toastMessage}</span>
+                {/* Новое сообщение сменяет прежнее через короткое размытие. */}
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.span
+                    key={toastMessage}
+                    initial={swap.initial}
+                    animate={swap.animate}
+                    exit={swap.exit}
+                    transition={swap.transition}
+                    className="font-medium"
+                  >
+                    {toastMessage}
+                  </motion.span>
+                </AnimatePresence>
               </div>
               <a
                 href={isAuthed ? `${appBase}/projects` : `${appBase}/login`}
@@ -498,13 +518,14 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
                       {projectsPerMonth} пр.
                     </span>
                   </div>
-                  <input
-                    type="range"
+                  <RubberSlider
                     min={1}
                     max={10}
                     value={projectsPerMonth}
-                    onChange={(e) => setProjectsPerMonth(Number(e.target.value))}
-                    className="w-full accent-rose-500 cursor-pointer h-2 bg-white/15 rounded-lg"
+                    onChange={setProjectsPerMonth}
+                    label="Запускаемых проектов в месяц"
+                    valueText={(v) => `${v} пр.`}
+                    fill="#f43f5e"
                   />
                 </div>
 
@@ -517,13 +538,14 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
                       {teamSize} чел.
                     </span>
                   </div>
-                  <input
-                    type="range"
+                  <RubberSlider
                     min={1}
                     max={12}
                     value={teamSize}
-                    onChange={(e) => setTeamSize(Number(e.target.value))}
-                    className="w-full accent-purple-400 cursor-pointer h-2 bg-white/15 rounded-lg"
+                    onChange={setTeamSize}
+                    label="Человек в команде"
+                    valueText={(v) => `${v} чел.`}
+                    fill="#c084fc"
                   />
                 </div>
 
@@ -531,18 +553,22 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
                   <span className="font-mono text-xs uppercase tracking-wider text-white/60 block mb-2.5">
                     3. Подписка Claude:
                   </span>
-                  <div className="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-black/40 border border-white/15">
+                  {/* Переключатель на двух пружинах: подложка перетекает и перекрашивается. */}
+                  <LiquidGroup
+                    activeKey={claudeSource}
+                    pill={claudeSource === 'builtin' ? '#f43f5e' : '#ffffff'}
+                    indicatorClassName="rounded-xl shadow-md"
+                    className="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-black/40 border border-white/15"
+                  >
                     <button
                       type="button"
                       onClick={() => {
                         setClaudeSource('builtin');
                         onSelectTariff(TARIFF_OPTIONS[1]!);
                       }}
-                      className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
-                        claudeSource === 'builtin'
-                          ? 'bg-rose-500 text-white shadow-md'
-                          : 'text-white/70 hover:text-white'
-                      }`}
+                      aria-pressed={claudeSource === 'builtin'}
+                      {...liquidItem(claudeSource === 'builtin', { color: liquidMix('#ffffff', 'var(--liquid-off-text)') })}
+                      className="relative z-[1] py-3 px-4 rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer [--liquid-off-text:rgba(255,255,255,0.7)] hover:[--liquid-off-text:#ffffff]"
                     >
                       Встроенный Claude от нас
                     </button>
@@ -552,15 +578,13 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
                         setClaudeSource('own');
                         onSelectTariff(TARIFF_OPTIONS[0]!);
                       }}
-                      className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
-                        claudeSource === 'own'
-                          ? 'bg-white text-[#140720] shadow-md'
-                          : 'text-white/70 hover:text-white'
-                      }`}
+                      aria-pressed={claudeSource === 'own'}
+                      {...liquidItem(claudeSource === 'own', { color: liquidMix('#140720', 'var(--liquid-off-text)') })}
+                      className="relative z-[1] py-3 px-4 rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer [--liquid-off-text:rgba(255,255,255,0.7)] hover:[--liquid-off-text:#ffffff]"
                     >
                       Свой Claude (0 ₽)
                     </button>
-                  </div>
+                  </LiquidGroup>
                 </div>
               </div>
 
@@ -579,8 +603,9 @@ export const GrowCalculatorSection: React.FC<GrowCalculatorSectionProps> = ({
 
                   <motion.div
                     key={netMonthlyBenefit}
-                    initial={{ scale: 0.95, opacity: 0.7 }}
+                    initial={{ scale: 0.96, opacity: 0.7 }}
                     animate={{ scale: 1, opacity: 1 }}
+                    transition={UI_SPRING}
                     className="font-display font-black text-4xl sm:text-5xl text-white tracking-tight mb-6"
                   >
                     +{netMonthlyBenefit.toLocaleString('ru-RU')} ₽

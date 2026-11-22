@@ -1131,17 +1131,19 @@ function AppTrafficView({
             className="mbs-5 flex h-44 items-end gap-1 overflow-x-auto"
             aria-label="График визитов приложения"
           >
-            {perDay.map((day) => (
+            {perDay.map((day, i) => (
               <div
                 key={day.date}
                 className="group flex min-w-3 flex-1 flex-col items-center justify-end gap-1"
                 title={`${day.date}: ${day.visits} визитов, ${day.sessions} сессий`}
               >
+                {/* Столбики вырастают на пружине один за другим (pf-bar-grow, styles/motion.css). */}
                 <span
-                  className="w-full rounded-bs bg-primary/75 transition-colors group-hover:bg-primary"
+                  className="pf-bar-grow w-full rounded-bs bg-primary/75 transition-colors group-hover:bg-primary"
                   style={{
                     height: `${Math.max(day.visits ? 6 : 2, (day.visits / dailyMax) * 132)}px`,
-                  }}
+                    '--i': i,
+                  } as React.CSSProperties}
                 />
                 <span className="hidden text-2xs text-muted-foreground xl:block">
                   {day.date.slice(5)}
@@ -1222,17 +1224,18 @@ function ProjectCardAnalyticsView({
           className="mbs-5 flex h-44 items-end gap-1 overflow-x-auto"
           aria-label="График просмотров"
         >
-          {analytics?.perDay.map((day) => (
+          {analytics?.perDay.map((day, i) => (
             <div
               key={day.date}
               className="group flex min-w-3 flex-1 flex-col items-center justify-end gap-1"
               title={`${day.date}: ${day.count} просмотров, ${day.unique} зрителей`}
             >
               <span
-                className="w-full rounded-bs bg-primary/75 transition-colors group-hover:bg-primary"
+                className="pf-bar-grow w-full rounded-bs bg-primary/75 transition-colors group-hover:bg-primary"
                 style={{
                   height: `${Math.max(day.count ? 6 : 2, (day.count / dailyMax) * 132)}px`,
-                }}
+                  '--i': i,
+                } as React.CSSProperties}
               />
               <span className="hidden text-2xs text-muted-foreground xl:block">
                 {day.date.slice(5)}
