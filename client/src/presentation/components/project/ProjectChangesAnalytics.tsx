@@ -61,7 +61,7 @@ function ChangesChart({
   const visibleLabels = days.length <= 14 ? 4 : 5;
   const labelStep = Math.max(1, Math.floor((days.length - 1) / Math.max(1, visibleLabels - 1)));
   return (
-    <div className="rounded-xl border border-border px-3 pbe-2 pbs-4">
+    <div className="rounded-xl px-3 pbe-2 pbs-4 bg-card shadow-card">
       <div className="flex h-32 items-end gap-1" aria-label="График изменений по дням">
         {days.map((day, index) => {
           const height = day.count === 0 ? 3 : Math.max(8, Math.round((day.count / max) * 112));
@@ -242,7 +242,7 @@ export function ProjectChangesAnalytics({
       {loading ? (
         <div className="grid grid-cols-2 gap-3" aria-label="Загрузка аналитики изменений">
           {[0, 1, 2, 3].map((value) => (
-            <div key={value} className="h-[108px] animate-pulse rounded-xl border bg-panel" />
+            <div key={value} className="h-[108px] animate-pulse rounded-xl bg-panel" />
           ))}
         </div>
       ) : (
@@ -295,7 +295,7 @@ export function ProjectChangesAnalytics({
           ) : null}
 
           {breakdown.length > 0 ? (
-            <div className="rounded-xl border border-border p-4">
+            <div className="rounded-xl p-4 bg-card shadow-card">
               <p className="mbe-3 text-xs font-medium text-muted-foreground">Что меняли</p>
               <div className="space-y-2.5">
                 {breakdown.slice(0, 6).map((item) => (
@@ -400,7 +400,7 @@ export function ProjectChangesAnalytics({
             </div>
           </div>
 
-          <div role="table" aria-label="Изменения проекта" className="overflow-clip rounded-xl border border-border">
+          <div role="table" aria-label="Изменения проекта" className="overflow-clip rounded-xl bg-card shadow-card">
             <div
               role="row"
               className="sticky inset-bs-0 z-10 grid h-12 grid-cols-[minmax(0,1fr)_8.5rem] items-center border-be bg-background/95 px-4 text-xs font-medium text-muted-foreground backdrop-blur"

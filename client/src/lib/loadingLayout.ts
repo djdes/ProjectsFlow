@@ -80,13 +80,20 @@ export function bootSkeletonKey(path: string, search: string, host: string): str
   return `${bare ? 'page' : 'shell'}:${bare && publicBoard ? 'board' : layout}`;
 }
 
-/** InstallAppPrompt shows its banner under the mobile header: not installed, not dismissed. */
+/**
+ * InstallAppPrompt shows its banner under the mobile header: not installed, not hidden.
+ * Serialized into index.html by bootSkeleton.tsx (String(fn)), so it must not use imports:
+ * the «one day, then hide» rule repeats installBanner.ts literally (keys and 24h), and
+ * loadingLayout.test.ts keeps the two in step.
+ */
 export function installBannerExpected(): boolean {
   try {
     const standalone =
       matchMedia('(display-mode: standalone)').matches ||
       (navigator as Navigator & { standalone?: boolean }).standalone === true;
-    return !standalone && localStorage.getItem('pf-install-dismissed') !== '1';
+    if (standalone || localStorage.getItem('pf-install-dismissed') === '1') return false;
+    const seen = Number(localStorage.getItem('pf-install-seen'));
+    return !(seen > 0 && Date.now() - seen > 24 * 60 * 60 * 1000);
   } catch {
     return false;
   }

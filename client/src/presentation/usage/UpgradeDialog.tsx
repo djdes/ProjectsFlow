@@ -127,7 +127,7 @@ export function UpgradeDialog({
               <div
                 key={p.id}
                 className={cn(
-                  'flex flex-col rounded-xl border p-5 transition-colors',
+                  'flex flex-col rounded-xl p-5 transition-colors bg-card shadow-card',
                   tone === 'current' && 'border-border bg-panel',
                   tone === 'recommended' && 'border-primary bg-primary/[0.04] ring-2 ring-primary/25',
                   // Премиум — фиолетовый тон Notion: контейнер нейтральный (C4), цвет живёт в

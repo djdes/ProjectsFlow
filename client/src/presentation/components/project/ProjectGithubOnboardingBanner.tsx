@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   CheckCircle2,
+  ChevronRight,
   Github,
   Link2,
   Loader2,
@@ -225,6 +226,7 @@ export function ProjectGithubOnboardingBanner({
   // Гейт продублирован здесь, чтобы плашка гасла независимо от места рендера.
   const bannersHidden = useProjectBannersHidden();
   const [intro, setIntro] = useState<Action | null>(null);
+  const [chooserOpen, setChooserOpen] = useState(false);
   const [pending, setPending] = useState<Action | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -320,9 +322,49 @@ export function ProjectGithubOnboardingBanner({
 
   return (
     <>
-      {/* Phone: symmetric 16px sides — only the text clears the dismiss «×», so the three
-          tiles below span the full width instead of leaving a 48px gap on the right. */}
-      <div className="relative border-be border-primary/10 bg-primary/[0.04] px-4 py-3 sm:px-8 sm:pe-24">
+      {/* Телефон: одна строка «Подключите код проекта ›» — способы открываются шторкой, а не
+          тремя плитками над доской (плашка отъедала треть экрана). */}
+      <div className="relative flex items-center bg-primary/[0.05] pe-1 sm:hidden">
+        <button
+          type="button"
+          onClick={() => setChooserOpen(true)}
+          className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 ps-4 text-start text-sm font-medium text-foreground active:bg-active"
+        >
+          <Sparkles className="size-4 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1 truncate">Подключите код проекта</span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        </button>
+        <ProjectBannerDismissButton className="static size-11 rounded-lg" />
+      </div>
+      <Dialog open={chooserOpen} onOpenChange={setChooserOpen}>
+        <DialogContent className="gap-2 sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Подключите код проекта</DialogTitle>
+            <DialogDescription>
+              Делегация доступа воркеру и база знаний настроятся автоматически.
+            </DialogDescription>
+          </DialogHeader>
+          {([
+            ['create', Github, 'Создать на GitHub'],
+            ['import', Archive, 'Импортировать ZIP'],
+            ['link', Link2, 'Привязать репозиторий'],
+          ] as const).map(([action, Icon, label]) => (
+            <button
+              key={action}
+              type="button"
+              onClick={() => {
+                setChooserOpen(false);
+                setIntro(action);
+              }}
+              className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-start text-sm transition-colors hover:bg-hover active:bg-active"
+            >
+              <Icon className="size-4 text-muted-foreground" />
+              {label}
+            </button>
+          ))}
+        </DialogContent>
+      </Dialog>
+      <div className="relative bg-primary/[0.04] px-4 py-3 max-sm:hidden sm:px-8 sm:pe-24">
         <ProjectBannerDismissButton className="end-1 inset-bs-1 size-11 rounded-lg sm:end-16 sm:inset-bs-2 sm:size-7" />
         <div
           className="mx-auto flex max-w-[1180px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between"
@@ -364,7 +406,7 @@ export function ProjectGithubOnboardingBanner({
             <button
               type="button"
               onClick={() => setIntro('import')}
-              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-input bg-background px-3.5 text-xs font-semibold text-foreground transition-colors hover:bg-hover max-sm:flex-col max-sm:gap-1 max-sm:px-1 max-sm:py-2 max-sm:text-center max-sm:text-2xs max-sm:leading-tight"
+              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-background px-3.5 text-xs font-semibold text-foreground transition-colors hover:bg-hover max-sm:flex-col max-sm:gap-1 max-sm:px-1 max-sm:py-2 max-sm:text-center max-sm:text-2xs max-sm:leading-tight"
             >
               <Archive className="size-4" />
               {/* «Импортировать» одним словом не помещалось в плитку на 320px. */}
@@ -374,7 +416,7 @@ export function ProjectGithubOnboardingBanner({
             <button
               type="button"
               onClick={() => setIntro('link')}
-              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-primary/20 bg-background px-3.5 text-xs font-semibold text-primary-ink transition-colors hover:border-primary/35 hover:bg-hover max-sm:flex-col max-sm:gap-1 max-sm:px-1 max-sm:py-2 max-sm:text-center max-sm:text-2xs max-sm:leading-tight"
+              className="group inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-background px-3.5 text-xs font-semibold text-primary-ink transition-colors hover:bg-hover max-sm:flex-col max-sm:gap-1 max-sm:px-1 max-sm:py-2 max-sm:text-center max-sm:text-2xs max-sm:leading-tight"
             >
               <Link2 className="size-4" />
               Привязать репозиторий

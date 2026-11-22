@@ -10,9 +10,10 @@ import {
 
 const MobileMenuContext = React.createContext<{
   mobile: boolean;
+  open: boolean;
   close: () => void;
   toggle: () => void;
-}>({ mobile: false, close: () => {}, toggle: () => {} });
+}>({ mobile: false, open: false, close: () => {}, toggle: () => {} });
 export function DropdownMenu({
   open,
   defaultOpen = false,
@@ -32,7 +33,7 @@ export function DropdownMenu({
   };
   return (
     <MobileMenuContext.Provider
-      value={{ mobile, close: () => change(false), toggle: () => change(!isOpen) }}
+      value={{ mobile, open: isOpen, close: () => change(false), toggle: () => change(!isOpen) }}
     >
       <DropdownMenuPrimitive.Root
         {...props}
@@ -138,15 +139,19 @@ export function DropdownMenuContent({
 }: React.ComponentPropsWithoutRef<
   typeof DropdownMenuPrimitive.Content
 >): React.ReactElement {
-  const { mobile, close } = React.useContext(MobileMenuContext);
+  const { mobile, open, close } = React.useContext(MobileMenuContext);
   const { ref: surfaceRef, closeRef } = useMobileSheetSurface(mobile);
   return (
     <>
       {mobile && (
         <DropdownMenuPrimitive.Portal>
+          {/* data-state: the closing backdrop plays its exit and stops taking touches at once
+              (mobile-sheets.css) — without it the dimmer could linger and swallow taps after
+              the menu had already closed. */}
           <div
             aria-hidden="true"
             data-pf-mobile-backdrop="true"
+            data-state={open ? 'open' : 'closed'}
             onClick={close}
           />
         </DropdownMenuPrimitive.Portal>

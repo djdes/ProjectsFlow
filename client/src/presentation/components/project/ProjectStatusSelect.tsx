@@ -38,7 +38,7 @@ export function ProjectStatusSelect({ project }: { project: Project }): React.Re
   };
 
   const badge = (
-    <span className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">
       <span className={`size-1.5 rounded-full ${STATUS_DOT[project.status]}`} />
       {STATUS_LABEL[project.status]}
       {canEdit && <ChevronDown className="size-3" />}

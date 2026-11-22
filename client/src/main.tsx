@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 
+import '@fontsource-variable/source-serif-4/index.css';
 import '@/styles/globals.css';
 import '@/styles/motion.css';
 import '@/styles/mobile-sheets.css';

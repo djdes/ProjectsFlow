@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 
 import { DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, type LucideIcon } from 'lucide-react';
+import { ChevronDown, GripVertical, type LucideIcon } from 'lucide-react';
 import { normalizeTaskPropertyOrder, reorderTaskProperties, type TaskPropertyKey } from '@/domain/user/UiPrefs';
 import { useContainer } from '@/infrastructure/di/container';
 import { toast } from '@/components/ui/sonner';
@@ -12,6 +12,20 @@ import { PropertyRow } from './PropertyRow';
 
 export type TaskProperty = { icon: LucideIcon; label: string; value: ReactNode; visible?: boolean };
 
+// Phone: the discussion matters more than ten property rows, so only the first rows of the
+// person's own order stay open and the rest folds under «Все свойства». The choice is
+// remembered for every task. Desktop (sm+) always shows everything.
+const MOBILE_PREVIEW_ROWS = 3;
+const EXPANDED_KEY = 'pf-task-props-expanded';
+
+function readExpanded(): boolean {
+  try {
+    return localStorage.getItem(EXPANDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function TaskProperties({ taskId, items }: {
   taskId: string;
   items: Record<TaskPropertyKey, TaskProperty>;
@@ -20,6 +34,17 @@ export function TaskProperties({ taskId, items }: {
   const [order, setOrder] = useState(() => normalizeTaskPropertyOrder(undefined));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(readExpanded);
+  const toggleExpanded = (): void => {
+    setExpanded((value) => {
+      try {
+        localStorage.setItem(EXPANDED_KEY, value ? '0' : '1');
+      } catch {
+        /* storage unavailable — the choice lasts until reload */
+      }
+      return !value;
+    });
+  };
   const generation = useRef(0);
   const savedOrder = useRef(order);
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -65,21 +90,47 @@ export function TaskProperties({ taskId, items }: {
     });
   };
   const visible = order.filter((key) => items[key].visible !== false);
+  const hiddenCount = Math.max(0, visible.length - MOBILE_PREVIEW_ROWS);
+  const folded = !expanded && hiddenCount > 0;
   return (
-    <div data-pf-task-properties>
+    <div data-pf-task-properties data-folded={folded || undefined}>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={visible} strategy={verticalListSortingStrategy}>
-          {visible.map((key) => <SortableProperty key={`${taskId}:${key}`} id={key} item={items[key]} disabled={loading} />)}
+          {visible.map((key, index) => (
+            <SortableProperty
+              key={`${taskId}:${key}`}
+              id={key}
+              item={items[key]}
+              disabled={loading}
+              foldedOnPhone={folded && index >= MOBILE_PREVIEW_ROWS}
+            />
+          ))}
         </SortableContext>
       </DndContext>
-      <p className="mbs-2 text-meta text-muted-foreground" role="status">
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={toggleExpanded}
+          aria-expanded={!folded}
+          className="mbs-1 flex min-h-11 w-full items-center gap-1.5 rounded-lg px-1 text-ui text-muted-foreground transition-colors active:bg-active sm:hidden"
+        >
+          <ChevronDown className={cn('size-4 motion-safe:transition-transform', !folded && 'rotate-180')} />
+          {folded ? `Все свойства · ещё ${hiddenCount}` : 'Свернуть свойства'}
+        </button>
+      )}
+      <p className={cn('mbs-2 text-meta text-muted-foreground', folded && 'max-sm:hidden')} role="status">
         {saving ? 'Сохраняем порядок…' : 'Удерживайте строку для перестановки. Порядок общий для всех проектов.'}
       </p>
     </div>
   );
 }
 
-function SortableProperty({ id, item, disabled }: { id: TaskPropertyKey; item: TaskProperty; disabled: boolean }): React.ReactElement {
+function SortableProperty({ id, item, disabled, foldedOnPhone }: {
+  id: TaskPropertyKey;
+  item: TaskProperty;
+  disabled: boolean;
+  foldedOnPhone: boolean;
+}): React.ReactElement {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
   const { animations } = useMotion();
   const style: CSSProperties = { transform: CSS.Transform.toString(transform), transition: animations ? transition : undefined };
@@ -95,7 +146,7 @@ function SortableProperty({ id, item, disabled }: { id: TaskPropertyKey; item: T
         if (event.currentTarget.contains(event.target as Node)) onTouchStart?.(event);
       }}
       onContextMenu={(event) => event.preventDefault()}
-      className={cn('touch-pan-y select-none [-webkit-touch-callout:none]', isDragging && 'relative z-10 rounded-md bg-raised shadow-menu')}
+      className={cn('touch-pan-y select-none [-webkit-touch-callout:none]', foldedOnPhone && 'max-sm:hidden', isDragging && 'relative z-10 rounded-md bg-raised shadow-menu')}
     >
       <PropertyRow icon={item.icon} label={item.label} handle={
         <button

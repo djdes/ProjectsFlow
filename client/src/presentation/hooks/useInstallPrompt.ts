@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { isAndroidDevice, isIOSDevice, isStandaloneDisplay } from '@/lib/platform';
+import { INSTALL_DISMISS_KEY, installBannerHidden, markInstallBannerSeen } from '@/lib/installBanner';
 
 export type InstallPlatform = 'ios' | 'android' | 'desktop';
 
@@ -9,7 +10,6 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
 
-const DISMISS_KEY = 'pf-install-dismissed';
 
 function detectPlatform(): InstallPlatform {
   if (isIOSDevice()) return 'ios';
@@ -34,7 +34,10 @@ export function useInstallPrompt(): {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(DISMISS_KEY) === '1';
+      // Shown for one day after it first appears, then hides on its own (installBanner.ts).
+      if (installBannerHidden(localStorage, Date.now())) return true;
+      if (!detectStandalone()) markInstallBannerSeen(localStorage, Date.now());
+      return false;
     } catch {
       return false;
     }
@@ -80,7 +83,7 @@ export function useInstallPrompt(): {
     // Later shell skeletons (workspace switch) must not reserve the banner row.
     delete document.documentElement.dataset.pfInstall;
     try {
-      localStorage.setItem(DISMISS_KEY, '1');
+      localStorage.setItem(INSTALL_DISMISS_KEY, '1');
     } catch {
       /* localStorage недоступен — баннер вернётся в следующей сессии */
     }

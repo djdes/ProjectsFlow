@@ -10,6 +10,9 @@ type Opts = {
   edgePx?: number;
   // Порог горизонтального смещения для открытия/закрытия (px).
   thresholdPx?: number;
+  // Свайп от левого края как «назад» (iOS): закрыть верхнее окно/шторку или вернуться из
+  // задачи. Возвращает true, если жест обработан — тогда панель не открывается.
+  onBack?: () => boolean;
 };
 
 // iPhone-style edge-swipe + ЖЁСТКАЯ блокировка системного свайпа «назад/вперёд».
@@ -27,10 +30,11 @@ export function useEdgeSwipe({
   onClose,
   edgePx = 22,
   thresholdPx = 44,
+  onBack,
 }: Opts): void {
-  const ref = useRef({ open, onOpen, onClose });
+  const ref = useRef({ open, onOpen, onClose, onBack });
   useEffect(() => {
-    ref.current = { open, onOpen, onClose };
+    ref.current = { open, onOpen, onClose, onBack };
   });
 
   useEffect(() => {
@@ -100,7 +104,7 @@ export function useEdgeSwipe({
       if (fired) return;
       if (edge === 'left' && dx > thresholdPx && Math.abs(dx) > Math.abs(dy)) {
         fired = true;
-        s.onOpen();
+        if (!s.onBack?.()) s.onOpen();
       }
     };
 

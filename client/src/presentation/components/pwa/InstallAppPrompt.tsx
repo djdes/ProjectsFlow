@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import { Download, Plus, Share, SquarePlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { SettingsButtonRow, SettingsGroup } from '@/components/ui/settings-list';
 import {
   Dialog,
   DialogContent,
@@ -108,7 +102,7 @@ export function InstallAppPrompt({
         {/* Одна строка 40px вместе с линией снизу: полоса висит под шапкой на каждой странице,
             и на 320×640 прежние 46px заметно отъедали экран. Крестик — полноценная тач-цель
             44px: -my-1 прячет лишние 4px в соседей, высоту строки он не раздувает. */}
-        <div className="flex min-h-10 shrink-0 items-center gap-2 border-be bg-primary/5 pe-0.5 ps-3 text-ui">
+        <div className="flex min-h-10 shrink-0 items-center gap-2 bg-primary/5 pe-0.5 ps-3 text-ui">
           <span
             aria-hidden
             className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-[9px] font-bold text-primary-foreground"
@@ -141,20 +135,17 @@ export function InstallAppPrompt({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Приложение на телефон</CardTitle>
-        <CardDescription>
-          Добавьте ProjectsFlow на экран «Домой» — откроется на весь экран, как обычное приложение.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Button onClick={() => void handleInstall()} className="gap-2">
-          <Download className="size-4" />
-          Установить приложение
-        </Button>
-        <InstructionsDialog open={showSteps} onOpenChange={setShowSteps} platform={platform} />
-      </CardContent>
-    </Card>
+    <SettingsGroup
+      title="Приложение на телефон"
+      description="ProjectsFlow откроется на весь экран, как обычное приложение."
+    >
+      <SettingsButtonRow
+        icon={<Download />}
+        label="Установить приложение"
+        chevron
+        onClick={() => void handleInstall()}
+      />
+      <InstructionsDialog open={showSteps} onOpenChange={setShowSteps} platform={platform} />
+    </SettingsGroup>
   );
 }

@@ -121,7 +121,7 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
           </div>
         ) : (
           <div className="space-y-5 p-5">
-            <section className="space-y-2 rounded-xl border bg-panel p-4">
+            <section className="space-y-2 rounded-xl bg-panel p-4">
               <p className="text-xs font-medium text-muted-foreground">Содержимое</p>
               <Input key={`${element?.locator.selector}:text`} defaultValue={element?.locator.text ?? ''} disabled={!element} onBlur={(event) => { if (event.target.value !== (element?.locator.text ?? '')) onPatch({ kind: 'text', value: event.target.value }); }} aria-label="Текст элемента" />
             </section>

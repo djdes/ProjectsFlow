@@ -155,7 +155,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
 
         {/* Мини-превью доски (обложка + иконка + имя) — как «окно» на скрине Notion. */}
         <div className="mbs-3 overflow-clip rounded-lg bg-card shadow-card">
-          <div className="flex h-7 items-center gap-1.5 border-be border-border bg-panel px-2">
+          <div className="flex h-7 items-center gap-1.5 border-border bg-panel px-2">
             <span className="size-2 rounded-full bg-foreground/15" />
             <span className="size-2 rounded-full bg-foreground/15" />
             <span className="size-2 rounded-full bg-foreground/15" />
@@ -200,7 +200,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
   return (
     <div className="px-3 py-3">
       {/* URL-строка: projectsflow.ru/p/<slug> + копирование. */}
-      <div className="flex items-center gap-1.5 rounded-md border border-border bg-panel px-2.5 py-1.5">
+      <div className="flex items-center gap-1.5 rounded-md bg-panel px-2.5 py-1.5">
         <span className="min-w-0 flex-1 truncate text-sm text-primary-ink">
           {slug ? publicBoardDisplayUrl(slug) : ''}
         </span>
@@ -230,7 +230,7 @@ export function ProjectPublishTab({ project, isOwner }: Props): React.ReactEleme
         </button>
 
         {appearanceOpen && (
-          <div className="mx-2 mbe-2 space-y-2 rounded-lg border bg-panel p-3">
+          <div className="mx-2 mbe-2 space-y-2 rounded-lg bg-panel p-3">
             <div>
               <p className="mbe-2 text-xs font-medium text-muted-foreground">Цвет акцента</p>
               <div className="flex flex-wrap items-center gap-2">

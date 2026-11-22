@@ -6,7 +6,7 @@
     <!-- iOS Safari игнорирует maximum-scale/user-scalable для accessibility (с iOS 10+) —
          не полагаемся на них. Защита от авто-зума при фокусе в input реализована через
          font-size: 16px на input/textarea в @media (max-width: 639px) в globals.css. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>ProjectsFlow</title>
 
     <!-- PWA: Home Screen install + service worker (public/sw.js, registered by main.tsx).
@@ -15,13 +15,35 @@
     <meta name="pf-app-shell" content="1" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- iOS launch screens (public/splash, light and dark per system theme): without them the
+         installed app starts on a white screen, which flashes in the dark theme. -->
+    <link rel="apple-touch-startup-image" href="/splash/splash-1320x2868-light.png" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1320x2868-dark.png" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1290x2796-light.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1290x2796-dark.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1206x2622-light.png" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1206x2622-dark.png" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1179x2556-light.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1179x2556-dark.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1284x2778-light.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1284x2778-dark.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1170x2532-light.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1170x2532-dark.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1125x2436-light.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1125x2436-dark.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1242x2688-light.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1242x2688-dark.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-828x1792-light.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-828x1792-dark.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-750x1334-light.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-750x1334-dark.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)" />
     <meta name="application-name" content="ProjectsFlow" />
     <meta name="apple-mobile-web-app-title" content="ProjectsFlow" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#16171b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fcfcf9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#181715" media="(prefers-color-scheme: dark)" />
     <script>
       // FOUC fix: применяем тему ДО React, чтобы не мерцать светлым на загрузке тёмной.
       (function () {
@@ -31,6 +53,12 @@
             t === 'dark' ||
             (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
           document.documentElement.classList.add(dark ? 'dark' : 'light');
+          // Status bar follows the chosen theme (ThemeProvider keeps it in sync later).
+          var metas = document.querySelectorAll('meta[name="theme-color"]');
+          for (var i = 0; i < metas.length; i++) {
+            metas[i].setAttribute('content', dark ? '#181715' : '#fcfcf9');
+            metas[i].removeAttribute('media');
+          }
         } catch (_) {
           /* localStorage недоступен — ничего страшного, останется light */
         }

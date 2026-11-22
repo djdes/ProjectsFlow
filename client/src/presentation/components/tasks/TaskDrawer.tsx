@@ -50,6 +50,7 @@ import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAud
 import { useCommentNotifyCandidates } from '@/presentation/hooks/useCommentNotifyCandidates';
 import { defaultCommentAudience } from '@/domain/task/defaultCommentAudience';
 import { CommentActionsMenu } from '@/presentation/components/tasks/CommentActionsMenu';
+import { useCommentGestures } from '@/presentation/hooks/useCommentGestures';
 import { getInitials } from '@/presentation/layout/projectIcons';
 import { CommentBody } from './CommentBody';
 import { isRalphConversationComment } from './RalphQuestionControls';
@@ -3132,13 +3133,40 @@ function CommentItem({
     onReply?.(comment.id, displayName, within && text ? text : null);
   };
 
+  // Телефон: свайп вправо — ответить, долгое нажатие — меню действий (ряд кнопок у имени
+  // на тач-экранах скрыт, как в Telegram/Claude). Замороженный тред жестов не принимает.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const gestures = useCommentGestures({
+    onReply: onReply && !frozen ? handleReplyClick : undefined,
+    onLongPress: frozen ? undefined : () => setMenuOpen(true),
+    disabled: editing,
+  });
+
   // Лента без линий (как в приложении Claude): ни рамок, ни линии-коннектора между
   // аватарами — комментарии разделяет только воздух space-y-4.
   return (
     <li
       id={`comment-${comment.id}`}
-      className="group relative flex scroll-mbs-4 items-start gap-3"
+      className={cn(
+        'group relative flex scroll-mbs-4 items-start gap-3 [@media(hover:none)]:select-none [@media(hover:none)]:[-webkit-touch-callout:none]',
+        // Snap back smoothly after release; while the finger drags, the row follows 1:1.
+        gestures.offset === 0 && 'motion-safe:transition-[translate] motion-safe:duration-200',
+      )}
+      {...gestures.handlers}
+      style={gestures.offset ? { translate: `${gestures.offset}px 0` } : undefined}
     >
+      {gestures.offset > 0 && (
+        <span
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute -start-9 inset-bs-1 grid size-7 place-items-center rounded-full text-muted-foreground transition-colors',
+            gestures.armed && 'bg-primary text-primary-foreground',
+          )}
+          style={{ opacity: Math.min(1, gestures.offset / 56) }}
+        >
+          <Reply className="size-3.5" />
+        </span>
+      )}
       {isAgent ? (
         // Avatar заменён на «✻»-плашку — иконка Claude в peach-кружке, не путается с
         // юзер-аватаром Denis (он был источником путаницы в исходном issue).
@@ -3191,7 +3219,7 @@ function CommentItem({
               прозрачными, но нажимались и занимали место у имени), на телефоне — 40px. */}
           <div
             className={cn(
-              'ms-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100',
+              'ms-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100',
               frozen && 'hidden',
             )}
           >
@@ -3200,7 +3228,7 @@ function CommentItem({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="size-6 max-sm:size-10"
+                className="size-6 [@media(hover:none)]:hidden"
                 // onMouseDown (не onClick): успеваем считать выделение ДО его схлопывания.
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -3216,7 +3244,7 @@ function CommentItem({
               type="button"
               variant="ghost"
               size="icon"
-              className="size-6 max-sm:size-10"
+              className="size-6 [@media(hover:none)]:hidden"
               onClick={enterEdit}
               aria-label="Редактировать"
               title="Редактировать"
@@ -3228,6 +3256,12 @@ function CommentItem({
               taskId={taskId}
               comment={comment}
               onDelete={() => void remove()}
+              onReply={onReply ? handleReplyClick : undefined}
+              onEdit={enterEdit}
+              menuOpen={menuOpen}
+              onMenuOpenChange={setMenuOpen}
+              // Тач: кнопка невидима (меню открывает долгое нажатие), но остаётся якорем.
+              triggerClassName="[@media(hover:none)]:pointer-events-none [@media(hover:none)]:size-px [@media(hover:none)]:overflow-hidden"
             />
           </div>
         </div>

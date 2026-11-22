@@ -85,6 +85,9 @@ const config: Config = {
           '"Segoe UI Emoji"',
           '"Segoe UI Symbol"',
         ],
+        // Засечки — только крупные заголовки страниц и пустых экранов (как в приложении
+        // Claude). Шрифт подключён в main.tsx через @fontsource-variable, без CDN.
+        serif: ['"Source Serif 4 Variable"', 'Georgia', '"Times New Roman"', 'serif'],
         mono: [
           'ui-monospace',
           'SFMono-Regular',

@@ -100,7 +100,7 @@ export function InboxSearch({
 // «Просрочено 3» читалось так же спокойно, как «Без срока 0».
 const DUE_CHIPS: ReadonlyArray<{ key: Exclude<DueKind, 'future'>; label: string; dot: string; tint: string | null }> = [
   { key: 'late', label: 'Просрочено', dot: 'bg-destructive', tint: 'border-transparent bg-destructive-soft text-destructive' },
-  { key: 'today', label: 'Сегодня', dot: 'bg-today', tint: 'border-transparent bg-today/15 text-today' },
+  { key: 'today', label: 'Сегодня', dot: 'bg-today', tint: 'border-transparent bg-today/[0.12] text-today' },
   { key: 'none', label: 'Без срока', dot: 'bg-muted-foreground/60', tint: null },
 ];
 
@@ -356,7 +356,7 @@ const SWIPE_TONE: Record<SwipeAction['tone'], { readonly soft: string; readonly 
   done: { soft: 'bg-done-soft text-done-ink', armed: 'bg-done text-background' },
   approval: { soft: 'bg-approval-soft text-approval-ink', armed: 'bg-approval text-background' },
   // «Отложить» — цветом срока «сегодня»: жест про срок, а не про статус.
-  snooze: { soft: 'bg-today/15 text-today', armed: 'bg-today text-background' },
+  snooze: { soft: 'bg-today/[0.12] text-today', armed: 'bg-today text-background' },
 };
 
 // Функция, а не таблица элементов: JSX на уровне модуля исполнялся бы при импорте (в том

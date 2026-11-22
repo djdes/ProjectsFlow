@@ -9,6 +9,7 @@ import {
   AnimatedUser,
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
+import { wantsViewTransition } from '@/lib/viewTransition';
 import { cn } from '@/lib/utils';
 
 type Gesture = { id: number; x: number; y: number; dragged: boolean };
@@ -63,8 +64,10 @@ export function MobileBottomNav(): React.ReactElement {
   return (
     <nav
       aria-label="Основная навигация"
-      // Дизайн C4: нижняя полоса с линией сверху (как линия под шапкой страниц), внутри —
-      // тот же переключатель, что «Мои / Все»: серая подложка и белая плашка выбранного.
+      // Плавающая капсула без линии сверху (как в приложении Claude), внутри — тот же
+      // переключатель, что «Мои / Все». Пока открыта клавиатура, полоса скрыта (globals.css,
+      // html[data-pf-keyboard]) — иначе на iOS она едет над клавиатурой и съедает место.
+      data-pf-bottom-nav
       className="shrink-0 bg-background px-3 pbe-[max(env(safe-area-inset-bottom,0px),0.5rem)] pbs-1.5"
     >
       <div
@@ -141,7 +144,7 @@ export function MobileBottomNav(): React.ReactElement {
             ),
           );
           restore(index);
-          navigate(items[index]!.path);
+          navigate(items[index]!.path, { viewTransition: wantsViewTransition() });
         }}
         onPointerCancel={() => {
           suppressClickRef.current = true;
@@ -177,7 +180,7 @@ export function MobileBottomNav(): React.ReactElement {
             data-pf-route={item.path}
             aria-label={item.label}
             aria-current={item.active ? 'page' : undefined}
-            onClick={() => pathname === item.path ? scrollMainToTop(animations) : navigate(item.path)}
+            onClick={() => pathname === item.path ? scrollMainToTop(animations) : navigate(item.path, { viewTransition: wantsViewTransition() })}
             className={cn(
               'relative z-10 flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-2xs min-[360px]:px-2 leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
               item.active

@@ -298,6 +298,7 @@ function allowedConsoleError(entry, run) {
   }
   if (/^\[vite\]/.test(text) || /WebSocket connection to '.*' failed/.test(text)) return 'HMR дев-сервера Vite';
   if (networkError && run.blockedUrls.has(url)) return 'внешний запрос заблокирован смоуком';
+  if (networkError && run.offlineSimulated && /ERR_INTERNET_DISCONNECTED/.test(text)) return 'сеть отключена сценарием (офлайн-чтение)';
   if (networkError && run.journal.expectedErrors?.some((e) => e.url === url && text.includes(String(e.status)))) {
     return 'ошибка сети, явно заданная сценарием для проверки восстановления';
   }

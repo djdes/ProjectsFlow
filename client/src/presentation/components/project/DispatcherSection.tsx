@@ -127,7 +127,7 @@ export function DispatcherSection({ project, onChanged }: Props): React.ReactEle
         {/* ≥1 кандидат — текущий статус */}
         {candidates !== null && candidates.length > 0 && (
           <div className="space-y-2">
-            <div className="rounded-md border bg-muted/10 p-3 text-sm">
+            <div className="rounded-md bg-muted/70 p-3 text-sm">
               {project.dispatcherUserId === null ? (
                 <p className="text-muted-foreground">
                   Сейчас диспетчер <strong>не назначен</strong> — задачи никто автономно

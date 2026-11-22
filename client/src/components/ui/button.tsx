@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
+import { haptic } from '@/lib/haptics';
 
 // Base-classes:
 //   - Отклик на нажатие и переходы живут в `.pf-button` (styles/motion.css): сжатие на
@@ -64,10 +65,25 @@ export function Button({
   variant,
   size,
   asChild = false,
+  onClick,
   ...props
 }: ButtonProps): React.ReactElement {
   const Comp = asChild ? Slot : 'button';
-  return <Comp className={cn('pf-button', buttonVariants({ variant, size, className }))} {...props} />;
+  // «Принять» / «Готово» подтверждаются короткой вибрацией на телефоне (lib/haptics).
+  const handleClick: typeof onClick =
+    variant === 'accept'
+      ? (event) => {
+          haptic('success');
+          onClick?.(event);
+        }
+      : onClick;
+  return (
+    <Comp
+      className={cn('pf-button', buttonVariants({ variant, size, className }))}
+      onClick={handleClick}
+      {...props}
+    />
+  );
 }
 
 export { buttonVariants };

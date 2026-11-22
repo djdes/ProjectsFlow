@@ -206,7 +206,7 @@ export function TasksPage(): React.ReactElement {
     return (
       <div className="grid h-full place-items-center p-6">
         <div className="max-w-md space-y-4 text-center">
-          <h1 className="text-2xl font-semibold">Проект не&nbsp;найден</h1>
+          <h1 className="font-serif text-2xl font-semibold">Проект не&nbsp;найден</h1>
           <Button asChild variant="outline">
             <Link to="/">На&nbsp;главную</Link>
           </Button>

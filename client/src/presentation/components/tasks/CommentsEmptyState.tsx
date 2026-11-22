@@ -114,8 +114,8 @@ export function CommentsEmptyState({
           </g>
         </g>
       </svg>
-      <div className="text-sm font-medium text-muted-foreground/70">{label}</div>
-      {hint ? <div className="max-w-[16rem] text-xs text-muted-foreground/50">{hint}</div> : null}
+      <div className="font-serif text-lg font-medium text-foreground/75">{label}</div>
+      {hint ? <div className="max-w-[16rem] text-ui text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }

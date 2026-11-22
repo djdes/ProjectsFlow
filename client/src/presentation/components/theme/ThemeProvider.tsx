@@ -14,6 +14,9 @@ function isTheme(value: string | null): value is Theme {
   return value === 'light' || value === 'dark' || value === 'system';
 }
 
+/** Browser chrome colour per theme — equals --background (globals.css). */
+const THEME_COLOR = { light: '#fcfcf9', dark: '#181715' } as const;
+
 function resolveTheme(theme: Theme): 'light' | 'dark' {
   if (theme === 'system') {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -60,6 +63,16 @@ export function ThemeProvider({
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, [theme]);
+
+  // Status bar / browser chrome follows the app theme, not only the system one: with
+  // «dark» chosen on a light phone the bar must not stay white. Same hex as --background
+  // and the boot script in index.html.
+  useEffect(() => {
+    for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+      meta.content = THEME_COLOR[resolved];
+      meta.removeAttribute('media');
+    }
+  }, [resolved]);
 
   const setTheme = (t: Theme): void => {
     localStorage.setItem(storageKey, t);

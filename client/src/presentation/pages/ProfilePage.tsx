@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Activity, Monitor, Moon, Sun, User } from 'lucide-react';
+import { Activity, KeyRound, Monitor, Moon, Sparkles, Sun, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { SettingsButtonRow, SettingsGroup, SettingsRow } from '@/components/ui/settings-list';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
@@ -231,18 +232,12 @@ function SecurityCard(): React.ReactElement {
   // сохранить «новый пароль», который никуда не записывался (потеря доступа). Никаких
   // полей ввода пароля до появления reset/change-flow.
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Безопасность</CardTitle>
-        <CardDescription>Смена пароля прямо в интерфейсе — скоро.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">
-          Самостоятельная смена пароля пока недоступна. Если нужно сменить пароль или вы
-          потеряли доступ — напишите в поддержку, поможем восстановить.
-        </p>
-      </CardContent>
-    </Card>
+    <SettingsGroup
+      title="Безопасность"
+      description="Если нужно сменить пароль или вы потеряли доступ — напишите в поддержку, поможем восстановить."
+    >
+      <SettingsRow icon={<KeyRound />} label="Смена пароля" trailing="Скоро" />
+    </SettingsGroup>
   );
 }
 
@@ -256,59 +251,52 @@ function PreferencesCard(): React.ReactElement {
   const { theme, setTheme } = useTheme();
   const { animations, setAnimations } = useMotion();
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Преференсы</CardTitle>
-        <CardDescription>Выбор сохраняется локально в&nbsp;этом браузере.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-3">
-          <Label>Тема</Label>
-          {/* Общий переключатель вида (SegmentedControl) — тот же, что в остальных местах;
-              сетка из трёх равных колонок, чтобы сегменты были одного размера. */}
-          <SegmentedControl
-            className="grid w-full grid-cols-3 sm:max-w-md"
-            value={theme}
-            onChange={setTheme}
-            options={THEME_OPTIONS}
-          />
-        </div>
-
-        <div className="flex items-start justify-between gap-4 sm:max-w-md">
-          <div className="space-y-1">
-            <div className="text-sm font-medium leading-none">Плавные анимации</div>
-            <p className="text-sm text-muted-foreground">
-              Переходы, вкладки и отклик на действия. Включены по умолчанию.
-              Учитываем настройку уменьшения движения на вашем устройстве.
-            </p>
-          </div>
+    <SettingsGroup title="Преференсы" description={'Выбор сохраняется локально в\u00a0этом браузере.'}>
+      <div className="space-y-2.5 px-3 py-3">
+        <Label className="flex items-center gap-3 text-sm font-normal">
+          <span className="grid size-6 place-items-center text-muted-foreground"><Sun className="size-[18px]" /></span>
+          Тема
+        </Label>
+        {/* Общий переключатель вида (SegmentedControl) — тот же, что в остальных местах;
+            сетка из трёх равных колонок, чтобы сегменты были одного размера. */}
+        <SegmentedControl
+          className="grid w-full grid-cols-3"
+          value={theme}
+          onChange={setTheme}
+          options={THEME_OPTIONS}
+        />
+      </div>
+      <SettingsRow
+        icon={<Sparkles />}
+        label="Плавные анимации"
+        description="Переходы, вкладки и отклик на действия. Учитываем настройку уменьшения движения на устройстве."
+        trailing={
           <Switch
             checked={animations}
             onCheckedChange={setAnimations}
             aria-label="Анимация интерфейса"
           />
-        </div>
-      </CardContent>
-    </Card>
+        }
+      />
+    </SettingsGroup>
   );
 }
 
 function MonitoringCard(): React.ReactElement {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Мониторинг</CardTitle>
-        <CardDescription>Состояние серверов и здоровье инфраструктуры.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Button asChild variant="outline" className="gap-2">
-          <Link to="/monitoring">
-            <Activity className="size-4" />
-            Открыть мониторинг
+    <SettingsGroup title="Мониторинг">
+      <SettingsButtonRow
+        icon={<Activity />}
+        label="Открыть мониторинг"
+        description="Состояние серверов и здоровье инфраструктуры."
+        chevron
+        render={({ className, children }) => (
+          <Link to="/monitoring" className={className}>
+            {children}
           </Link>
-        </Button>
-      </CardContent>
-    </Card>
+        )}
+      />
+    </SettingsGroup>
   );
 }
 

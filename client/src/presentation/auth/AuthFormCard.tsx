@@ -52,7 +52,7 @@ export function AuthFormCard({ title, description, icon, children, footer }: Pro
               <span className="text-sm font-semibold">ProjectsFlow</span>
             </div>
           )}
-          <h1 className="text-h1 font-bold leading-tight tracking-[-0.01em]">{title}</h1>
+          <h1 className="font-serif text-h1 font-semibold leading-tight">{title}</h1>
           {description && <p className="text-balance text-sm text-muted-foreground">{description}</p>}
         </header>
         {children}

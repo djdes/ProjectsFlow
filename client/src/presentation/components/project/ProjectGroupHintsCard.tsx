@@ -52,7 +52,7 @@ export function ProjectGroupHintsCard({ project, onProjectUpdated }: Props): Rea
   };
 
   return (
-    <section className="rounded-xl border p-4">
+    <section className="rounded-xl p-4 bg-card shadow-card">
       <div className="flex items-center gap-2">
         <MessagesSquare className="size-4 text-muted-foreground" />
         <p className="text-sm font-semibold">Как называют проект в Telegram-группах</p>

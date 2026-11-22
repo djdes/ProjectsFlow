@@ -31,7 +31,7 @@ export function ImageGenerationPanel(): React.ReactElement {
     finally{submitting.current=false;setBusy(false);}
   };
   return <section className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6">
-    <div><h1 className="text-2xl font-semibold">Генерация фото</h1><p className="mbs-2 text-sm text-muted-foreground">Опиши фотографию, которую хочешь получить. Результаты сохранятся здесь.</p></div>
+    <div><h1 className="font-serif text-2xl font-semibold">Генерация фото</h1><p className="mbs-2 text-sm text-muted-foreground">Опиши фотографию, которую хочешь получить. Результаты сохранятся здесь.</p></div>
     <form className="space-y-3 rounded-xl border border-border bg-card p-4" onSubmit={event=>{event.preventDefault();void submit();}}>
       <label htmlFor="image-prompt" className="block text-sm font-medium">Что создать</label>
       <textarea id="image-prompt" value={prompt} onChange={event=>setPrompt(event.target.value)} maxLength={8000} rows={4} placeholder="Например: предметная фотография жёлтой кружки на светлом столе, мягкий утренний свет" className="w-full resize-y rounded-lg border border-input bg-background p-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" />

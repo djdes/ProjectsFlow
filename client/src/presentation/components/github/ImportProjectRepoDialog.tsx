@@ -217,7 +217,7 @@ export function ImportProjectRepoDialog({
           <input ref={inputRef} type="file" accept=".zip,application/zip" hidden onChange={(e) => choose(e.target.files?.[0])} />
 
           {analyzing && (
-            <div className="flex items-center gap-2 rounded-xl border bg-panel px-3 py-3 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-xl bg-panel px-3 py-3 text-sm text-muted-foreground">
               <Loader2 className="size-4 motion-safe:animate-spin text-primary" />
               Проверяем структуру, runtime, базу данных и секреты…
             </div>
@@ -225,7 +225,7 @@ export function ImportProjectRepoDialog({
 
           {analysis && !analyzing && (
             <div className={cn(
-              'overflow-clip rounded-xl border',
+              'overflow-clip rounded-xl bg-card shadow-card',
               analysis.status === 'supported' && 'border-done/30 bg-done/[0.06]',
               analysis.status === 'needs_config' && 'border-warning/35 bg-warning/[0.07]',
               analysis.status === 'unsupported' && 'border-destructive/30 bg-destructive/[0.05]',

@@ -454,11 +454,11 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
                   </p>
                 </div>
                 {loadingAnalytics ? (
-                  <div className="flex h-44 items-center justify-center gap-2 rounded-xl border text-sm text-muted-foreground">
+                  <div className="flex h-44 items-center justify-center gap-2 rounded-xl text-sm text-muted-foreground bg-card shadow-card">
                     <Loader2 className="size-4 motion-safe:animate-spin" /> Загрузка просмотров…
                   </div>
                 ) : !analytics ? (
-                  <div className="grid h-32 place-items-center rounded-xl border px-6 text-center">
+                  <div className="grid h-32 place-items-center rounded-xl px-6 text-center bg-card shadow-card">
                     <p className="text-xs text-muted-foreground">
                       Не удалось загрузить аналитику просмотров.
                     </p>
@@ -476,7 +476,7 @@ export function ProjectActivityDialog({ open, onOpenChange, projectId, actions }
               {analytics ? (
                 <section className="space-y-2.5">
                   <p className="text-sm font-medium">Зрители</p>
-                  <div className="flex items-start justify-between gap-3 rounded-xl border border-border px-4 py-3">
+                  <div className="flex items-start justify-between gap-3 rounded-xl px-4 py-3 bg-card shadow-card">
                     <div className="min-w-0 space-y-0.5">
                       <p className="text-sm font-medium">Показывать историю ваших просмотров</p>
                       <p className="text-xs text-muted-foreground">

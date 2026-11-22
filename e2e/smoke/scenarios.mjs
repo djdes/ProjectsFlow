@@ -23,6 +23,30 @@ import { liveChatScenarios, liveRolesScenarios } from './live-chat.mjs';
 import { adminMailingScenarios } from './admin-mailing.mjs';
 import { adminUsersScenarios } from './admin-users.mjs';
 
+// Left-edge swipe (iOS «back»): starts inside the 22px edge zone of useEdgeSwipe.
+async function touchEdgeSwipe(t, distance = 120) {
+  const y = (t.page.viewportSize()?.height ?? 640) / 2;
+  const cdp = await t.page.context().newCDPSession(t.page);
+  try {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 8, y }] });
+    for (let step = 1; step <= 12; step += 1) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 8 + (distance * step) / 12, y }] });
+      await t.page.waitForTimeout(16);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+// Phone folds task properties after the first three rows (TaskProperties.tsx).
+async function expandTaskProperties(t, properties) {
+  const toggle = properties.getByRole('button', { name: /^Все свойства/ });
+  if (!(await toggle.isVisible())) return;
+  await toggle.tap();
+  await t.visible(properties.getByRole('button', { name: 'Свернуть свойства', exact: true }), 'свойства развёрнуты');
+}
+
 export const VIEWPORTS = {
   desktop: { label: 'десктоп 1440×900', viewport: { width: 1440, height: 900 } },
   phone: {
@@ -1133,6 +1157,13 @@ export const scenarios = [
       const properties = page.locator('[data-pf-task-properties]');
       const press = (locator) => t.isMobile ? locator.tap() : locator.click();
       await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/t-home`, { ready: () => properties });
+      if (t.isMobile) {
+        await t.check('на телефоне свойства свёрнуты до трёх строк', async () => {
+          await t.visible(properties.getByText('Статус', { exact: true }), 'Статус');
+          await t.hidden(properties.getByText('Повтор', { exact: true }), 'Повтор под «Все свойства»');
+          await expandTaskProperties(t, properties);
+        });
+      }
       await t.check('подписи свойств и «Создано» в меню', async () => {
         for (const label of ['Статус', 'Проект', 'Исполнитель', 'Срок до', 'Повтор', 'Кто утверждает']) {
           await t.visible(properties.getByText(label, { exact: true }), label);
@@ -1220,6 +1251,7 @@ export const scenarios = [
       await page.locator(card('t-home')).getByText(taskTitle(state, 't-home'), { exact: true }).tap();
       const properties = page.locator('[data-pf-task-properties]');
       await t.visible(properties, 'свойства в окне задачи');
+      await expandTaskProperties(t, properties);
       await t.step('закрытие вложенной шторки сохраняет окно задачи', async () => {
         await properties.getByRole('button', { name: 'Кто утверждает', exact: true }).tap();
         const picker = page.getByRole('dialog', { name: 'Кто утверждает' });
@@ -1227,6 +1259,15 @@ export const scenarios = [
         await page.keyboard.press('Escape');
         await t.hidden(picker, 'закрытая шторка утверждающих');
         await t.visible(properties, 'окно задачи после закрытия шторки');
+      });
+      await t.step('свайп от левого края закрывает верхнюю шторку, окно задачи остаётся', async () => {
+        await properties.getByRole('button', { name: 'Кто утверждает', exact: true }).tap();
+        const picker = page.getByRole('dialog', { name: 'Кто утверждает' });
+        await t.visible(picker, 'шторка утверждающих');
+        await touchEdgeSwipe(t);
+        await t.hidden(picker, 'шторка закрылась свайпом от края');
+        await t.visible(properties, 'окно задачи после свайпа');
+        await t.hidden(page.getByRole('navigation', { name: 'Проекты' }), 'панель не открылась вместо «назад»');
       });
       await t.step('долгий тап меняет порядок внутри окна, не закрывая его', async () => {
         await touchLongDrag(t, properties.locator('[data-pf-task-property="status"]'), properties.locator('[data-pf-task-property="assignee"]'));
@@ -1294,6 +1335,160 @@ export const scenarios = [
       });
       await shot('comment-sent');
       await t.pageChecks('окно задачи после комментария с картинкой');
+    },
+  },
+
+  {
+    id: 'visual-rules',
+    title: 'Вид: мало цветов рамок, шапка и нижняя навигация без линий',
+    matrix: [['phone', 'light'], ['phone', 'dark']],
+    async run(t) {
+      const { page } = t;
+      // Distinct visible border colours on the page: one line per theme plus a few meaning
+      // colours (accent, status, drop zone). Growth past this means borders went «dirty» again.
+      const borderColors = () => page.evaluate(() => {
+        const colors = new Set();
+        for (const el of document.querySelectorAll('body *')) {
+          const box = el.getBoundingClientRect();
+          if (!box.width || !box.height) continue;
+          const cs = getComputedStyle(el);
+          if (cs.visibility === 'hidden') continue;
+          for (const side of ['Top', 'Right', 'Bottom', 'Left']) {
+            if (parseFloat(cs[`border${side}Width`]) === 0 || cs[`border${side}Style`] === 'none') continue;
+            const color = cs[`border${side}Color`];
+            if (/\/ 0\)$|transparent|rgba\(0, 0, 0, 0\)/.test(color)) continue;
+            colors.add(color);
+          }
+        }
+        return [...colors];
+      });
+      const pages = [
+        ['Входящие', '/', () => page.locator(NOW)],
+        ['доска', `/projects/${BOARD_PROJECT_ID}`, () => page.locator(card('t-home'))],
+        ['задача', `/projects/${BOARD_PROJECT_ID}/tasks/t-home`, () => page.locator('[data-pf-comment-composer]:visible')],
+        ['профиль', '/profile', () => page.getByRole('heading', { name: 'Профиль' })],
+      ];
+      for (const [name, path, ready] of pages) {
+        await t.goto(path, { ready });
+        await t.check(`${name}: не больше 6 цветов рамок`, async () => {
+          const colors = await borderColors();
+          t.assert(colors.length <= 6, `цветов рамок ${colors.length}: ${colors.join(', ')}`);
+        });
+      }
+      await t.check('шапка и нижняя навигация без линий', async () => {
+        const header = await page.locator('[data-pf-mobile-app-header]').evaluate((el) => getComputedStyle(el).borderBottomWidth);
+        const nav = await page.locator('[data-pf-bottom-nav]').evaluate((el) => getComputedStyle(el).borderTopWidth);
+        t.assert(header === '0px' && nav === '0px', `линия у шапки ${header}, у навигации ${nav}`);
+      });
+    },
+  },
+
+  {
+    id: 'offline-reads',
+    title: 'Без сети: доска открывается из последней сохранённой копии',
+    matrix: [['phone', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      await t.goto(`/projects/${BOARD_PROJECT_ID}`, { ready: () => page.locator(card('t-home')) });
+      // Saved copies are written right after the reads finish.
+      await page.waitForTimeout(800);
+      await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('button', { name: 'Профиль' }).tap();
+      await t.visible(page.getByRole('heading', { name: 'Профиль' }), 'профиль');
+      await t.step('сеть пропала — назад на доску', async () => {
+        t.offlineSimulated = true;
+        await page.context().route(
+          (url) => url.pathname === '/api' || url.pathname.startsWith('/api/'),
+          (route) => route.abort('internetdisconnected'),
+        );
+        await page.goBack();
+        await t.visible(page.locator(card('t-home')).getByText(taskTitle(state, 't-home'), { exact: true }).first(), 'карточка из сохранённой копии');
+      });
+    },
+  },
+
+  {
+    id: 'board-card-menu',
+    title: 'Доска на телефоне: долгое нажатие на карточку без переноса открывает меню',
+    matrix: [['phone', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      await t.goto(`/projects/${BOARD_PROJECT_ID}`, { ready: () => page.locator(card('t-home')) });
+      const target = page.locator(card('t-home')).getByText(taskTitle(state, 't-home'), { exact: true }).first();
+      await t.step('долгое нажатие и отпускание на месте', async () => {
+        await target.scrollIntoViewIfNeeded();
+        await target.tap({ trial: true });
+        const { x, y } = await touchPoint(target);
+        const cdp = await page.context().newCDPSession(page);
+        try {
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+          await page.waitForTimeout(500);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        } finally {
+          await cdp.detach().catch(() => {});
+        }
+        const sheet = page.getByRole('dialog', { name: taskTitle(state, 't-home') });
+        await t.visible(sheet, 'меню карточки');
+        await t.visible(sheet.getByRole('button', { name: 'Открыть', exact: true }), 'пункт «Открыть»');
+        await t.visible(sheet.getByRole('button', { name: 'Удалить', exact: true }), 'пункт «Удалить»');
+        t.assert(!t.journal.mutations.some((m) => m.path.endsWith('/t-home/move')), 'долгое нажатие без переноса сдвинуло карточку');
+        await sheet.getByRole('button', { name: 'Открыть', exact: true }).tap();
+        await t.visible(page.locator('[data-pf-task-properties]:visible'), 'задача открылась из меню');
+      });
+      await t.pageChecks('доска после меню карточки');
+    },
+  },
+
+  {
+    id: 'comment-gestures',
+    title: 'Комментарий на телефоне: свайп — ответ, долгое нажатие — меню, без рамок',
+    matrix: [['phone', 'light'], ['narrow', 'dark']],
+    async run(t) {
+      const { page, state } = t;
+      const at = new Date(Date.now() - 3_600_000).toISOString();
+      state.comments = { 't-home': [{
+        id: 'c-gesture', taskId: 't-home', ownerUserId: 'u-boris', body: 'Проверьте, пожалуйста, первый экран.',
+        actorKind: 'user', agentName: null, notifyMode: 'all', replyToCommentId: null, quotedText: null,
+        createdAt: at, updatedAt: at, attachments: [], acknowledgements: [],
+      }] };
+      await t.goto(`/projects/${BOARD_PROJECT_ID}/tasks/t-home`, { ready: () => page.locator('[data-pf-comment-composer]:visible') });
+      const item = page.locator('#comment-c-gesture:visible');
+      const body = item.getByText('Проверьте, пожалуйста, первый экран.', { exact: true });
+      await t.visible(body, 'комментарий в ленте');
+      await t.check('на тач-экране у комментария нет ряда кнопок и рамок', async () => {
+        await t.hidden(item.getByRole('button', { name: 'Ответить', exact: true }), 'кнопка «Ответить» у имени');
+        const card = page.locator('[data-pf-comment-composer]:visible .pf-comment-composer-card');
+        const borders = await card.evaluate((el) => getComputedStyle(el).borderTopWidth);
+        t.assert(borders === '0px', `у поля комментария рамка ${borders}`);
+        const itemBorder = await item.evaluate((el) => getComputedStyle(el).borderTopWidth);
+        t.assert(itemBorder === '0px', `у комментария рамка ${itemBorder}`);
+      });
+      await t.step('долгое нажатие открывает меню с «Ответить»', async () => {
+        await item.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        const { x, y } = await touchPoint(body);
+        const cdp = await page.context().newCDPSession(page);
+        try {
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+          await page.waitForTimeout(650);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        } finally {
+          await cdp.detach().catch(() => {});
+        }
+        await t.visible(page.getByRole('menuitem', { name: 'Ответить', exact: true }), 'пункт «Ответить» в меню');
+        await t.visible(page.getByRole('menuitem', { name: 'Кто уведомлён', exact: true }), 'пункт «Кто уведомлён»');
+        await page.keyboard.press('Escape');
+        await t.hidden(page.getByRole('menu'), 'меню закрылось');
+        // The menu opens on release: lifting the finger must not pick an item (it once hit «Изменить»).
+        await t.hidden(item.locator('[contenteditable="true"]'), 'комментарий не перешёл в правку после долгого нажатия');
+        // Radix keeps body pointer-events off until the menu's exit finishes; a finger lands later.
+        await t.waitFor(() => page.evaluate(() => document.body.style.pointerEvents !== 'none'), 'страница не приняла касания после меню');
+      });
+      await t.step('свайп вправо отвечает на комментарий', async () => {
+        // The sticky composer overlaps the end of the list: bring the comment to the middle first.
+        await item.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await touchSwipeRight(t, body, 110);
+        await t.visible(page.locator('[data-pf-comment-composer]:visible .pf-comment-reply-strip'), 'плашка «В ответ» в поле комментария');
+      });
+      await t.pageChecks('лента после жестов');
     },
   },
 
