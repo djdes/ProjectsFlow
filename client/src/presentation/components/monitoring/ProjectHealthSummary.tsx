@@ -56,7 +56,7 @@ export function ProjectHealthSummary({
   const critical = alerts.filter((a) => a.severity === 'critical').length;
 
   return (
-    <div className="sticky inset-bs-0 z-10 -mx-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-be bg-background/80 px-4 py-2.5 backdrop-blur sm:-mx-6 sm:px-6">
+    <div className="sticky inset-bs-0 z-10 -mx-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-be bg-background px-4 py-2.5 sm:-mx-6 sm:px-6">
       <span className="text-sm font-medium">{plural(servers.length, 'сервер', 'сервера', 'серверов')}</span>
       {servers.length > 0 && (
         <span className="flex items-center gap-3 text-xs text-muted-foreground">

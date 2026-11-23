@@ -281,7 +281,7 @@ export function AiConversationView({
               aria-hidden={!showJumpToLatest}
               tabIndex={showJumpToLatest ? 0 : -1}
               className={cn(
-                'absolute inset-be-4 start-1/2 z-20 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-raised/95 text-muted-foreground shadow-menu backdrop-blur',
+                'absolute inset-be-4 start-1/2 z-20 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-raised text-muted-foreground shadow-menu',
                 'transition-opacity duration-300 hover:text-foreground',
                 showJumpToLatest ? 'opacity-100' : 'pointer-events-none opacity-0',
               )}
@@ -292,7 +292,7 @@ export function AiConversationView({
           {/* Нижний safe-area — только от md: на телефоне под композером всегда есть
               кто-то, кто его уже учёл (нижняя навигация приложения или нижний лист панели
               ИИ/студии), и второй инсет давал пустую полосу ~34px над навигацией. */}
-          <div className="shrink-0 bg-background/95 px-3 pbe-3 pbs-3 backdrop-blur md:pbe-[max(12px,env(safe-area-inset-bottom,0px))]">
+          <div className="shrink-0 bg-background px-3 pbe-3 pbs-3 md:pbe-[max(12px,env(safe-area-inset-bottom,0px))]">
             <div className={cn('mx-auto', compact ? 'max-w-3xl' : 'max-w-4xl')}>
               {/* Подсказки живут НАД композером и приезжают из metadata последнего ответа.
                   Своего генератора у нас нет: сервер не прислал — блок не рендерится. */}
@@ -461,7 +461,7 @@ function AiConversationHeader({
         </DialogContent>
       </Dialog>
       <Dialog open={deleteOpen} onOpenChange={(open) => { if (!busy) setDeleteOpen(open); }}>
-        <DialogContent className="sm:max-w-sm" overlayClassName="bg-black/25 backdrop-blur-[1px]">
+        <DialogContent className="sm:max-w-sm" overlayClassName="bg-black/25">
           <DialogTitle>Удалить чат?</DialogTitle>
           <DialogDescription>История и все ответы этого разговора будут удалены без возможности восстановления.</DialogDescription>
           <DialogFooter className="gap-2 sm:space-x-0"><Button type="button" variant="outline" onClick={() => setDeleteOpen(false)} disabled={busy}>Отмена</Button><Button type="button" variant="destructive" onClick={() => void remove()} disabled={busy}>{busy ? 'Удаляю…' : 'Удалить'}</Button></DialogFooter>

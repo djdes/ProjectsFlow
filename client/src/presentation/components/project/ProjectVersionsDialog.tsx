@@ -243,7 +243,7 @@ export function ProjectVersionsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        overlayClassName="bg-black/70 backdrop-blur-[1px]"
+        overlayClassName="bg-black/70"
         className="flex h-[92dvh] w-[94vw] max-w-[94vw] flex-col gap-0 overflow-clip p-0 shadow-float sm:rounded-xl"
       >
         <DialogHeader className="shrink-0 border-be px-5 py-4 pe-12">

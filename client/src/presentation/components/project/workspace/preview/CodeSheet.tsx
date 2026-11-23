@@ -115,7 +115,7 @@ export function CodeSheet({ open, onOpenChange, element, status, message, onPatc
               className={cn('min-h-[360px] flex-1 resize-none bg-transparent p-5 font-mono text-xs leading-5 text-foreground outline-none', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre')}
               aria-label="Исходный HTML выбранного элемента"
             />
-            <div className="sticky inset-be-0 flex justify-end border-bs bg-panel/95 p-3 backdrop-blur">
+            <div className="sticky inset-be-0 flex justify-end border-bs bg-panel p-3">
               <Button type="button" size="sm" className="gap-1.5" disabled={!element || !sourceDraft.trim() || sourceDraft === source} onClick={() => onPatch({ kind: 'html', value: sourceDraft })}><Save className="size-3.5" />Сохранить исходник</Button>
             </div>
           </div>

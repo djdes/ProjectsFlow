@@ -101,7 +101,7 @@ export function CancelWorkButton({ task: sourceTask, onChanged, workerRunning = 
     const when = task.ralphCancelRequestedAt!;
     const who = task.ralphCancelRequestedByDisplayName;
     return (
-      <div className="space-y-2 border-bs bg-background/95 px-3 py-3 backdrop-blur-md">
+      <div className="space-y-2 border-bs bg-background px-3 py-3">
         <div className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning-ink">
           <p className="flex items-center gap-1.5 font-medium"><Octagon className="size-3.5 shrink-0" aria-hidden="true" />Отмена запрошена ({formatRelativeMinutes(when)})</p>
           {who && <p className="mbs-0.5 opacity-80">{who}</p>}
@@ -127,7 +127,7 @@ export function CancelWorkButton({ task: sourceTask, onChanged, workerRunning = 
   }
 
   return (
-    <div className="border-bs bg-background/95 px-3 py-3 backdrop-blur-md">
+    <div className="border-bs bg-background px-3 py-3">
       {feedback?.taskId === task.id && <p role="status" className="mbe-2 rounded-md bg-done-soft px-3 py-2 text-xs text-done-ink">{feedback.text}</p>}
       {error && <p role="alert" className="mbe-2 text-xs text-destructive">{error}</p>}
       {(workerRunning || ['in_progress', 'awaiting_clarification'].includes(task.status)) && (

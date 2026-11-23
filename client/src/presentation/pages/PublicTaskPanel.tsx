@@ -112,7 +112,7 @@ export function PublicTaskPanel({
         className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-xl"
       >
         {/* Верхняя панель действий (read-only: только развернуть + копировать). */}
-        <div className="sticky inset-bs-0 z-10 flex items-center justify-end gap-1 border-be bg-background/80 px-2 py-1.5 backdrop-blur">
+        <div className="sticky inset-bs-0 z-10 flex items-center justify-end gap-1 border-be bg-background px-2 py-1.5">
           <button
             type="button"
             onClick={() => navigate(expandPath)}

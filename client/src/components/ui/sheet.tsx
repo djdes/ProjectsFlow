@@ -36,7 +36,10 @@ export function SheetOverlay({
         // dimmed (center-peek, модально): затемняющий фон + клики ловятся (клик мимо закрывает).
         // Иначе (side-peek): прозрачный + pointer-events-none — клики «проходят» сквозь оверлей
         // к остальному приложению (немодальные правые окна — тыкать весь сайт, как в Notion).
-        dimmed ? 'bg-black/40 backdrop-blur-[1px]' : 'pointer-events-none',
+        // Без backdrop-blur: размытие всего экрана пересчитывается на каждом кадре, пока окно
+        // открывается и затемнение проявляется. (На телефоне листы и так без размытия —
+        // затемнение им задаёт mobile-sheets.css.)
+        dimmed ? 'bg-black/40' : 'pointer-events-none',
         className,
       )}
       {...props}

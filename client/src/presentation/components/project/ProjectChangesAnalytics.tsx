@@ -403,7 +403,7 @@ export function ProjectChangesAnalytics({
           <div role="table" aria-label="Изменения проекта" className="overflow-clip rounded-xl bg-card shadow-card">
             <div
               role="row"
-              className="sticky inset-bs-0 z-10 grid h-12 grid-cols-[minmax(0,1fr)_8.5rem] items-center border-be bg-background/95 px-4 text-xs font-medium text-muted-foreground backdrop-blur"
+              className="sticky inset-bs-0 z-10 grid h-12 grid-cols-[minmax(0,1fr)_8.5rem] items-center border-be bg-background px-4 text-xs font-medium text-muted-foreground"
             >
               <span role="columnheader">Изменение</span>
               <span role="columnheader">Кто и когда</span>

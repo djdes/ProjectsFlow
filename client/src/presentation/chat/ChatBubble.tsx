@@ -234,7 +234,7 @@ export function ChatBubble({
             openMenu(r.left, r.bottom + 4);
           }}
           className={cn(
-            'absolute inset-bs-0.5 z-20 grid size-6 place-items-center rounded-full bg-raised/95 text-muted-foreground opacity-0 shadow-card backdrop-blur transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100',
+            'absolute inset-bs-0.5 z-20 grid size-6 place-items-center rounded-full bg-raised text-muted-foreground opacity-0 shadow-card transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100',
             isOwn ? 'start-0.5' : 'end-0.5',
           )}
         >

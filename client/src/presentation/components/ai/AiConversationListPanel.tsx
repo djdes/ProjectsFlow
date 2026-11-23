@@ -103,7 +103,7 @@ export function AiConversationListPanel(): React.ReactElement {
         {!loading && !error && groups.length === 0 && <p className="px-2 py-5 text-xs leading-5 text-muted-foreground">{search.trim() ? 'Личные чаты не найдены.' : 'Создайте личный чат — он будет всегда под рукой.'}</p>}
         {groups.map((group) => (
           <section key={group.label} className="mbe-3">
-            <h3 className="sticky inset-bs-0 z-10 bg-sidebar/90 px-2 py-1 text-xs font-medium leading-5 text-muted-foreground backdrop-blur-sm">{group.label}</h3>
+            <h3 className="sticky inset-bs-0 z-10 bg-sidebar px-2 py-1 text-xs font-medium leading-5 text-muted-foreground">{group.label}</h3>
             <div className="space-y-0.5">
               {group.items.map((conversation) => <ConversationRow key={conversation.id} conversation={conversation} now={now} />)}
             </div>
@@ -131,7 +131,7 @@ export function AiConversationListPanel(): React.ReactElement {
         )}
       </div>
       {/* min-h + padding, а не фикс-высота: под safe-area кнопка должна расти вниз, а не сжиматься. */}
-      <div className="shrink-0 border-bs bg-sidebar/95 pbe-[env(safe-area-inset-bottom,0px)] pbs-2 backdrop-blur-sm">
+      <div className="shrink-0 border-bs bg-sidebar pbe-[env(safe-area-inset-bottom,0px)] pbs-2">
         <button
           type="button"
           onClick={() => void create()}
