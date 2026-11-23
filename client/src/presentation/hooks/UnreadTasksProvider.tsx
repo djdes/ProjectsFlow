@@ -5,6 +5,7 @@ import {
   REALTIME_CONNECTED_EVENT,
   TASK_CHANGED_EVENT,
 } from '@/presentation/hooks/useNotificationStream';
+import { onTabReturn } from '@/lib/tabReturn';
 
 type UnreadTasks = {
   // Непрочитана ли задача для текущего пользователя.
@@ -54,13 +55,7 @@ export function UnreadTasksProvider({
 
   // Вернулись во вкладку — перечитываем: пока человека не было, ему могли делегировать
   // задачу, и подсветка должна появиться без перезагрузки страницы.
-  useEffect(() => {
-    const onVisible = (): void => {
-      if (document.visibilityState === 'visible') refresh();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [refresh]);
+  useEffect(() => onTabReturn(refresh), [refresh]);
 
   // Задачу назначили прямо сейчас — счётчик на «Входящих» должен подрасти без перезагрузки
   // и без перехода на другую вкладку. Дебаунс: серия правок (приоритет + дедлайн + перенос)

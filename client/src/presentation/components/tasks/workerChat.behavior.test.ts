@@ -346,6 +346,21 @@ test('a missed lifecycle event is recovered on focus and a late previous-task re
   } finally { await view.close(); }
 });
 
+// A real return to the tab: away (blur) for longer than the re-read threshold, then focus.
+// A bare focus (a click into an iframe, DevTools) no longer re-reads anything.
+async function returnToTab(): Promise<void> {
+  const now = performance.now.bind(performance);
+  const own = Object.getOwnPropertyDescriptor(performance, 'now');
+  await act(async () => { window.dispatchEvent(new Event('blur')); });
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => now() + 60_000 });
+  try {
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+  } finally {
+    if (own) Object.defineProperty(performance, 'now', own);
+    else delete (performance as { now?: unknown }).now;
+  }
+}
+
 test('cards recover worker activity, errors and questions from one project snapshot and update after an answer', async () => {
   const Badge = await component('WorkerActivityBadge');
   let calls = 0;
@@ -370,7 +385,7 @@ test('cards recover worker activity, errors and questions from one project snaps
     await act(async () => { window.dispatchEvent(new CustomEvent('pf:live-changed', { detail: { projectId: 'project', taskId: 'task', status: 'completed' } })); });
     assert.equal(view.host.textContent, '');
     active = [activity('other', 'running')];
-    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await returnToTab();
     assert.match(view.host.textContent ?? '', /Воркер работает/);
   } finally { await view.close(); }
 });

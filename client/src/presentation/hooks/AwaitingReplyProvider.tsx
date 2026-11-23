@@ -7,6 +7,7 @@ import {
   REALTIME_CONNECTED_EVENT,
   TASK_CHANGED_EVENT,
 } from '@/presentation/hooks/useNotificationStream';
+import { onTabReturn } from '@/lib/tabReturn';
 
 type AwaitingReply = {
   // Задачи, где меня ждут с ответом: новые вопросы сверху.
@@ -44,13 +45,7 @@ export function AwaitingReplyProvider({ children }: { children: React.ReactNode 
     refresh();
   }, [refresh, pathname]);
 
-  useEffect(() => {
-    const onVisible = (): void => {
-      if (document.visibilityState === 'visible') refresh();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [refresh]);
+  useEffect(() => onTabReturn(refresh), [refresh]);
 
   // Адресованный мне комментарий приходит уведомлением, чужой ответ или закрытие задачи —
   // событием изменения задачи; пачку событий схлопываем в одно чтение.

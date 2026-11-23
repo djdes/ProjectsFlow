@@ -61,19 +61,39 @@ const destinations: Array<[RegExp, string]> = [
   [/^\/workspaces\/[^/]+\/settings$/, 'WorkspaceSettingsPage'],
 ];
 
-/** Import code only, never user data. Failed speculative imports can be retried. */
-export function preloadPage(href: string): void {
+/** Speculative downloads only on a connection that can afford them. */
+function canPreload(): boolean {
   const connection = (
     navigator as Navigator & {
       connection?: { saveData?: boolean; effectiveType?: string };
     }
   ).connection;
-  if (
+  return !(
     connection?.saveData ||
     /(^|-)2g$/.test(connection?.effectiveType ?? '') ||
     !navigator.onLine
-  )
-    return;
+  );
+}
+
+/**
+ * The rich-text editor (comments, descriptions) is the heaviest chunk, ~200 KB gzipped, and
+ * was fetched only when the first task opened. Fetched while the page is idle after start,
+ * the first task opens without waiting for it. Code only, same network rules as preloadPage.
+ */
+export function preloadEditorWhenIdle(): void {
+  if (typeof window === 'undefined' || !canPreload()) return;
+  const load = (): void => {
+    void import('@/presentation/components/editor/RichTextEditor').catch(() => {
+      /* Opening a task retries the import. */
+    });
+  };
+  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(load, { timeout: 5000 });
+  else window.setTimeout(load, 3000);
+}
+
+/** Import code only, never user data. Failed speculative imports can be retried. */
+export function preloadPage(href: string): void {
+  if (!canPreload()) return;
   try {
     const url = new URL(href, location.href);
     if (url.origin !== location.origin) return;
