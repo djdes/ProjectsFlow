@@ -4,6 +4,7 @@
 
 import { HttpError, type HttpErrorBody } from '@/lib/HttpError';
 import { InFlightReads } from './InFlightReads';
+import { ReadCache, readCacheTtl } from './ReadCache';
 import { fetchWithDeadline } from './fetchWithDeadline';
 import {
   cacheStorageStore,
@@ -16,6 +17,12 @@ import {
 } from './offlineReads';
 
 const reads = new InFlightReads();
+// Stable resources (project settings, members, the project list…) are not re-read on every
+// task opening and page visit: see ReadCache.ts for what is kept and what clears it.
+const cache = new ReadCache();
+if (typeof window !== 'undefined') cache.listen(window);
+// Answers served from the offline copy while the network was down: never kept in `cache`.
+let offlineAnswers = 0;
 let requestWorkspace: string | null = null;
 // Offline reading (offlineReads.ts): the account the stored reads belong to.
 const offlineStore = cacheStorageStore();
@@ -24,6 +31,7 @@ let offlineOwner: string | null = readOfflineOwner();
 function forgetOfflineReads(): void {
   offlineOwner = null;
   writeOfflineOwner(null);
+  cache.clear();
   void offlineStore?.clear().catch(() => undefined);
 }
 
@@ -79,6 +87,7 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
     if (isRead && offlineOwner && offlineStore && isNetworkFailure(error)) {
       const saved = await offlineStore.get(offlineKey(offlineOwner, workspace, path)).catch(() => null);
       if (saved !== null) {
+        offlineAnswers += 1;
         try {
           window.dispatchEvent(new CustomEvent('pf:offline-read', { detail: { path } }));
         } catch {
@@ -139,15 +148,35 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
 async function mutate<T>(path: string, opts: Options): Promise<T> {
   reads.invalidate();
   try { return await request<T>(path, opts); }
-  finally { reads.invalidate(); }
+  finally {
+    reads.invalidate();
+    // Also on failure: the server may have applied part of the change.
+    cache.afterWrite(path);
+  }
+}
+
+function read<T>(path: string, options?: Pick<Options, 'timeoutMs' | 'workspaceId'>): Promise<T> {
+  const workspace = options?.workspaceId ?? requestWorkspace ?? 'account';
+  const ttl = readCacheTtl(path);
+  const cacheKey = `${workspace}:${path}`;
+  if (ttl !== null) {
+    const hit = cache.get(cacheKey);
+    if (hit !== undefined) return Promise.resolve(hit as T);
+  }
+  const generation = cache.generation;
+  const offlineBefore = offlineAnswers;
+  return reads
+    .get(`${workspace}:${path}:${options?.timeoutMs ?? 45000}`, () => request<T>(path, options))
+    .then((value) => {
+      if (ttl !== null && generation === cache.generation && offlineAnswers === offlineBefore) {
+        cache.set(cacheKey, path, value, ttl);
+      }
+      return value;
+    });
 }
 
 export const httpClient = {
-  get: <T>(path: string, options?: Pick<Options, 'timeoutMs' | 'workspaceId'>) =>
-    reads.get(
-      `${options?.workspaceId ?? requestWorkspace ?? 'account'}:${path}:${options?.timeoutMs ?? 45000}`,
-      () => request<T>(path, options),
-    ),
+  get: <T>(path: string, options?: Pick<Options, 'timeoutMs' | 'workspaceId'>) => read<T>(path, options),
   post: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'POST', body }),
   patch: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PATCH', body }),
   put: <T>(path: string, body?: unknown) => mutate<T>(path, { method: 'PUT', body }),

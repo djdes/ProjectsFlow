@@ -10,6 +10,21 @@ import { build } from 'esbuild';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// A real return to the tab: away (blur) for longer than the re-read threshold, then focus.
+// A bare focus (a click into an iframe, DevTools) no longer re-reads anything.
+async function returnToTab(): Promise<void> {
+  const now = performance.now.bind(performance);
+  const own = Object.getOwnPropertyDescriptor(performance, 'now');
+  await act(async () => { window.dispatchEvent(new Event('blur')); });
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => now() + 60_000 });
+  try {
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+  } finally {
+    if (own) Object.defineProperty(performance, 'now', own);
+    else delete (performance as { now?: unknown }).now;
+  }
+}
+
 test('worker completion updates the pill; retries and out-of-order snapshots cannot inflate it', async () => {
   let serverCount = 1, reads = 0;
   let deferred: Array<(value: number) => void> | null = null;
@@ -56,7 +71,7 @@ test('worker completion updates the pill; retries and out-of-order snapshots can
     await act(async () => { pending![0](2); });
     assert.equal(state.count, 7, 'an older HTTP response cannot overwrite the new count');
     serverCount = 6; await act(async () => { state.forget('already-counted'); }); assert.equal(state.count, 6);
-    serverCount = 8; await event('focus'); assert.equal(state.count, 8);
+    serverCount = 8; await returnToTab(); assert.equal(state.count, 8, 'coming back to the tab re-reads the count');
   } finally {
     await act(async () => { root.unmount(); }); host.remove();
   }

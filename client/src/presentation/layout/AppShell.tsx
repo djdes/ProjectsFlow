@@ -53,6 +53,7 @@ import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
 import { canLeaveTaskPage, closeTopLayer } from '@/lib/edgeBack';
 import { PlatformUpdateNotice } from '@/presentation/components/experience/PlatformUpdateNotice';
 import { ImpersonationBanner } from '@/presentation/auth/ImpersonationBanner';
+import { preloadEditorWhenIdle } from '@/presentation/app/pageModules';
 
 const COLLAPSE_KEY = 'pf_sidebar_collapsed';
 
@@ -74,6 +75,8 @@ function WorkspaceShell(): React.ReactElement {
   const [rightPanelWidth, setRightPanelWidth] = useState(0);
   const { pathname } = useLocation();
   useAppNavigation(isDesktop);
+  // The task window's editor downloads while the first screen is idle (pageModules).
+  useEffect(() => preloadEditorWhenIdle(), []);
   const studioRoute = /\/projects\/[^/]+\/studio(?:\/|$)/.test(pathname);
   const immersiveRoute = pathname === '/ai' || pathname.startsWith('/ai/') || studioRoute;
   const [studioChatHidden, setStudioChatHidden] = useState(false);

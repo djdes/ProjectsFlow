@@ -10,6 +10,7 @@ import {
 import type { UsageSummary } from '@/domain/usage/Usage';
 import { useContainer } from '@/infrastructure/di/container';
 import { TASK_CHANGED_EVENT } from '@/presentation/hooks/useNotificationStream';
+import { onTabReturn } from '@/lib/tabReturn';
 
 type UsageContextValue = {
   usage: UsageSummary | null;
@@ -56,12 +57,10 @@ export function UsageProvider({ children }: { children: ReactNode }): React.Reac
       if (!document.hidden) refresh();
     };
     const id = window.setInterval(tick, POLL_MS);
-    window.addEventListener('focus', tick);
-    document.addEventListener('visibilitychange', tick);
+    const stopTabReturn = onTabReturn(tick);
     return () => {
       window.clearInterval(id);
-      window.removeEventListener('focus', tick);
-      document.removeEventListener('visibilitychange', tick);
+      stopTabReturn();
     };
   }, [refresh]);
 

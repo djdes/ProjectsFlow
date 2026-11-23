@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { canDragSheetFrom, shouldDismissSheet } from '@/lib/mobileSheetGesture';
+import { haptic } from '@/lib/haptics';
+import { canDragSheetFrom, sheetDismissDistance, shouldDismissSheet } from '@/lib/mobileSheetGesture';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 
 export function useMobileSheet(enabled = true): boolean {
@@ -55,6 +56,24 @@ export function warmSheetViewport(): void {
   else setTimeout(warm, 300);
 }
 
+// The grabber nods into an arrow on the first few sheets ever opened: it shows that the strip
+// is pressable and closes the sheet downwards. Then people know, and it stays still.
+const GRABBER_HINTS = 3;
+const GRABBER_HINT_KEY = 'pf-grabber-hints';
+let grabberHintShown = false;
+function takeGrabberHint(): boolean {
+  if (grabberHintShown) return false;
+  grabberHintShown = true;
+  try {
+    const seen = Number(localStorage.getItem(GRABBER_HINT_KEY) ?? 0) || 0;
+    if (seen >= GRABBER_HINTS) return false;
+    localStorage.setItem(GRABBER_HINT_KEY, String(seen + 1));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Keeps Radix in charge of focus, dismissal and draft/confirmation guards. */
 export function useMobileSheetSurface(
   enabled: boolean,
@@ -91,6 +110,7 @@ export function useMobileSheetSurface(
     };
     const unwatchViewport = watchSheetViewport(resize);
     resize();
+    if (takeGrabberHint()) node.setAttribute('data-pf-grabber-hint', '');
     // Some legacy forms scroll the dialog itself rather than an inner body.
     const keepHandleVisible = (): void => {
       closeRef.current?.style.setProperty(
@@ -108,6 +128,9 @@ export function useMobileSheetSurface(
       velocity: number;
       distance: number;
       dragging: boolean;
+      // Pulled far enough that letting go closes the sheet: the grabber says so.
+      dismissAt: number;
+      release: boolean;
     } | null = null;
     let suppressClickUntil = 0;
     const start = (target: EventTarget | null, x: number, y: number): void => {
@@ -133,6 +156,8 @@ export function useMobileSheetSurface(
         velocity: 0,
         distance: 0,
         dragging: false,
+        dismissAt: Infinity,
+        release: false,
       };
     };
     const move = (x: number, y: number, event: Event): void => {
@@ -146,6 +171,7 @@ export function useMobileSheetSurface(
         }
         if (dy < 8 || Math.abs(dy) <= Math.abs(dx)) return;
         gesture.dragging = true;
+        gesture.dismissAt = sheetDismissDistance(node.clientHeight);
         node.setAttribute('data-pf-sheet-interacted', '');
         node.setAttribute('data-pf-sheet-dragging', '');
       }
@@ -156,11 +182,19 @@ export function useMobileSheetSurface(
       gesture.lastY = y;
       gesture.distance = Math.max(0, dy);
       node.style.setProperty('--pf-sheet-y', `${gesture.distance}px`);
+      const release = gesture.distance >= gesture.dismissAt;
+      if (release !== gesture.release) {
+        gesture.release = release;
+        node.toggleAttribute('data-pf-sheet-release', release);
+        // A short tick at the point where letting go closes the sheet (Android; iOS ignores it).
+        if (release) haptic('tap');
+      }
     };
     const finish = (cancelled: boolean, event?: Event): void => {
       const current = gesture;
       gesture = null;
       node.removeAttribute('data-pf-sheet-dragging');
+      node.removeAttribute('data-pf-sheet-release');
       if (!current?.dragging) return;
       if (event?.cancelable) event.preventDefault();
       // A finger held still must not retain the velocity of an earlier movement.
@@ -259,6 +293,7 @@ export function useMobileSheetSurface(
       node.removeEventListener('click', click, true);
       node.removeAttribute('data-pf-sheet-dragging');
       node.removeAttribute('data-pf-sheet-interacted');
+      node.removeAttribute('data-pf-sheet-release');
       node.style.removeProperty('--pf-sheet-y');
     };
   }, [enabled, node]);
@@ -279,7 +314,11 @@ export const MobileSheetHandle = React.forwardRef<
       className="pf-sheet-handle"
       aria-label="Закрыть окно"
     >
-      <span aria-hidden="true" />
+      {/* Two halves of one strip: pressed or pulled down, they bend into a down arrow. */}
+      <span className="pf-sheet-grabber" aria-hidden="true">
+        <span />
+        <span />
+      </span>
     </button>
   );
 });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RecentTaskView } from '@/domain/recent/RecentTaskView';
 import { useContainer } from '@/infrastructure/di/container';
+import { onTabReturn } from '@/lib/tabReturn';
 
 // Загрузчик «недавно открытых задач» текущего юзера. Рефетч по:
 //  - событию 'pf:recent-changed' (TaskDrawer шлёт его после записи открытия),
@@ -28,10 +29,10 @@ export function useRecentTasks(limit: number): {
     refresh();
     const onChanged = (): void => refresh();
     window.addEventListener('pf:recent-changed', onChanged);
-    window.addEventListener('focus', onChanged);
+    const stopTabReturn = onTabReturn(onChanged);
     return () => {
       window.removeEventListener('pf:recent-changed', onChanged);
-      window.removeEventListener('focus', onChanged);
+      stopTabReturn();
     };
   }, [refresh]);
 

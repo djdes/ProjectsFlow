@@ -7,10 +7,17 @@ import { actionErrorMessage } from '@/lib/actionFeedback';
 import { cn } from '@/lib/utils';
 import { isDesktopAppOnline } from '@/domain/desktop-notes/DesktopNote';
 import { useDesktopNotes } from '@/presentation/hooks/useDesktopNotes';
+import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 
 // «На экран»: закрепляет задачу стикером поверх окон (приложение «ProjectsFlow Заметки»).
-// Только для компьютера — на телефоне стикерам негде жить.
-export function PinToScreenButton({ taskId }: { taskId: string }): React.ReactElement {
+// Только для компьютера — на телефоне стикерам негде жить: там кнопка не монтируется вовсе,
+// и список заметок (/desktop-notes) телефон не запрашивает.
+export function PinToScreenButton({ taskId }: { taskId: string }): React.ReactElement | null {
+  const wide = useMediaQuery('(min-width: 640px)');
+  return wide ? <PinToScreenToggle taskId={taskId} /> : null;
+}
+
+function PinToScreenToggle({ taskId }: { taskId: string }): React.ReactElement {
   const navigate = useNavigate();
   const { isPinned, pin, unpin } = useDesktopNotes();
   const [busy, setBusy] = useState(false);
@@ -49,7 +56,7 @@ export function PinToScreenButton({ taskId }: { taskId: string }): React.ReactEl
       aria-pressed={pinned}
       title={pinned ? 'Убрать заметку с экрана' : 'Закрепить задачу заметкой поверх окон'}
       className={cn(
-        'h-8 shrink-0 gap-1.5 px-2 max-sm:hidden',
+        'h-8 shrink-0 gap-1.5 px-2',
         pinned ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
       )}
       onClick={() => void toggle()}

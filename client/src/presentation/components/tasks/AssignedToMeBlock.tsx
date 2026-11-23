@@ -179,6 +179,7 @@ import {
   selectBoardTasks,
   type InboxBlockTask,
 } from './inboxBlockTasks';
+import { onTabReturn } from '@/lib/tabReturn';
 
 type Props = {
   regionId?: string;
@@ -563,6 +564,10 @@ export function AssignedToMeBlock({
   };
   const [loading, setLoading] = useState(true);
   const [drawerTask, setDrawerTask] = useState<InboxBlockTask | null>(null);
+  // Something changed while the task window was open (edit, comment, status…): each change
+  // already refreshed the lists; closing re-reads them once more only in that case — just
+  // looking at a task sends no requests.
+  const drawerChanged = useRef(false);
   // Зеркало hideDone для mount-эффекта: prop не в deps (иначе refetch на каждый
   // Eye-toggle), а стартовую вкладку надо решать по ВИДИМЫМ спискам — иначе блок
   // открывался бы на «Для меня», пустой из-за скрытых done-задач. Синхронизация — в
@@ -697,13 +702,12 @@ export function AssignedToMeBlock({
         if (!cancelled) setLoading(false);
       });
     // Перефетч при возврате на вкладку — ловим новые назначения без ручного refresh.
-    const onFocus = (): void => void refresh();
-    window.addEventListener('focus', onFocus);
+    const stopTabReturn = onTabReturn(() => void refresh());
     return () => {
       cancelled = true;
       refreshGeneration.current += 1;
       focusedGeneration.current += 1;
-      window.removeEventListener('focus', onFocus);
+      stopTabReturn();
     };
   }, [taskAssigneeRepository, userRepository, refresh]);
 
@@ -2742,10 +2746,17 @@ export function AssignedToMeBlock({
         canEdit={drawerTask?.canModify ?? true}
         onClose={() => {
           setDrawerTask(null);
+          if (drawerChanged.current) void refresh();
+          drawerChanged.current = false;
+        }}
+        onSubmit={(input) => {
+          drawerChanged.current = true;
+          return handleDrawerSubmit(input);
+        }}
+        onCommitsChange={() => {
+          drawerChanged.current = true;
           void refresh();
         }}
-        onSubmit={handleDrawerSubmit}
-        onCommitsChange={() => void refresh()}
         projectName={drawerTask && !drawerTask.isInbox ? drawerTask.projectName : undefined}
         isInbox={drawerTask?.isInbox ?? false}
         aiProjectId={drawerTask && !drawerTask.isInbox ? drawerTask.projectId : null}

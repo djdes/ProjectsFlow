@@ -1492,13 +1492,19 @@ html[data-pf-modality='pointer'] :focus-visible {
   }
 }
 
-/* Фокус в поле ввода (комментарий, ИИ, поиск, формы): от рамки поля один раз расходится
-   и гаснет кольцо акцента — палец видит, что поле приняло ввод. Кольцо — outline, а не
-   box-shadow: свои кольца полей (Tailwind ring, ореол композера) остаются как есть и не
-   мигают. Капсулы с полем внутри (.pf-field-capsule, композер комментария) реагируют на
+/* Поля ввода — по всему сайту (комментарий, ИИ, поиск, формы):
+   • Фокус: вокруг поля вспыхивает мягкий ореол акцента и стягивается в обычное состояние
+     фокуса (у композера — в его кольцо): палец видит, что поле приняло ввод. Задан только
+     начальный кадр — анимация сама приходит к тому, что у поля в покое, и свои кольца полей
+     не мигают.
+   • Обычное поле (bg-field) в фокусе чуть подсвечено акцентом; подпись над полем и иконка в
+     нём (лупа поиска) — цвета акцента, пока поле в фокусе.
+   • Плейсхолдер в фокусе приглушается, каретка — цвета акцента.
+   • Ошибка (aria-invalid) — короткое покачивание «нет».
+   Капсулы с полем внутри (.pf-field-capsule, композер комментария) реагируют на
    :focus-within; редактор описания и ячейки таблицы — нет, там поле занимает пол-экрана.
    Движение — только при prefers-reduced-motion: no-preference; «Анимации: выкл» в профиле
-   глушит его через html.pf-no-motion. */
+   глушит его через html.pf-no-motion. Всё — разовые короткие перерисовки одного поля. */
 @layer components {
   .pf-field-capsule {
     transition: background-color 200ms var(--pf-ease);
@@ -1512,22 +1518,61 @@ html[data-pf-modality='pointer'] :focus-visible {
   :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea) {
     caret-color: oklch(var(--primary));
   }
+  :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea).bg-field {
+    transition:
+      border-color 200ms var(--pf-ease),
+      background-color 200ms var(--pf-ease),
+      box-shadow 200ms var(--pf-ease);
+  }
+  :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea).bg-field:focus {
+    background-color: color-mix(in oklch, oklch(var(--primary)) 4%, oklch(var(--field)));
+  }
+  :where(div, fieldset, section, li, form) > label,
+  label > span:first-child,
+  :where(.relative) > svg {
+    transition: color 200ms var(--pf-ease);
+  }
+  :where(div, fieldset, section, li, form):has(> :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea):focus) > label,
+  label:has(> :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea):focus) > span:first-child,
+  :where(.relative):has(> :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea):focus) > svg {
+    color: oklch(var(--primary));
+  }
 
   @media (prefers-reduced-motion: no-preference) {
     :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea):not(.pf-field-capsule *, .pf-comment-composer-card *):focus,
     .pf-field-capsule:focus-within,
     .pf-comment-composer-card:focus-within {
-      animation: pf-field-focus 300ms var(--pf-ease);
+      animation: pf-field-focus 400ms ease-out;
+    }
+    /* Не слабее правила фокуса: ошибку обычно показывают, пока поле ещё в фокусе (Enter). */
+    :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea)[aria-invalid='true']:not(.pf-field-capsule *, .pf-comment-composer-card *) {
+      animation: pf-field-shake 340ms var(--pf-ease);
     }
   }
   @keyframes pf-field-focus {
-    from {
-      outline: 2px solid oklch(var(--primary) / 0.5);
-      outline-offset: 0px;
+    0% {
+      box-shadow: 0 0 0 8px oklch(var(--primary) / 0.22);
     }
-    to {
-      outline: 2px solid oklch(var(--primary) / 0);
-      outline-offset: 7px;
+    40% {
+      box-shadow: 0 0 0 5px oklch(var(--primary) / 0.15);
+    }
+  }
+  @keyframes pf-field-shake {
+    0%,
+    100% {
+      translate: 0;
+    }
+    20% {
+      translate: -4px 0;
+    }
+    40% {
+      translate: 3px 0;
+    }
+    60% {
+      translate: -2px 0;
+    }
+    80% {
+      translate: 1px 0;
     }
   }
 }

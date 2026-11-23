@@ -2272,6 +2272,7 @@ export function TaskDrawer({
                     onCommentCreatedRef={onCommentCreatedRef}
                     onFirstLoad={scrollBodyToBottom}
                     onCountChange={setCommentCount}
+                    onCommentDeleted={notifyChanged}
                     scrollToCommentId={scrollToCommentId}
                     commentNavigationKey={commentNavigationKey}
                     onReply={(commentId, authorName, quotedText) =>
@@ -2629,6 +2630,8 @@ function TaskCommentsSection({
   onReply,
   // Задача на утверждении, а юзер её не принимает: тред read-only (сервер вернёт 409).
   frozen = false,
+  // Удалённый комментарий меняет карточку задачи (счётчик, последняя активность).
+  onCommentDeleted,
 }: {
   projectId: string;
   taskId: string;
@@ -2640,6 +2643,7 @@ function TaskCommentsSection({
   commentNavigationKey?: string;
   onReply?: (commentId: string, authorName: string, quotedText: string | null) => void;
   frozen?: boolean;
+  onCommentDeleted?: () => void;
 }): React.ReactElement {
   const { taskRepository, projectRepository } = useContainer();
   const [comments, setComments] = useState<TaskComment[]>([]);
@@ -2708,6 +2712,7 @@ function TaskCommentsSection({
 
   const handleDeleted = (id: string): void => {
     setComments((prev) => prev.filter((c) => c.id !== id));
+    onCommentDeleted?.();
   };
 
   const handleCreated = (created: TaskComment): void => {

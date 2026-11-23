@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useContainer } from '@/infrastructure/di/container';
 import { LIVE_CHANGED_EVENT, REALTIME_CONNECTED_EVENT, TASK_CHANGED_EVENT } from './useNotificationStream';
+import { onTabReturn } from '@/lib/tabReturn';
 
 type CompletedToday = {
   // Сколько задач я закрыл сегодня. null — ещё не загрузили (пилюлю не рисуем).
@@ -65,7 +66,6 @@ export function CompletedTodayProvider({
     window.addEventListener(TASK_CHANGED_EVENT, onChanged);
     window.addEventListener(LIVE_CHANGED_EVENT, onChanged);
     window.addEventListener(REALTIME_CONNECTED_EVENT, onChanged);
-    window.addEventListener('focus', onChanged);
     // Recover a missed event and a date change even while the tab stays open.
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') refresh();
@@ -76,21 +76,19 @@ export function CompletedTodayProvider({
       window.removeEventListener(TASK_CHANGED_EVENT, onChanged);
       window.removeEventListener(LIVE_CHANGED_EVENT, onChanged);
       window.removeEventListener(REALTIME_CONNECTED_EVENT, onChanged);
-      window.removeEventListener('focus', onChanged);
     };
   }, [refresh]);
 
   // Вернулись во вкладку — сверяем цифру: задачи закрываются и с телефона тоже, а за время
   // отсутствия могли наступить новые сутки.
-  useEffect(() => {
-    const onVisible = (): void => {
-      if (document.visibilityState !== 'visible') return;
-      if (dayRef.current !== localMidnight().toDateString()) setCount(null);
-      refresh();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [refresh]);
+  useEffect(
+    () =>
+      onTabReturn(() => {
+        if (dayRef.current !== localMidnight().toDateString()) setCount(null);
+        refresh();
+      }),
+    [refresh],
+  );
 
   // Задачи, для которых в этой сессии уже показан праздник.
   const countedRef = useRef<Set<string>>(new Set());
