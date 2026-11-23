@@ -697,6 +697,10 @@ async function runCase(browser, baseURL, scenario, vpKey, themeKey) {
   }
 
   if (run.failed) await writeCaseLog(run);
+  // Unload the app while /api is still intercepted. Closing a live page lets requests it fires
+  // on the way out (pagehide, visibilitychange, a last timer or IntersectionObserver tick) slip
+  // past context.route to the static server, where they show up as intermittent leaks.
+  for (const open of context.pages()) await open.goto('about:blank', { timeout: 5_000 }).catch(() => {});
   await context.close().catch(() => {});
   return { run, ms: Date.now() - started };
 }
