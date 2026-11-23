@@ -387,7 +387,9 @@ export function TaskComposer({
         'pf-field-capsule group/composer w-full overflow-hidden border bg-card transition-colors focus-within:border-foreground/30',
         isInline
           ? 'rounded-lg'
-          : 'pointer-events-auto max-w-2xl rounded-2xl bg-card/95 shadow-lg backdrop-blur-md',
+          // Без backdrop-blur: размытие подложки под плавающей панелью пересчитывается на каждом
+          // кадре прокрутки — на телефоне это главный пожиратель кадров; фон и так почти сплошной.
+          : 'pointer-events-auto max-w-2xl rounded-2xl bg-card shadow-lg',
         dragActive ? 'border-primary bg-primary/5' : '',
       )}
     >

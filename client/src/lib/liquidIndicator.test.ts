@@ -4,148 +4,136 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LiquidIndicator, type IndicatorBox } from './liquidIndicator';
 
-// A hand-driven clock: rAF callbacks run only when the test advances time, so the springs can
-// be stepped frame by frame and every intermediate shape inspected.
-let clock = 0;
-let queue: Array<{ id: number; cb: FrameRequestCallback }> = [];
-let nextId = 1;
-globalThis.requestAnimationFrame = (cb: FrameRequestCallback): number => {
-  const id = nextId++;
-  queue.push({ id, cb });
-  return id;
-};
-globalThis.cancelAnimationFrame = (id: number): void => {
-  queue = queue.filter((frame) => frame.id !== id);
-};
-Object.defineProperty(performance, 'now', { configurable: true, value: () => clock });
-
-function frame(ms = 16): void {
-  clock += ms;
-  const run = queue;
-  queue = [];
-  for (const { cb } of run) cb(clock);
-}
-
-function painted(el: HTMLElement): IndicatorBox {
-  const match = /translate3d\(([-\d.]+)px, ([-\d.]+)px, 0\)/.exec(el.style.transform);
-  assert.ok(match, `unexpected transform: ${el.style.transform}`);
-  return {
-    left: Number(match[1]),
-    top: Number(match[2]),
-    width: Number.parseFloat(el.style.width),
-    height: Number.parseFloat(el.style.height),
+// The engine hands precomputed keyframes to the Web Animations API (compositor thread). The
+// fake below records them; a test can move its clock (currentTime) or finish it.
+type Frame = { offset: number; transform: string };
+type FakeAnimation = { frames: Frame[]; duration: number; currentTime: number; cancelled: boolean; onfinish: null | (() => void); cancel: () => void };
+let calls: FakeAnimation[] = [];
+HTMLElement.prototype.animate = function (keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions) {
+  const anim: FakeAnimation = {
+    frames: keyframes as unknown as Frame[],
+    duration: typeof options === 'number' ? options : Number(options?.duration ?? 0),
+    currentTime: 0,
+    cancelled: false,
+    onfinish: null,
+    cancel() {
+      this.cancelled = true;
+    },
   };
-}
+  calls.push(anim);
+  return anim as unknown as Animation;
+};
 
 const A: IndicatorBox = { left: 0, top: 4, width: 80, height: 32 };
 const B: IndicatorBox = { left: 200, top: 4, width: 120, height: 32 };
 
 function setup(onSettle?: () => void): { el: HTMLElement; engine: LiquidIndicator } {
-  queue = [];
+  calls = [];
   document.documentElement.classList.remove('pf-no-motion');
   const el = document.createElement('span');
-  const engine = new LiquidIndicator(el, onSettle);
-  return { el, engine };
+  return { el, engine: new LiquidIndicator(el, onSettle) };
 }
+
+/** Box drawn by a transform string, given the element's CSS size (the scale base). */
+function boxOf(transform: string, el: HTMLElement): IndicatorBox {
+  const m = /translate3d\(([-\d.]+)px, ([-\d.]+)px, 0\)(?: scale\(([-\d.]+), ([-\d.]+)\))?/.exec(transform);
+  assert.ok(m, `unexpected transform: ${transform}`);
+  const w = Number.parseFloat(el.style.width);
+  const h = Number.parseFloat(el.style.height);
+  return { left: Number(m[1]), top: Number(m[2]), width: w * Number(m[3] ?? 1), height: h * Number(m[4] ?? 1) };
+}
+const near = (a: IndicatorBox, b: IndicatorBox, eps = 0.6): boolean =>
+  Math.abs(a.left - b.left) < eps && Math.abs(a.top - b.top) < eps && Math.abs(a.width - b.width) < eps && Math.abs(a.height - b.height) < eps;
 
 test('jump places the indicator exactly, without animation', () => {
   const { el, engine } = setup();
   engine.jump(A);
-  assert.deepEqual(painted(el), A);
+  assert.ok(near(boxOf(el.style.transform, el), A));
+  assert.equal(calls.length, 0);
   assert.equal(engine.moving, false);
-  assert.equal(queue.length, 0);
 });
 
-test('springTo stretches toward the target (leading edge first) and settles exactly on it', () => {
+test('springTo animates transform only: from the old box, stretching, to the new box — fast', () => {
   let settled = 0;
   const { el, engine } = setup(() => settled++);
   engine.jump(A);
   engine.springTo(B);
+  assert.equal(calls.length, 1);
+  const { frames, duration } = calls[0]!;
+  assert.ok(frames.every((f) => !('width' in f) && !('height' in f)), 'no layout properties in keyframes');
+  assert.ok(near(boxOf(frames[0]!.transform, el), A), 'starts where it stood');
+  assert.ok(near(boxOf(frames[frames.length - 1]!.transform, el), B), 'ends on the target');
+  assert.ok(duration <= 320, `UI motion stays short, got ${duration} ms`);
+  const widest = Math.max(...frames.map((f) => boxOf(f.transform, el).width));
+  assert.ok(widest > B.width + 20, `expected a visible stretch, widest ${widest}`);
+  // The element already rests on the target under the animation (no fill needed).
+  assert.ok(near(boxOf(el.style.transform, el), B));
   assert.equal(engine.moving, true);
-
-  let widest = 0;
-  for (let i = 0; i < 400 && engine.moving; i++) {
-    frame();
-    const box = painted(el);
-    assert.ok(box.width >= 0, 'the trailing edge never passes the leading one');
-    assert.ok(Number.isFinite(box.left) && Number.isFinite(box.width));
-    widest = Math.max(widest, box.width);
-  }
-  assert.equal(engine.moving, false, 'the springs come to rest');
-  assert.deepEqual(painted(el), B);
+  calls[0]!.onfinish?.();
+  assert.equal(engine.moving, false);
   assert.equal(settled, 1, 'onSettle fires once, on arrival');
-  // The leading edge runs ahead of the trailing one: on the way the pill is wider than both ends.
-  assert.ok(widest > B.width + 20, `expected a visible stretch, widest was ${widest}`);
 });
 
-test('moving left, the left edge leads', () => {
+test('the edge in the direction of travel leads', () => {
   const { el, engine } = setup();
   engine.jump(B);
   engine.springTo(A);
-  frame();
-  frame();
-  frame();
-  const box = painted(el);
-  const leftProgress = (B.left - box.left) / (B.left - A.left);
-  const rightProgress = (B.left + B.width - (box.left + box.width)) / (B.left + B.width - (A.left + A.width));
+  const early = boxOf(calls[0]!.frames[4]!.transform, el);
+  const leftProgress = (B.left - early.left) / (B.left - A.left);
+  const rightProgress = (B.left + B.width - (early.left + early.width)) / (B.left + B.width - (A.left + A.width));
   assert.ok(leftProgress > rightProgress, `left ${leftProgress} should lead right ${rightProgress}`);
 });
 
-test('moving down a list, the bottom edge leads and the pill stretches vertically', () => {
+test('moving down a list, the pill stretches vertically and not sideways', () => {
   const { el, engine } = setup();
   const ROW0: IndicatorBox = { left: 0, top: 0, width: 300, height: 40 };
   const ROW3: IndicatorBox = { left: 0, top: 160, width: 300, height: 40 };
   engine.jump(ROW0);
   engine.springTo(ROW3);
-  let tallest = 0;
-  for (let i = 0; i < 3; i++) frame();
-  const box = painted(el);
-  const topProgress = (box.top - ROW0.top) / (ROW3.top - ROW0.top);
-  const bottomProgress = (box.top + box.height - 40) / (ROW3.top + 40 - 40);
-  assert.ok(bottomProgress > topProgress, `bottom ${bottomProgress} should lead top ${topProgress}`);
-  for (let i = 0; i < 400 && engine.moving; i++) {
-    frame();
-    tallest = Math.max(tallest, painted(el).height);
-    assert.equal(painted(el).width, 300, 'the cross axis does not stretch');
-  }
-  assert.ok(tallest > 60, `expected a vertical stretch, tallest was ${tallest}`);
-  assert.deepEqual(painted(el), ROW3);
+  const boxes = calls[0]!.frames.map((f) => boxOf(f.transform, el));
+  assert.ok(Math.max(...boxes.map((b) => b.height)) > 60, 'vertical stretch');
+  assert.ok(boxes.every((b) => Math.abs(b.width - 300) < 0.5), 'the cross axis does not stretch');
+  const early = boxes[4]!;
+  assert.ok(early.top + early.height - 40 > early.top, 'bottom edge leads');
 });
 
-test('a new target mid-flight is taken from the current position, without a jump', () => {
+test('a new target mid-flight starts from the current position, without a jump', () => {
   const { el, engine } = setup();
   engine.jump(A);
   engine.springTo(B);
-  for (let i = 0; i < 5; i++) frame();
-  const before = painted(el);
+  const first = calls[0]!;
+  first.currentTime = 50; // 50 ms into the move
+  const t = 0.05;
+  const samples = first.frames.map((f) => ({ t: f.offset * (first.duration / 1000), box: boxOf(f.transform, el) }));
+  const i = samples.findIndex((s) => s.t >= t);
+  const a = samples[i - 1]!;
+  const b = samples[i]!;
+  const k = (t - a.t) / (b.t - a.t);
+  const expected: IndicatorBox = {
+    left: a.box.left + (b.box.left - a.box.left) * k,
+    top: a.box.top + (b.box.top - a.box.top) * k,
+    width: a.box.width + (b.box.width - a.box.width) * k,
+    height: a.box.height + (b.box.height - a.box.height) * k,
+  };
   engine.springTo(A);
-  frame();
-  const after = painted(el);
-  // One frame later it is still near where it was (velocity carried, no teleport back to A).
-  assert.ok(Math.abs(after.left - before.left) < 40, `jumped from ${before.left} to ${after.left}`);
-  for (let i = 0; i < 400 && engine.moving; i++) frame();
-  assert.deepEqual(painted(el), A);
+  assert.equal(first.cancelled, true, 'the old move is cancelled');
+  const second = calls[1]!;
+  assert.ok(near(boxOf(second.frames[0]!.transform, el), expected, 1), 'continues from where it was');
+  assert.ok(near(boxOf(second.frames[second.frames.length - 1]!.transform, el), A));
 });
 
-test('follow tracks the finger directly; release carries its velocity into the spring', () => {
+test('follow tracks the finger with transform only; release carries its velocity', async () => {
   const { el, engine } = setup();
   engine.jump(A);
-  // The finger drags the indicator right at 1px/ms.
-  for (let x = 0; x <= 64; x += 16) {
-    clock += 16;
+  for (let x = 16; x <= 64; x += 16) {
+    await new Promise((r) => setTimeout(r, 16));
     engine.follow({ ...A, left: x });
-    assert.equal(painted(el).left, x, 'no lag under the finger');
-    assert.equal(engine.moving, false);
+    assert.equal(boxOf(el.style.transform, el).left, x, 'no lag under the finger');
   }
-  // Released at x=64 with a target at x=64: momentum still pushes it a little further right.
+  assert.equal(calls.length, 0);
   engine.release({ ...A, left: 64 });
-  let furthest = 64;
-  for (let i = 0; i < 400 && engine.moving; i++) {
-    frame();
-    furthest = Math.max(furthest, painted(el).left);
-  }
-  assert.ok(furthest > 64.5, `expected the carried velocity to overshoot, furthest ${furthest}`);
-  assert.deepEqual(painted(el), { ...A, left: 64 });
+  const furthest = Math.max(...calls[0]!.frames.map((f) => boxOf(f.transform, el).left));
+  assert.ok(furthest > 64.5, `momentum carries it past the release point, furthest ${furthest}`);
 });
 
 test('with motion turned off, springTo lands at once and still reports arrival', () => {
@@ -154,18 +142,17 @@ test('with motion turned off, springTo lands at once and still reports arrival',
   engine.jump(A);
   document.documentElement.classList.add('pf-no-motion');
   engine.springTo(B);
-  assert.deepEqual(painted(el), B);
-  assert.equal(engine.moving, false);
+  assert.equal(calls.length, 0);
+  assert.ok(near(boxOf(el.style.transform, el), B));
   assert.equal(settled, 1);
   document.documentElement.classList.remove('pf-no-motion');
 });
 
-test('destroy stops the animation frame loop', () => {
+test('destroy cancels the running move', () => {
   const { engine } = setup();
   engine.jump(A);
   engine.springTo(B);
-  assert.equal(queue.length, 1);
   engine.destroy();
-  assert.equal(queue.length, 0);
+  assert.equal(calls[0]!.cancelled, true);
   assert.equal(engine.moving, false);
 });

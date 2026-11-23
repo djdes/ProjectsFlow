@@ -1,187 +1,216 @@
 // «Жидкий» индикатор выбранного пункта: подложка перетекает от пункта к пункту.
-// Перенос движка из приложения (client/src/lib/liquidIndicator.ts): каждый край — своя пружина,
-// передний по ходу движения край жёсткий и убегает вперёд, задний мягкий и догоняет, поэтому
-// подложка вытягивается к цели и стягивается на месте. Ось растяжения — та, вдоль которой
-// идёт переход (вбок для ряда пилюль, вниз/вверх для столбца карточек). Новая цель на ходу
+// Тот же движок, что в приложении (client/src/lib/liquidIndicator.ts): каждый край — своя
+// пружина, передний по ходу край жёсткий и убегает вперёд, задний мягкий и догоняет, поэтому
+// подложка вытягивается к цели и стягивается на месте; ось растяжения — та, вдоль которой идёт
+// переход. Ход просчитывается заранее и играется ключевыми кадрами Web Animations только по
+// transform — в потоке композитора, без width/height на кадр: на телефоне не дёргается, даже
+// когда главный поток занят (на этой странице его грузит ещё и 3D-сцена). Новая цель на ходу
 // подхватывается из текущего положения и скорости. Под reduced-motion — без движения.
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 
 export type IndicatorBox = { left: number; top: number; width: number; height: number };
 
-type Axis = { pos: number; vel: number; target: number };
-type SpringParams = { stiffness: number; damping: number };
 
-// Затухание 0.78 — перелёт ~2%, «чуть-чуть», не пружинка.
-const LEAD: SpringParams = { stiffness: 640, damping: 0.78 };
-const TRAIL: SpringParams = { stiffness: 230, damping: 0.94 };
-const CROSS: SpringParams = { stiffness: 520, damping: 0.92 };
-const STEP = 1 / 240;
-const MAX_FRAME = 1 / 20;
-const REST_POS = 0.08;
-const REST_VEL = 0.5;
+type Edges = [number, number, number, number]; // left, right, top, bottom
+type SpringParams = { stiffness: number; damping: number };
+type Sample = { t: number; edges: Edges };
+
+// Передний край — почти без перелёта (<1%), задний — без перелёта; ход вкладки занимает
+// ~270 мс, длинный перелёт — ~300 мс, растяжение по пути — треть ширины и больше.
+const LEAD: SpringParams = { stiffness: 2000, damping: 0.9 };
+const TRAIL: SpringParams = { stiffness: 650, damping: 1 };
+const CROSS: SpringParams = { stiffness: 1200, damping: 1 };
+const STEP = 1 / 480;
+const SAMPLE = 1 / 120; // ключевой кадр на каждый кадр экрана 120 Гц
+const MAX_T = 0.6;
+// Последний пиксель не доползает, а встаёт на место: хвост пружины глазу не виден.
+const REST_POS = 1;
+const REST_VEL = 40;
 
 export function motionReduced(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (typeof document === 'undefined') return true;
+  if (document.documentElement.classList.contains('pf-no-motion')) return true;
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-function stepAxis(axis: Axis, { stiffness, damping }: SpringParams, dt: number): void {
-  const c = 2 * damping * Math.sqrt(stiffness);
-  const acceleration = -stiffness * (axis.pos - axis.target) - c * axis.vel;
-  axis.vel += acceleration * dt;
-  axis.pos += axis.vel * dt;
-}
-
-const atRest = (axis: Axis): boolean => Math.abs(axis.pos - axis.target) < REST_POS && Math.abs(axis.vel) < REST_VEL;
+const edgesOf = (box: IndicatorBox): Edges => [box.left, box.left + box.width, box.top, box.top + box.height];
+const px = (n: number): string => `${n.toFixed(2)}px`;
 
 export class LiquidIndicator {
-  private readonly left: Axis = { pos: 0, vel: 0, target: 0 };
-  private readonly right: Axis = { pos: 0, vel: 0, target: 0 };
-  private readonly top: Axis = { pos: 0, vel: 0, target: 0 };
-  private readonly bottom: Axis = { pos: 0, vel: 0, target: 0 };
   private placed = false;
-  private vertical = false;
-  private forward = true;
-  private frame = 0;
-  private last = 0;
+  // Где индикатор стоит (или куда идёт, если идёт анимация) и с какой скоростью его отпустили.
+  private edges: Edges = [0, 0, 0, 0];
+  private vel: Edges = [0, 0, 0, 0];
+  private size = { w: 0, h: 0 };
+  private anim: Animation | null = null;
+  private samples: Sample[] = [];
   private followAt = 0;
 
   constructor(
     private readonly el: HTMLElement,
-    private readonly onFrame?: (box: IndicatorBox) => void,
-  ) {}
+    private readonly onSettle?: () => void,
+  ) {
+    el.style.transformOrigin = '0 0';
+  }
 
   get box(): IndicatorBox | null {
     if (!this.placed) return null;
-    return { left: this.left.pos, top: this.top.pos, width: this.right.pos - this.left.pos, height: this.bottom.pos - this.top.pos };
+    const [l, r, t, b] = this.current().edges;
+    return { left: l, top: t, width: r - l, height: b - t };
   }
 
   get moving(): boolean {
-    return this.frame !== 0;
+    return this.anim !== null;
   }
 
-  /** Встать на место без движения. */
+  /** Встать на место без движения (первый показ, смена раскладки, reduced motion). */
   jump(box: IndicatorBox): void {
-    this.stop();
-    this.set(box, true);
+    this.cancel();
     this.placed = true;
-    this.paint();
+    this.edges = edgesOf(box);
+    this.vel = [0, 0, 0, 0];
+    this.setSize(box.width, box.height);
+    this.el.style.transform = `translate3d(${px(box.left)}, ${px(box.top)}, 0)`;
   }
 
   /** Перетечь к новой цели пружинами из текущего положения и скорости. */
   springTo(box: IndicatorBox): void {
-    if (!this.placed || motionReduced()) {
+    if (!this.placed || motionReduced() || typeof this.el.animate !== 'function') {
       this.jump(box);
+      this.onSettle?.();
       return;
     }
-    const dx = box.left + box.width / 2 - (this.left.pos + this.right.pos) / 2;
-    const dy = box.top + box.height / 2 - (this.top.pos + this.bottom.pos) / 2;
-    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-      this.vertical = Math.abs(dy) > Math.abs(dx);
-      this.forward = this.vertical ? dy > 0 : dx > 0;
+    const { edges: from, vel } = this.current();
+    this.cancel();
+    const target = edgesOf(box);
+    const still = vel.every((v) => Math.abs(v) < REST_VEL);
+    if (still && from.every((v, i) => Math.abs(v - target[i]!) < REST_POS)) {
+      this.jump(box);
+      this.onSettle?.();
+      return;
     }
-    this.left.target = box.left;
-    this.right.target = box.left + box.width;
-    this.top.target = box.top;
-    this.bottom.target = box.top + box.height;
-    this.start();
+    const samples = simulate(from, vel, target);
+    const duration = samples[samples.length - 1]!.t;
+    // Размер — целевой; от него считается масштаб промежуточных кадров, в покое масштаб 1.
+    this.setSize(box.width, box.height);
+    const w = box.width || 1;
+    const h = box.height || 1;
+    const frames = samples.map(({ t, edges: [l, r, top, b] }) => ({
+      offset: t / duration,
+      transform: `translate3d(${px(l)}, ${px(top)}, 0) scale(${((r - l) / w).toFixed(4)}, ${((b - top) / h).toFixed(4)})`,
+    }));
+    this.edges = target;
+    this.vel = [0, 0, 0, 0];
+    this.samples = samples;
+    // Под анимацией — конечное положение: по окончании (без fill) элемент уже стоит в нём.
+    this.el.style.transform = `translate3d(${px(box.left)}, ${px(box.top)}, 0)`;
+    const anim = this.el.animate(frames, { duration: duration * 1000, easing: 'linear' });
+    this.anim = anim;
+    anim.onfinish = () => {
+      if (this.anim !== anim) return;
+      this.anim = null;
+      this.samples = [];
+      this.onSettle?.();
+    };
   }
 
-  /** Прямое ведение пальцем: без пружин, скорость запоминается для отпускания. */
+  /** Прямое ведение пальцем: только transform, скорость запоминается для отпускания. */
   follow(box: IndicatorBox): void {
     const now = performance.now();
+    const prev = this.current().edges;
     const dt = this.followAt ? Math.max(1, now - this.followAt) / 1000 : 0;
     this.followAt = now;
-    this.stop();
-    const values: [Axis, number][] = [
-      [this.left, box.left],
-      [this.right, box.left + box.width],
-      [this.top, box.top],
-      [this.bottom, box.top + box.height],
-    ];
-    for (const [axis, value] of values) {
-      axis.vel = dt > 0 && this.placed ? (value - axis.pos) / dt : 0;
-      axis.pos = value;
-      axis.target = value;
-    }
+    this.cancel();
+    const next = edgesOf(box);
+    this.vel = dt > 0 && this.placed ? (next.map((x, i) => (x - prev[i]!) / dt) as Edges) : [0, 0, 0, 0];
+    this.edges = next;
     this.placed = true;
-    this.paint();
+    if (!this.size.w || !this.size.h) this.setSize(box.width, box.height);
+    this.el.style.transform = `translate3d(${px(box.left)}, ${px(box.top)}, 0) scale(${(box.width / (this.size.w || 1)).toFixed(4)}, ${(box.height / (this.size.h || 1)).toFixed(4)})`;
   }
 
-  /** Отпущен — дальше пружины к цели с накопленной скоростью. */
+  /** Палец отпущен — дальше пружины к цели с накопленной скоростью. */
   release(box: IndicatorBox): void {
     this.followAt = 0;
     this.springTo(box);
   }
 
   destroy(): void {
-    this.stop();
+    this.cancel();
   }
 
-  private set(box: IndicatorBox, resetVelocity: boolean): void {
-    const values: [Axis, number][] = [
-      [this.left, box.left],
-      [this.right, box.left + box.width],
-      [this.top, box.top],
-      [this.bottom, box.top + box.height],
-    ];
-    for (const [axis, value] of values) {
-      axis.pos = value;
-      axis.target = value;
-      if (resetVelocity) axis.vel = 0;
-    }
+  private cancel(): void {
+    const anim = this.anim;
+    this.anim = null;
+    this.samples = [];
+    anim?.cancel();
   }
 
-  private start(): void {
-    if (this.frame) return;
-    this.last = performance.now();
-    this.frame = requestAnimationFrame(this.tick);
+  private setSize(w: number, h: number): void {
+    if (this.size.w !== w) this.el.style.width = px(w);
+    if (this.size.h !== h) this.el.style.height = px(h);
+    this.size = { w, h };
   }
 
-  private stop(): void {
-    if (this.frame) cancelAnimationFrame(this.frame);
-    this.frame = 0;
+  /** Edges and velocity right now: sampled from the running animation, if any. */
+  private current(): { edges: Edges; vel: Edges } {
+    const s = this.samples;
+    if (!this.anim || s.length < 2) return { edges: this.edges, vel: this.vel };
+    const ct = this.anim.currentTime;
+    const t = typeof ct === 'number' ? ct / 1000 : 0;
+    let i = s.findIndex((x) => x.t >= t);
+    if (i <= 0) i = i === 0 ? 1 : s.length - 1;
+    const a = s[i - 1]!;
+    const b = s[i]!;
+    const span = b.t - a.t || 1;
+    const k = Math.min(1, Math.max(0, (t - a.t) / span));
+    return {
+      edges: a.edges.map((v, j) => v + (b.edges[j]! - v) * k) as Edges,
+      vel: a.edges.map((v, j) => (b.edges[j]! - v) / span) as Edges,
+    };
   }
+}
 
-  private readonly tick = (now: number): void => {
-    let elapsed = Math.min(MAX_FRAME, Math.max(0, (now - this.last) / 1000));
-    this.last = now;
-    const [lead, trail, crossA, crossB] = this.vertical
-      ? this.forward ? [this.bottom, this.top, this.left, this.right] : [this.top, this.bottom, this.left, this.right]
-      : this.forward ? [this.right, this.left, this.top, this.bottom] : [this.left, this.right, this.top, this.bottom];
-    while (elapsed > 0) {
-      const dt = Math.min(STEP, elapsed);
-      stepAxis(lead, LEAD, dt);
-      stepAxis(trail, TRAIL, dt);
-      stepAxis(crossA, CROSS, dt);
-      stepAxis(crossB, CROSS, dt);
-      elapsed -= dt;
+/** Steps the four edge springs from `from` (with velocity) to `target`; samples every SAMPLE s. */
+function simulate(from: Edges, vel: Edges, target: Edges): Sample[] {
+  const dx = (target[0] + target[1] - from[0] - from[1]) / 2;
+  const dy = (target[2] + target[3] - from[2] - from[3]) / 2;
+  const vertical = Math.abs(dy) > Math.abs(dx);
+  const right = dx > 0;
+  const down = dy > 0;
+  const params: SpringParams[] = vertical
+    ? [CROSS, CROSS, down ? TRAIL : LEAD, down ? LEAD : TRAIL]
+    : [right ? TRAIL : LEAD, right ? LEAD : TRAIL, CROSS, CROSS];
+  const pos = [...from] as Edges;
+  const v = [...vel] as Edges;
+  const samples: Sample[] = [{ t: 0, edges: [...pos] as Edges }];
+  let t = 0;
+  let next = SAMPLE;
+  while (t < MAX_T) {
+    for (let i = 0; i < 4; i++) {
+      const { stiffness, damping } = params[i]!;
+      const c = 2 * damping * Math.sqrt(stiffness);
+      v[i]! += (-stiffness * (pos[i]! - target[i]!) - c * v[i]!) * STEP;
+      pos[i]! += v[i]! * STEP;
     }
     // A trailing edge must never pass the leading one: the pill would turn inside out.
-    if (this.right.pos < this.left.pos) this.left.pos = this.right.pos = (this.left.pos + this.right.pos) / 2;
-    if (this.bottom.pos < this.top.pos) this.top.pos = this.bottom.pos = (this.top.pos + this.bottom.pos) / 2;
-    if ([this.left, this.right, this.top, this.bottom].every(atRest)) {
-      for (const axis of [this.left, this.right, this.top, this.bottom]) {
-        axis.pos = axis.target;
-        axis.vel = 0;
+    for (const [a, b] of [[0, 1], [2, 3]] as const) {
+      if (pos[b] < pos[a]) {
+        const mid = (pos[a] + pos[b]) / 2;
+        pos[a] = mid;
+        pos[b] = mid;
       }
-      this.frame = 0;
-      this.paint();
-      return;
     }
-    this.paint();
-    this.frame = requestAnimationFrame(this.tick);
-  };
-
-  private paint(): void {
-    const width = Math.max(0, this.right.pos - this.left.pos);
-    const height = Math.max(0, this.bottom.pos - this.top.pos);
-    const style = this.el.style;
-    style.transform = `translate3d(${this.left.pos.toFixed(2)}px, ${this.top.pos.toFixed(2)}px, 0)`;
-    style.width = `${width.toFixed(2)}px`;
-    style.height = `${height.toFixed(2)}px`;
-    this.onFrame?.({ left: this.left.pos, top: this.top.pos, width, height });
+    t += STEP;
+    if (t >= next - 1e-9) {
+      next += SAMPLE;
+      const rest = pos.every((p, i) => Math.abs(p - target[i]!) < REST_POS && Math.abs(v[i]!) < REST_VEL);
+      samples.push({ t, edges: rest ? ([...target] as Edges) : ([...pos] as Edges) });
+      if (rest) return samples;
+    }
   }
+  samples.push({ t: t + SAMPLE, edges: [...target] as Edges });
+  return samples;
 }
 
 /** Рамка элемента в координатах контейнера, в котором лежит индикатор (с учётом прокрутки). */
@@ -250,15 +279,11 @@ export function useLiquidPill({
     }));
   };
 
-  // Доля каждого пункта под индикатором: подпись темнеет / светлеет, пока подложка проходит.
-  const paintOverlap = (box: IndicatorBox): void => {
-    for (const { el, box: b } of itemsRef.current) {
-      const ix = Math.max(0, Math.min(box.left + box.width, b.left + b.width) - Math.max(box.left, b.left));
-      const iy = Math.max(0, Math.min(box.top + box.height, b.top + b.height) - Math.max(box.top, b.top));
-      const area = b.width * b.height;
-      const on = area > 0 ? Math.min(1, (ix * iy) / area) : 0;
-      el.style.setProperty('--liquid-on', on.toFixed(3));
-    }
+  // Подписи и подложки пунктов переходят в конечное состояние сразу на старте хода, а плавность
+  // им даёт CSS-переход цвета (globals.css, [data-liquid='on'] [data-liquid-item]) — синхронно с
+  // ходом подложки и без записи стилей на каждый кадр.
+  const paintFinal = (activeEl: Element | null): void => {
+    for (const { el } of itemsRef.current) el.style.setProperty('--liquid-on', el === activeEl || el.contains(activeEl) ? '1' : '0');
   };
 
   const sync = (firstSync: boolean): void => {
@@ -268,7 +293,7 @@ export function useLiquidPill({
     let initial = firstSync;
     if (!engineRef.current || engineElRef.current !== indicator) {
       engineRef.current?.destroy();
-      engineRef.current = new LiquidIndicator(indicator, paintOverlap);
+      engineRef.current = new LiquidIndicator(indicator);
       engineElRef.current = indicator;
       initial = true;
     }
@@ -286,8 +311,7 @@ export function useLiquidPill({
     indicator.style.opacity = '1';
     if (initial || !engine.box || (previousEl === nextEl && !engine.moving)) engine.jump(next);
     else engine.springTo(next);
-    // The spring paints on the next frame: until then, the labels follow where the pill is now.
-    if (engine.box) paintOverlap(engine.box);
+    paintFinal(nextEl);
   };
 
   useIsoLayoutEffect(() => {

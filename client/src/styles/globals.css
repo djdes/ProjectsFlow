@@ -754,9 +754,9 @@ main[data-pf-scrolled='true'] .pf-sticky-surface {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* Отпускание — пружиной (еле заметный перелёт), само нажатие — быстро. */
+  /* Нажатие и отпускание — 160 мс, ease-out. */
   :where(button, [role='button']):not(.pf-button) {
-    transition: scale 440ms var(--pf-spring);
+    transition: scale 160ms var(--pf-ease);
   }
   :where(button, [role='button']):not(.pf-button):active {
     transition-duration: 120ms;
@@ -974,36 +974,16 @@ html[data-pf-modality='pointer'] :focus-visible {
      непрочитанного, и это осознанно — один визуальный язык, разный цвет: синий зовёт
      «посмотри», красный «сделай сейчас». Геометрия свечения постоянная, пульсирует
      только прозрачность: ореол, меняющий размер, читается как мигание и мешает
-     работать (та же правка, что делали для непрочитанного). */
+     работать (та же правка, что делали для непрочитанного). Свечение не пульсирует:
+     бесконечная анимация box-shadow перерисовывала бы каждую срочную карточку каждый кадр
+     (батарея и плавность прокрутки на телефоне). */
   .pf-urgent {
     border-color: oklch(64.5% 0.215 16.44 / 0.8) !important;
     box-shadow:
       0 0 0 1px oklch(64.5% 0.215 16.44 / 0.55),
       0 0 13px -1px oklch(64.5% 0.215 16.44 / 0.6),
       inset 0 0 14px -6px oklch(64.5% 0.215 16.44 / 0.5);
-    animation: pf-urgent-breathe 5s ease-in-out infinite;
   }
-  @keyframes pf-urgent-breathe {
-    0%,
-    100% {
-      box-shadow:
-        0 0 0 1px oklch(64.5% 0.215 16.44 / 0.46),
-        0 0 13px -1px oklch(64.5% 0.215 16.44 / 0.5),
-        inset 0 0 14px -6px oklch(64.5% 0.215 16.44 / 0.44);
-    }
-    50% {
-      box-shadow:
-        0 0 0 1px oklch(64.5% 0.215 16.44 / 0.66),
-        0 0 13px -1px oklch(64.5% 0.215 16.44 / 0.78),
-        inset 0 0 14px -6px oklch(64.5% 0.215 16.44 / 0.6);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .pf-urgent {
-      animation: none;
-    }
-  }
-
   /* Задача «прилетела»: пришли по ссылке из плашки или её только что назначили.
      Горячая оранжевая вспышка, которая остывает — а дальше, если задача непрочитана,
      сама собой проступает синяя подсветка (класс .pf-unread никуда не девается).
@@ -1512,14 +1492,6 @@ html[data-pf-modality='pointer'] :focus-visible {
   }
 }
 
-/* Прогресс цветения фокуса поля (pf-field-bloom ниже): число, чтобы его можно было вести
-   ключевыми кадрами. Покой — 1: заливка прозрачная. */
-@property --pf-field-bloom {
-  syntax: '<number>';
-  inherits: false;
-  initial-value: 1;
-}
-
 /* Фокус в поле ввода (комментарий, ИИ, поиск, формы): от рамки поля один раз расходится
    и гаснет кольцо акцента — палец видит, что поле приняло ввод. Кольцо — outline, а не
    box-shadow: свои кольца полей (Tailwind ring, ореол композера) остаются как есть и не
@@ -1542,34 +1514,12 @@ html[data-pf-modality='pointer'] :focus-visible {
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    /* Два слоя: снаружи от рамки расходится и гаснет кольцо, внутри от точки касания
-       (lib/fieldTapPoint, --pf-tap-x/y) расцветает и тает заливка акцента — круг растёт до
-       дальнего угла поля. Прогресс цветения — регистрируемое число --pf-field-bloom (0→1):
-       по нему и радиус, и прозрачность. Браузер без @property перескочит 0→1 посередине —
-       и при 0 (радиус 0), и при 1 (прозрачность 0) заливки не видно, так что там просто
-       останется кольцо. */
     :is(input:not([type]), input[type='text'], input[type='search'], input[type='email'], input[type='password'], input[type='url'], input[type='tel'], input[type='number'], textarea):not(.pf-field-capsule *, .pf-comment-composer-card *):focus,
     .pf-field-capsule:focus-within,
     .pf-comment-composer-card:focus-within {
-      animation:
-        pf-field-focus 520ms var(--pf-ease),
-        pf-field-bloom 680ms var(--pf-ease);
-      background-image: radial-gradient(
-        circle farthest-corner at var(--pf-tap-x, 50%) var(--pf-tap-y, 50%),
-        oklch(var(--primary) / calc(0.14 * (1 - var(--pf-field-bloom)))) calc(var(--pf-field-bloom) * 100% - 14%),
-        oklch(var(--primary) / 0) calc(var(--pf-field-bloom) * 100%)
-      );
+      animation: pf-field-focus 300ms var(--pf-ease);
     }
   }
-  @keyframes pf-field-bloom {
-    from {
-      --pf-field-bloom: 0;
-    }
-    to {
-      --pf-field-bloom: 1;
-    }
-  }
-
   @keyframes pf-field-focus {
     from {
       outline: 2px solid oklch(var(--primary) / 0.5);
@@ -1687,16 +1637,16 @@ html[data-pf-modality='pointer'] :focus-visible {
   }
   @media (prefers-reduced-motion: no-preference) {
     .pf-roll-in.pf-roll-up {
-      animation: pf-roll-in-up 360ms var(--pf-spring) both;
+      animation: pf-roll-in-up 220ms var(--pf-ease) both;
     }
     .pf-roll-in.pf-roll-down {
-      animation: pf-roll-in-down 360ms var(--pf-spring) both;
+      animation: pf-roll-in-down 220ms var(--pf-ease) both;
     }
     .pf-roll-out.pf-roll-up {
-      animation: pf-roll-out-up 240ms var(--pf-ease) both;
+      animation: pf-roll-out-up 160ms var(--pf-ease) both;
     }
     .pf-roll-out.pf-roll-down {
-      animation: pf-roll-out-down 240ms var(--pf-ease) both;
+      animation: pf-roll-out-down 160ms var(--pf-ease) both;
     }
   }
   @keyframes pf-roll-in-up {

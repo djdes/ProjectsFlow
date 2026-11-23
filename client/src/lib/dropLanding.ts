@@ -6,7 +6,6 @@
 // при монтировании в новом месте забирает её. Так не важно, когда именно доска применит
 // перенос (сразу, после таймера или после ответа сервера) — лишь бы за полторы секунды.
 import { motionReduced } from '@/lib/liquidIndicator';
-import { springEasing } from '@/lib/springEasing';
 
 type Point = { x: number; y: number };
 const drops = new Map<string, Point & { at: number }>();
@@ -48,6 +47,6 @@ export function landFromDrop(taskId: string, el: HTMLElement | null): void {
       { transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(0.55)`, opacity: 0.55 },
       { transform: 'none', opacity: 1 },
     ],
-    { duration: 460, easing: springEasing() },
+    { duration: 300, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' },
   );
 }

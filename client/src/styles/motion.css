@@ -10,19 +10,6 @@
   --pf-duration-fast: 140ms;
   --pf-duration: 220ms;
   --pf-duration-panel: 340ms;
-  /* Пружины (шаг пружины, посчитанный и записанный как linear()): --pf-spring — затухание
-     0.78, перелёт ~2% («чуть-чуть», не пружинка); --pf-spring-soft — критическое затухание,
-     без перелёта. Длительность — время, за которое пружина успокаивается. Старые браузеры
-     без linear() берут --pf-ease (см. @supports ниже). */
-  --pf-spring: var(--pf-ease);
-  --pf-spring-soft: var(--pf-ease);
-  --pf-spring-duration: 520ms;
-}
-@supports (transition-timing-function: linear(0, 1)) {
-  :root {
-    --pf-spring: linear(0, 0.0218, 0.0775, 0.155, 0.2447, 0.3393, 0.4335, 0.5236, 0.607, 0.6823, 0.7487, 0.8061, 0.8547, 0.8951, 0.9281, 0.9544, 0.9749, 0.9904, 1.0018, 1.0098, 1.0151, 1.0182, 1.0197, 1.0199, 1.0192, 1.018, 1.0163, 1.0145, 1.0126, 1.0107, 1.009, 1.0074, 1.0059, 1.0046, 1.0036, 1.0026, 1.0019, 1.0013, 1.0008, 1.0004, 1);
-    --pf-spring-soft: linear(0, 0.0133, 0.0474, 0.0956, 0.1523, 0.2138, 0.2771, 0.3401, 0.4012, 0.4596, 0.5145, 0.5655, 0.6126, 0.6557, 0.6948, 0.7302, 0.762, 0.7905, 0.816, 0.8386, 0.8587, 0.8765, 0.8922, 0.906, 0.9182, 0.9288, 0.9381, 0.9463, 0.9534, 0.9597, 0.9651, 0.9698, 0.9739, 0.9774, 0.9805, 0.9832, 0.9855, 0.9875, 0.9892, 0.9907, 1);
-  }
 }
 .pf-skeleton {
   position: relative;
@@ -65,22 +52,22 @@
   animation: pf-content-reveal var(--pf-duration) var(--pf-ease) both;
 }
 /* Содержимое вкладки (TabsContent): без движения — то же проявление, что у pf-content-reveal;
-   с движением — проявляется из лёгкого размытия и въезжает со стороны выбранной вкладки
-   (--pf-tab-dir ставит TabsList на корне Tabs). Только кадр «from»: после конца у панели не
-   остаётся ни filter, ни translate — они бы сделали её контейнером для position: fixed. */
+   с движением — коротко проявляется и чуть въезжает со стороны выбранной вкладки (--pf-tab-dir
+   ставит TabsList на корне Tabs). Только opacity и сдвиг (поток композитора): панель большая,
+   размытие на ней дорого на телефоне. Только кадр «from»: после конца у панели не остаётся
+   translate — он сделал бы её контейнером для position: fixed. */
 .pf-tab-content {
   animation: pf-content-reveal var(--pf-duration) var(--pf-ease) both;
 }
 @media (prefers-reduced-motion: no-preference) {
   .pf-tab-content {
-    animation: pf-tab-content-in 320ms var(--pf-ease) backwards;
+    animation: pf-tab-content-in 180ms var(--pf-ease) backwards;
   }
 }
 @keyframes pf-tab-content-in {
   from {
     opacity: 0;
-    filter: blur(3px);
-    translate: calc(var(--pf-tab-dir, 0) * 14px) 0;
+    translate: calc(var(--pf-tab-dir, 0) * 8px) 0;
   }
 }
 .pf-loading-shell {
@@ -120,7 +107,7 @@
   transform: scale(0.975);
 }
 @media (prefers-reduced-motion: no-preference) {
-  /* Нажатие — быстро вниз, отпускание — пружиной обратно с еле заметным перелётом. */
+  /* Нажатие и отпускание — 160 мс, ease-out: отклик быстрее взгляда, без «пружинки». */
   .pf-button {
     transition:
       color var(--pf-duration-fast) var(--pf-ease-press),
@@ -128,17 +115,13 @@
       border-color var(--pf-duration-fast) var(--pf-ease-press),
       box-shadow var(--pf-duration-fast) var(--pf-ease-press),
       opacity var(--pf-duration-fast) var(--pf-ease-press),
-      transform 460ms var(--pf-spring);
-  }
-  .pf-button:active:not(:disabled) {
-    transition-duration: var(--pf-duration-fast);
-    transition-timing-function: var(--pf-ease-press);
+      transform 160ms var(--pf-ease);
   }
 }
 /* Подпись кнопки (components/ui/button.tsx) — в своей обёртке, которая повторяет раскладку
    кнопки (направление, выравнивание, промежутки), поэтому вид кнопок не меняется. Новая
-   подпись («Войти» → «Входим…») проявляется из короткого размытия; ширину кнопки ведёт
-   пружина в самом компоненте. */
+   подпись («Войти» → «Входим…») проявляется (размытие 2px только маскирует смену, на
+   маленькой подписи оно дешёвое); ширину кнопки ведёт сам компонент. */
 .pf-button-label {
   display: inline-flex;
   flex: 1 1 auto;
@@ -152,20 +135,20 @@
 }
 @media (prefers-reduced-motion: no-preference) {
   .pf-button-label[data-pf-swap] {
-    animation: pf-label-in 300ms var(--pf-ease) both;
+    animation: pf-label-in 180ms var(--pf-ease) both;
   }
 }
 @keyframes pf-label-in {
   from {
     opacity: 0;
-    filter: blur(6px);
-    scale: 0.96;
+    filter: blur(2px);
+    scale: 0.98;
   }
 }
-/* Ползунок тумблера ведут пружины (components/ui/switch.tsx, lib/liquidIndicator) — покадрово,
-   своего transition у него нет. Нажатие тянет его в сторону хода там же. */
+/* Ползунок тумблера ведут пружины (components/ui/switch.tsx, lib/liquidIndicator) — ключевыми
+   кадрами в потоке композитора, своего transition у него нет. */
 /* Кнопка «Отправить»: неактивная чуть меньше, самолётик опущен; как только есть что
-   отправить — кнопка дорастает пружиной, а самолётик разворачивается «к взлёту».
+   отправить — кнопка дорастает, а самолётик разворачивается «к взлёту» (200 мс, ease-out).
    Сами состояния (масштаб) видны всем, их смена пружиной — только без reduce. Нажатие —
    общее для кнопок (globals.css, scale 0.97). */
 .pf-send-button:disabled {
@@ -178,7 +161,7 @@
       background-color 200ms var(--pf-ease),
       border-color 200ms var(--pf-ease),
       box-shadow 200ms var(--pf-ease),
-      scale 480ms var(--pf-spring);
+      scale 200ms var(--pf-ease);
   }
   .pf-send-button:active:not(:disabled) {
     transition-duration: var(--pf-duration-fast);
@@ -187,16 +170,16 @@
   .pf-send-button .pf-send-icon {
     transition:
       transform 200ms var(--pf-ease),
-      rotate 560ms var(--pf-spring),
-      scale 560ms var(--pf-spring);
+      rotate 220ms var(--pf-ease),
+      scale 220ms var(--pf-ease);
   }
   .pf-send-button:disabled .pf-send-icon {
     rotate: -24deg;
     scale: 0.86;
   }
 }
-/* Подложку активной вкладки ведут пружины (lib/liquidIndicator) — покадрово, поэтому своего
-   transition у неё нет: он бы догонял каждый кадр и смазывал ход. Появление — прозрачностью. */
+/* Подложку активной вкладки ведут пружины (lib/liquidIndicator) — ключевыми кадрами Web
+   Animations, поэтому своего transition по transform у неё нет. Появление — прозрачностью. */
 .pf-tab-indicator {
   transition: opacity 160ms var(--pf-ease);
 }
@@ -223,76 +206,41 @@
 [data-sonner-toast][data-type="success"] [data-icon] svg {
   animation: pf-content-reveal 220ms var(--pf-ease);
 }
-/* Окна, меню и всплывашки открываются пружиной (перелёт ~2%) и «собираются» из короткого
-   размытия — как смена состояний в ролике. Направление и масштаб берутся из переменных
-   tailwindcss-animate, которые ставят классы slide-in/zoom-in, поэтому центровка диалога
-   (translate -50%) сохраняется. Лист на телефоне — без перелёта, иначе его край на миг
-   отходит от низа экрана. Закрытие остаётся прежним, коротким. */
+/* Окна, меню и всплывашки открываются коротко: 200 мс, сильный ease-out, лёгкий масштаб и
+   прозрачность — только transform и opacity, без размытия (окно большое, размытие на нём
+   дорого на телефоне). Направление и масштаб берутся из переменных tailwindcss-animate, которые
+   ставят классы slide-in/zoom-in, поэтому центровка диалога (translate -50%) сохраняется. Лист
+   на телефоне выезжает кривой шторок iOS. Палитра ⌘K (.pf-instant) открывается и закрывается
+   без анимации: ею пользуются десятки раз в день. */
 @media (prefers-reduced-motion: no-preference) {
   :is([data-pf-motion-surface='dialog'], [data-pf-motion-surface='popover'], [data-pf-motion-surface='menu'])[data-state='open'] {
     animation-name: pf-surface-in;
-    animation-duration: 380ms;
-    animation-timing-function: var(--pf-spring);
+    animation-duration: 200ms;
+    animation-timing-function: var(--pf-ease);
   }
   [data-pf-motion-surface][data-pf-mobile-sheet][data-state='open'] {
-    animation-timing-function: var(--pf-spring-soft);
+    animation-duration: var(--pf-duration-panel);
+    animation-timing-function: var(--pf-ease-sheet);
   }
 }
 @keyframes pf-surface-in {
   from {
     opacity: var(--tw-enter-opacity, 0);
     transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0) scale(var(--tw-enter-scale, 0.97));
-    filter: blur(6px);
   }
 }
-/* Тосты: въезд и перестановка стопки — на пружине, содержимое проявляется из размытия
-   по очереди (значок, текст, кнопка). У sonner свои правила в :where() — нулевая
-   специфичность, перебиваются без !important. */
-@media (prefers-reduced-motion: no-preference) {
-  [data-sonner-toast][data-mounted='true']:not([data-removed='true']) {
-    transition-timing-function: var(--pf-spring);
-  }
-  [data-sonner-toast][data-mounted='true'] > :is([data-icon], [data-content], [data-button], [data-cancel]) {
-    animation: pf-toast-part-in 340ms var(--pf-ease) both;
-  }
-  [data-sonner-toast][data-mounted='true'] > [data-content] {
-    animation-delay: 40ms;
-  }
-  [data-sonner-toast][data-mounted='true'] > :is([data-button], [data-cancel]) {
-    animation-delay: 80ms;
-  }
+.pf-instant[data-state] {
+  animation: none;
 }
-@keyframes pf-toast-part-in {
-  from {
-    opacity: 0;
-    filter: blur(5px);
-    translate: 0 4px;
-  }
-}
-/* Строки выдачи палитры поиска (TaskSearchDialog) проявляются из короткого размытия одна за
-   другой — как фильтрация в ⌘K ролика; уже стоявшие строки (тот же ключ) не мигают. */
-@media (prefers-reduced-motion: no-preference) {
-  .pf-search-row {
-    animation: pf-row-in 260ms var(--pf-ease) both;
-    animation-delay: calc(min(var(--i, 0), 8) * 16ms);
-  }
-}
-@keyframes pf-row-in {
-  from {
-    opacity: 0;
-    filter: blur(4px);
-    translate: 0 4px;
-  }
-}
-/* Графики рисуют себя: ряды открываются слева направо, столбики вырастают на пружине по
-   очереди. Только при монтировании графика — новые данные в том же графике не перерисовывают. */
+/* Графики рисуют себя: ряды открываются слева направо (clip-path), столбики вырастают по
+   очереди (scale). Только при монтировании графика — новые данные не перерисовывают. */
 @media (prefers-reduced-motion: no-preference) {
   .pf-chart-reveal {
-    animation: pf-chart-reveal 900ms var(--pf-ease) both;
+    animation: pf-chart-reveal 600ms var(--pf-ease) both;
   }
   .pf-bar-grow {
     transform-origin: bottom;
-    animation: pf-bar-grow 560ms var(--pf-spring) both;
+    animation: pf-bar-grow 360ms var(--pf-ease) both;
     animation-delay: calc(min(var(--i, 0), 30) * 16ms);
   }
 }
@@ -309,22 +257,22 @@
     scale: 1 0;
   }
 }
-/* Галочка: квадрат «принимает» отметку пружиной, сама галка рисуется слева направо (путь
+/* Галочка: квадрат коротко «принимает» отметку, сама галка рисуется слева направо (путь
    lucide идёт справа, поэтому смещение штриха — отрицательное). */
 .pf-checkbox[data-state='checked'] svg path {
   stroke-dasharray: 24 24;
 }
 @media (prefers-reduced-motion: no-preference) {
   .pf-checkbox[data-state='checked'] {
-    animation: pf-check-pop 380ms var(--pf-spring);
+    animation: pf-check-pop 160ms var(--pf-ease);
   }
   .pf-checkbox[data-state='checked'] svg path {
-    animation: pf-check-draw 300ms var(--pf-ease) 40ms both;
+    animation: pf-check-draw 180ms var(--pf-ease) 30ms both;
   }
 }
 @keyframes pf-check-pop {
   from {
-    scale: 0.8;
+    scale: 0.85;
   }
 }
 @keyframes pf-check-draw {

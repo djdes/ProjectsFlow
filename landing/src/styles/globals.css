@@ -53,6 +53,16 @@
   background: var(--liquid-pill, #ffffff);
   transition: opacity 160ms cubic-bezier(0.22, 1, 0.36, 1), background-color 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+/* Подписи и подложки пунктов меняют цвет за время хода подложки (около 250 мс). */
+@media (prefers-reduced-motion: no-preference) {
+  [data-liquid='on'] [data-liquid-item],
+  [data-liquid='on'] [data-liquid-item] [style*='--liquid-on'] {
+    transition:
+      color 220ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 220ms cubic-bezier(0.23, 1, 0.32, 1),
+      border-color 220ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .liquid-indicator {
     transition: none;

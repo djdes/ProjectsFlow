@@ -24,7 +24,6 @@ import { defaultProjectIcon as FolderIcon } from '@/presentation/layout/projectI
 import { ProjectIconView } from '@/presentation/components/project/projectIconView';
 import { matchesKeyboardLayoutQuery } from '@/lib/keyboardLayoutSearch';
 import { Highlight } from '@/presentation/components/search/Highlight';
-import { useLiquidIndicator } from '@/presentation/components/motion/useLiquidIndicator';
 
 const DEBOUNCE_MS = 250;
 
@@ -269,20 +268,11 @@ export function TaskSearchDialog({
 
   const trimmed = query.trim();
 
-  // Палитра поиска: подсветка выбранной строки — «жидкая» (едет за стрелками и мышью, вытягиваясь
-  // по ходу), строки новой выдачи проявляются из короткого размытия одна за другой.
-  const listRef = useRef<HTMLUListElement>(null);
-  const highlightRef = useRef<HTMLLIElement>(null);
-  useLiquidIndicator({
-    containerRef: listRef,
-    indicatorRef: highlightRef,
-    activeSelector: '[data-pf-search-active]',
-    activeKey: `${open ? 1 : 0}|${activeIndex}|${items.map((item) => item.key).join(',')}`,
-  });
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="inset-bs-[15%] max-w-xl translate-y-0 gap-0 overflow-hidden p-0">
+      {/* pf-instant: палитра открывается и закрывается без анимации, подсветка строки и выдача
+          тоже без движения — ею пользуются десятки раз в день, движение тут только тормозит. */}
+      <DialogContent className="pf-instant inset-bs-[15%] max-w-xl translate-y-0 gap-0 overflow-hidden p-0">
         <DialogTitle className="sr-only">Поиск и команды</DialogTitle>
         <div className="flex items-center gap-2 border-be px-4">
           <Search className="size-4 shrink-0 text-muted-foreground" />
@@ -298,12 +288,11 @@ export function TaskSearchDialog({
             className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
-        <ul ref={listRef} className="relative isolate max-h-96 overflow-y-auto py-1">
-          <li ref={highlightRef} aria-hidden role="presentation" className="pointer-events-none absolute start-0 top-0 bg-hover opacity-0" />
+        <ul className="max-h-96 overflow-y-auto py-1">
           {items.map((item, i) => {
             const sectionStart = i === 0 || items[i - 1]?.section !== item.section;
             return (
-              <li key={item.key} className="pf-search-row" style={{ '--i': i } as React.CSSProperties}>
+              <li key={item.key}>
                 {sectionStart && (
                   <p className="px-4 pbe-1 pbs-2 text-xs font-medium text-muted-foreground/70">
                     {SECTION_TITLE[item.section]}
@@ -313,11 +302,9 @@ export function TaskSearchDialog({
                   type="button"
                   onClick={item.run}
                   onMouseEnter={() => setActiveIndex(i)}
-                  data-pf-search-active={i === activeIndex || undefined}
                   className={cn(
-                    // Подложку выбранной строки рисует общая «жидкая» подсветка (выше).
-                    'relative z-[1] flex w-full items-center gap-2.5 px-4 py-2 text-start transition-colors',
-                    i === activeIndex && 'text-foreground',
+                    'flex w-full items-center gap-2.5 px-4 py-2 text-start',
+                    i === activeIndex ? 'bg-hover text-foreground' : 'hover:bg-hover',
                   )}
                 >
                   <span className="grid size-5 shrink-0 place-items-center">{item.icon}</span>
