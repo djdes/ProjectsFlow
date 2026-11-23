@@ -306,7 +306,7 @@ export const scenarios = [
         requestAnimationFrame(sample);
       });
       // Slow answers keep every loading stage on screen: sign-in check, workspace, data.
-      const delays = { 'ws-team:/auth/me': 300, 'ws-team:/workspaces': 300, 'ws-team:/assignees/mine': 500, 'ws-team:/projects/p-site': 400 };
+      const delays = { 'ws-team:/auth/me': 300, 'ws-team:/workspaces': 300, 'ws-team:/assignees/overview': 500, 'ws-team:/projects/p-site': 400 };
       // The first visit remembers the sizes of data-dependent rows; the second one is measured.
       const load = async (path, name) => {
         t.state.delays = {};

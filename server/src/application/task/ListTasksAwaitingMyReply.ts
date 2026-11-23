@@ -10,7 +10,7 @@ import type { TaskCommentRepository } from './TaskCommentRepository.js';
 import type { TaskCommitRepository } from './TaskCommitRepository.js';
 import type { TaskRepository } from './TaskRepository.js';
 import type { AssignedTaskView } from './ListTasksAssignedToMe.js';
-import { requireTaskModifyAccess, requireTaskReadAccess } from './taskAuthorization.js';
+import { checkTaskModifyAccess, checkTaskReadAccess } from './taskAuthorization.js';
 import { commentPreviewText } from '../../domain/task/commentContent.js';
 
 type Deps = {
@@ -67,29 +67,45 @@ export class ListTasksAwaitingMyReply {
     // Comments arrive newest first: the first one per task is its latest question.
     const latestByTask = new Map<string, TaskComment>();
     for (const c of comments) if (!latestByTask.has(c.taskId)) latestByTask.set(c.taskId, c);
+    if (latestByTask.size === 0) return [];
 
+    // One read for all the tasks (live ones only, like getById), not one per question.
+    const taskById = new Map(
+      (await this.deps.tasks.listByIds([...latestByTask.keys()])).map((t) => [t.id, t] as const),
+    );
+
+    // A project of the active workspace (its own or connected to it, db/182) — once per project.
     const projectCache = new Map<string, Promise<Project | null>>();
-    const projectOf = (id: string): Promise<Project | null> => {
+    const projectInWorkspace = (id: string): Promise<Project | null> => {
       let p = projectCache.get(id);
-      if (!p) projectCache.set(id, (p = this.deps.projects.getById(id)));
+      if (!p) {
+        p = (async () => {
+          const project = await this.deps.projects.getById(id);
+          if (!project) return null;
+          if (project.workspaceId !== ws.id && !(await this.deps.projects.isInWorkspace?.(project.id, ws.id))) {
+            return null;
+          }
+          return project;
+        })();
+        projectCache.set(id, p);
+      }
       return p;
     };
 
     const resolved = await Promise.all(
       [...latestByTask.values()].map(async (question) => {
-        const task = await this.deps.tasks.getById(question.taskId);
+        const task = taskById.get(question.taskId);
         if (!task || task.status === 'done') return null;
-        const project = await projectOf(task.projectId);
+        const project = await projectInWorkspace(task.projectId);
         if (!project) return null;
-        if (project.workspaceId !== ws.id && !(await this.deps.projects.isInWorkspace?.(project.id, ws.id))) {
-          return null;
-        }
+        // The task and its project are loaded above: check them as they are, without reading
+        // them again for every check.
         try {
-          await requireTaskReadAccess(this.deps, project.id, task.id, userId);
+          await checkTaskReadAccess(this.deps, project, task, userId);
         } catch {
           return null;
         }
-        const canModify = await requireTaskModifyAccess(this.deps, project.id, task.id, userId, 'move_task').then(
+        const canModify = await checkTaskModifyAccess(this.deps, project, task, userId, 'move_task').then(
           () => true,
           () => false,
         );

@@ -52,6 +52,7 @@ import type {
   ActivityKind,
   ActivityPayload,
 } from "@/domain/activity/ActivityFeedItem";
+import { memoByAnswer } from "./answerMemo";
 import { HttpError, httpClient } from "./httpClient";
 
 // Нормализует значение JSON-колонки в plain-объект: парсит строку (MariaDB longtext),
@@ -176,6 +177,11 @@ function memberFromDto(dto: MemberDto): ProjectMember {
 }
 
 export class HttpProjectRepository implements ProjectRepository {
+  // The same inbox answer gives the same Project object (see memoByAnswer).
+  private readonly inboxOf = memoByAnswer((dto: { project: ProjectDto }) => fromDto(dto.project));
+  private readonly listOf = memoByAnswer((dto: { projects: ProjectDto[] }): readonly Project[] => dto.projects.map(fromDto));
+  private readonly sharedMembersOf = memoByAnswer((dto: { members: SharedMember[] }): readonly SharedMember[] => dto.members);
+
   constructor(private readonly client: typeof httpClient = httpClient) {}
 
   async list(): Promise<Project[]> {
@@ -183,6 +189,15 @@ export class HttpProjectRepository implements ProjectRepository {
       "/projects",
     );
     return projects.map(fromDto);
+  }
+
+  async listForScreen(options?: { readonly latest?: boolean }): Promise<readonly Project[]> {
+    return this.listOf(await this.client.read<{ projects: ProjectDto[] }>("/projects", { swr: !options?.latest }));
+  }
+
+  peekList(): readonly Project[] | null {
+    const answer = this.client.peekAnswer<{ projects: ProjectDto[] }>("/projects");
+    return answer ? this.listOf(answer) : null;
   }
 
   async getById(id: string): Promise<Project | null> {
@@ -198,8 +213,12 @@ export class HttpProjectRepository implements ProjectRepository {
   }
 
   async getInbox(): Promise<Project> {
-    const { project } = await this.client.get<{ project: ProjectDto }>("/inbox");
-    return fromDto(project);
+    return this.inboxOf(await this.client.read<{ project: ProjectDto }>("/inbox", { swr: true }));
+  }
+
+  peekInbox(): Project | null {
+    const answer = this.client.peekAnswer<{ project: ProjectDto }>("/inbox");
+    return answer ? this.inboxOf(answer) : null;
   }
 
   async create(input: CreateProjectInput): Promise<Project> {
@@ -539,6 +558,15 @@ export class HttpProjectRepository implements ProjectRepository {
       "/me/shared-members",
     );
     return members;
+  }
+
+  async listSharedMembersForScreen(): Promise<readonly SharedMember[]> {
+    return this.sharedMembersOf(await this.client.read<{ members: SharedMember[] }>("/me/shared-members", { swr: true }));
+  }
+
+  peekSharedMembers(): readonly SharedMember[] | null {
+    const answer = this.client.peekAnswer<{ members: SharedMember[] }>("/me/shared-members");
+    return answer ? this.sharedMembersOf(answer) : null;
   }
 
   async recordProjectView(projectId: string): Promise<void> {

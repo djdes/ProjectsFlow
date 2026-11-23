@@ -12,6 +12,9 @@ export interface LiveRepository {
   listTaskActivity(projectId: string): Promise<TaskWorkerActivity[]>;
   // Сессии задачи, newest-first.
   listSessions(projectId: string, taskId: string): Promise<LiveSession[]>;
+  // Начать чтение сессий заранее: окно задачи открывается, LIVE смонтируется следом и возьмёт
+  // готовый ответ (без второго запроса).
+  prefetchSessions?(projectId: string, taskId: string): void;
   // События сессии с seq > afterSeq (для replay/пагинации). limit ограничивает батч.
   listEvents(
     projectId: string,

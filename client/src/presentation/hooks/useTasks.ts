@@ -16,12 +16,14 @@ import type {
 } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import { useRealtimeTaskRefresh } from './useRealtimeTaskRefresh';
+import { useReadRefreshed } from './useReadRefreshed';
 import { useCurrentUser } from './useCurrentUser';
 import { trackProjectAction } from '@/lib/productAnalytics';
 import { getDefaultTaskDeadline } from '@/domain/task/defaultTaskDeadline';
 
 type State = {
-  tasks: Task[];
+  // Shared with the repository while the answer is unchanged (listForScreen): never mutated.
+  tasks: readonly Task[];
   loading: boolean;
   error: string | null;
 };
@@ -69,11 +71,11 @@ export type UseTasks = State & {
 export function useTasks(projectId: string): UseTasks {
   const { taskRepository } = useContainer();
   const { user } = useCurrentUser();
-  const [state, setState] = useState<State & { projectId: string }>({
-    projectId,
-    tasks: [],
-    loading: true,
-    error: null,
+  // Known from an earlier visit: the board renders it at once (no skeleton) and the mount read
+  // below refreshes it.
+  const [state, setState] = useState<State & { projectId: string }>(() => {
+    const known = taskRepository.peekList(projectId);
+    return { projectId, tasks: known ?? [], loading: known === null, error: null };
   });
   const scope = useRef(projectId);
   const latestState = useRef(state);
@@ -125,7 +127,7 @@ export function useTasks(projectId: string): UseTasks {
   // момент передачи владения (личная задача уезжает в inbox нового ответственного, см.
   // ChangeTaskAssignee) локальный снимок может ещё держать старую доску — тогда запрос
   // по projectId доски вернул бы 404. Снимок в ref: колбэки async и видели бы stale state.
-  const tasksRef = useRef<Task[]>([]);
+  const tasksRef = useRef<readonly Task[]>([]);
   useEffect(() => {
     tasksRef.current = state.projectId === projectId ? state.tasks : [];
   }, [state.tasks, state.projectId, projectId]);
@@ -138,11 +140,13 @@ export function useTasks(projectId: string): UseTasks {
   // что юзеры видят как «контент мигает». Теперь данные обновляются in-place.
   // Skeleton показывается только при первом mount/смене projectId (см. useEffect).
   // На ошибке tasks НЕ обнуляем — пусть юзер видит последний снимок + error.
+  // latest (default) — after a change, an event or a gesture: wait for the current list.
+  // Otherwise what is known comes at once and a newer list is announced (useReadRefreshed).
   const load = useCallback(
-    async (propagateError = false): Promise<void> => {
+    async (propagateError = false, latest = true): Promise<void> => {
       const request = ++requests.current;
       try {
-        const tasks = await taskRepository.list(projectId);
+        const tasks = await taskRepository.listForScreen(projectId, { latest });
         if (
           scope.current === projectId &&
           request === requests.current &&
@@ -169,12 +173,18 @@ export function useTasks(projectId: string): UseTasks {
   usePageRefresh(() => load(true), Boolean(projectId));
 
   useEffect(() => {
-    // Смена projectId (или первый mount) — сбрасываем в skeleton-state, потом
-    // фетчим. SSE-refetch'и идут мимо useEffect (refetch вызывается напрямую
-    // из useRealtimeTaskRefresh), поэтому skeleton не дёргается на каждый event.
-    setState({ projectId, tasks: [], loading: true, error: null });
-    void refetch();
-  }, [refetch, projectId]);
+    // Смена projectId — показываем то, что о новой доске уже известно, а skeleton только если
+    // ничего (первый mount это уже сделал в useState). Потом читаем: известное — сразу, свежее
+    // — следом (useReadRefreshed ниже). SSE-refetch'и идут мимо useEffect (refetch вызывается
+    // напрямую из useRealtimeTaskRefresh), поэтому skeleton не дёргается на каждый event.
+    setState((current) => {
+      if (current.projectId === projectId) return current;
+      const known = taskRepository.peekList(projectId);
+      return { projectId, tasks: known ?? [], loading: known === null, error: null };
+    });
+    void load(false, false);
+  }, [load, projectId, taskRepository]);
+  useReadRefreshed(() => void load(false, false));
 
   // Live-обновление: рефетч при SSE-событии об изменении задач в этом проекте + при
   // возврате фокуса. void — refetch возвращает Promise, нам результат не нужен.

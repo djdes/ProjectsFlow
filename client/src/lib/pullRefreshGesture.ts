@@ -6,10 +6,12 @@ export function pullRefreshDistance(dx: number, dy: number): number {
 export function mayStartPull(target: Element, main: HTMLElement): boolean {
   if (!main.contains(target) || window.getSelection()?.isCollapsed === false)
     return false;
+  // Real controls keep their touch. Task cards are role="button" blocks that fill almost the
+  // whole inbox: a pull may start on them (a held press is a drag — AppExperience checks that).
   if (
     main.scrollTop > 1 ||
     target.closest(
-      'button, a, input, textarea, select, [contenteditable], [role="button"], [data-pf-no-edge-swipe]',
+      'button, a, input, textarea, select, [contenteditable], [data-pf-no-edge-swipe]',
     )
   )
     return false;

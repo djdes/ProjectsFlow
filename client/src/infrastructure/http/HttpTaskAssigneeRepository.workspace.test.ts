@@ -14,9 +14,9 @@ test('cross-workspace reads carry explicit scope and never change the selected w
   t.after(() => setRequestWorkspace(null));
   const repo = new HttpTaskAssigneeRepository();
   await Promise.all([repo.listMineInWorkspace('a'), repo.listOthersInWorkspace('a'), repo.listOthersInWorkspace('b')]);
-  await repo.listOthers();
+  await repo.listMemberTasks('u1');
   assert.deepEqual(requests.map((request) => [request.path, request.scope]), [
-    ['/api/assignees/mine', 'a'], ['/api/assignees/others', 'a'], ['/api/assignees/others', 'b'], ['/api/assignees/others', 'selected'],
+    ['/api/assignees/mine', 'a'], ['/api/assignees/others', 'a'], ['/api/assignees/others', 'b'], ['/api/assignees/member/u1', 'selected'],
   ]);
   assert.ok(requests.every((request) => request.method === 'GET'));
 });

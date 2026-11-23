@@ -1,7 +1,8 @@
-import { PageSkeleton } from '@/presentation/components/loading/LoadingLayouts';
+import { InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
+import { useReadRefreshed } from '@/presentation/hooks/useReadRefreshed';
 import { INBOX_SHOW_DONE_KEY, inboxHidesDone, inboxShowDoneValue } from '@/lib/inboxDonePreference';
 import { usePageRefresh } from '@/presentation/components/experience/usePageRefresh';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EyeOff, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InboxBreadcrumbs } from '@/presentation/layout/InboxBreadcrumbs';
@@ -31,10 +32,15 @@ export function InboxPage({
   embedded?: boolean;
   onHideWorkspace?: () => void;
 }): React.ReactElement {
-  const { projectRepository, taskRepository } = useContainer();
+  const { projectRepository, taskRepository, taskAssigneeRepository } = useContainer();
   const { workspace } = useCurrentWorkspace();
-  const [project, setProject] = useState<Project | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Known from an earlier visit, or the copy saved on this device: shown on the first frame and
+  // refreshed in the background — a skeleton only for what is not known yet.
+  const [known] = useState(() => {
+    const inbox = projectRepository.peekInbox();
+    return { project: inbox, tasks: inbox ? taskRepository.peekList(inbox.id) : null };
+  });
+  const [project, setProject] = useState<Project | null>(known.project);
   const [error, setError] = useState<string | null>(null);
   const [hideDone, setHideDone] = useState<boolean>(loadHideDone);
   // Режим выделения ВЕРХНЕГО блока (вкладки «Мои»/«Для всех»), включается кнопкой в шапке
@@ -44,11 +50,13 @@ export function InboxPage({
   // Снимок задач своего инбокса. Нижней доски на странице больше нет (канбан ровно один —
   // блок ответственных); зеркало ускоряет обновление личных задач после локальных действий.
   // null = ещё грузится, отличается от честного пустого инбокса.
-  const [boardTasks, setBoardTasks] = useState<readonly Task[] | null>(null);
+  const [boardTasks, setBoardTasks] = useState<readonly Task[] | null>(known.tasks);
+  // latest — after own changes and on pull to refresh: wait for the current list. Otherwise the
+  // known list comes at once and a newer one is announced (useReadRefreshed below).
   const reloadInboxTasks = useCallback(
-    async (projectId: string, propagateError = false): Promise<void> => {
+    async (projectId: string, latest: boolean, propagateError = false): Promise<void> => {
       try {
-        setBoardTasks(await taskRepository.list(projectId));
+        setBoardTasks(await taskRepository.listForScreen(projectId, { latest }));
       } catch (error) {
         if (propagateError) throw error;
         // Блок не должен «залипнуть» в пустом рендере из-за сетевой ошибки: сам он
@@ -58,32 +66,46 @@ export function InboxPage({
     },
     [taskRepository],
   );
-  usePageRefresh(() => project ? reloadInboxTasks(project.id, true) : Promise.resolve(), Boolean(project));
+  const projectId = project?.id ?? null;
+  usePageRefresh(() => projectId ? reloadInboxTasks(projectId, true, true) : Promise.resolve(), Boolean(projectId));
 
+  const shownProject = useRef(project);
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    projectRepository
-      .getInbox()
-      .then((p) => {
-        if (!cancelled) setProject(p);
-      })
-      .catch(() => {
-        const msg = 'Не удалось загрузить «Входящие» этого пространства. Повторите попытку.';
-        if (!cancelled) { setError(msg); toast.error(msg); }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    shownProject.current = project;
+  }, [project]);
+  const loadInbox = useCallback(async (): Promise<void> => {
+    try {
+      setProject(await projectRepository.getInbox());
+      setError(null);
+    } catch {
+      // What is known stays on screen; the error replaces the page only when nothing is.
+      if (shownProject.current) return;
+      const msg = 'Не удалось загрузить «Входящие» этого пространства. Повторите попытку.';
+      setError(msg);
+      toast.error(msg);
+    }
   }, [projectRepository]);
 
   useEffect(() => {
-    if (!project) return;
-    void reloadInboxTasks(project.id);
-  }, [project, reloadInboxTasks]);
+    void loadInbox();
+  }, [loadInbox]);
+
+  // First visit on this device (the inbox project is not known yet): the lists start loading
+  // alongside it, not after it — the board mounts and takes them (one round trip, not two).
+  useEffect(() => {
+    if (!known.project) void taskAssigneeRepository.loadInboxOverview().catch(() => undefined);
+  }, [known.project, taskAssigneeRepository]);
+
+  useEffect(() => {
+    if (projectId) void reloadInboxTasks(projectId, false);
+  }, [projectId, reloadInboxTasks]);
+
+  // A newer answer than the one shown arrived in the background: re-read, now from memory.
+  // Unchanged data comes back as the same objects, so only what changed re-renders.
+  useReadRefreshed(() => {
+    void loadInbox();
+    if (projectId) void reloadInboxTasks(projectId, false);
+  });
 
   const handleHideDoneChange = (next: boolean): void => {
     setHideDone(next);
@@ -94,14 +116,20 @@ export function InboxPage({
     }
   };
 
-  if (loading) return <PageSkeleton layout="inbox" />;
+  // Своя страница — заголовок страницы прямо в строке управления: название пространства уже
+  // стоит в крошках (на телефоне — в шапке приложения), отдельная строка с ним только
+  // повторяла его и отодвигала задачи вниз. На «Всех задачах» блоков несколько, там
+  // заголовок блока — его пространство.
+  const heading = embedded
+    ? <CurrentWorkspaceHeading name={workspace?.name ?? 'Пространство'} icon={workspace?.icon ?? null} />
+    : <PageTitle className="me-1">Задачи пространства</PageTitle>;
 
-  if (error || !project) {
+  if (error && !project) {
     return (
       <div className="grid h-full place-items-center p-6">
         <div className="max-w-md space-y-4 text-center">
           <PageTitle className="justify-center">Не получилось</PageTitle>
-          <p className="text-sm text-muted-foreground">{error ?? 'Inbox недоступен'}</p>
+          <p className="text-sm text-muted-foreground">{error}</p>
           <Button variant="outline" onClick={() => window.location.reload()}>
             Перезагрузить
           </Button>
@@ -130,20 +158,20 @@ export function InboxPage({
           десктопе): заголовок встаёт на те же 16/20px от шапки, что и везде. */}
       {/* Телефон: строки заголовка нет (см. compactHeading) — лента «кто» стоит в 12px от шапки. */}
       <div className={embedded ? 'flex flex-1 flex-col gap-3' : 'flex flex-1 flex-col gap-3 px-4 pbe-6 pbs-3 sm:px-6 sm:pbs-[1.125rem] lg:px-9'}>
-        <AssignedToMeBlock
+        {/* The inbox project is not known yet (first visit on this device): the page and its
+            title are already in place, the board below waits — as AssignedToMeBlock does. */}
+        {!project ? (
+          <section className="flex flex-col gap-3">
+            <InboxLoadingLayout heading={heading} compactHeading={!embedded} />
+          </section>
+        ) : <AssignedToMeBlock
           regionId={embedded ? `workspace-board-${workspace?.id}` : undefined}
           initialTab={embedded ? 'toMe' : undefined}
           tabStorageKey={embedded ? `pf.inbox.global.${workspace?.id}.tab` : undefined}
           boardTasks={boardTasks}
           inboxProjectId={project.id}
-          onChanged={() => void reloadInboxTasks(project.id)}
-          // Своя страница — заголовок страницы прямо в строке управления: название
-          // пространства уже стоит в крошках (на телефоне — в шапке приложения), отдельная
-          // строка с ним только повторяла его и отодвигала задачи вниз. На «Всех задачах»
-          // блоков несколько, там заголовок блока — его пространство.
-          heading={embedded
-            ? <CurrentWorkspaceHeading name={workspace?.name ?? 'Пространство'} icon={workspace?.icon ?? null} />
-            : <PageTitle className="me-1">Задачи пространства</PageTitle>}
+          onChanged={() => void reloadInboxTasks(project.id, true)}
+          heading={heading}
           actions={
             <>
               {/* Выделение задач блока: режим включается сразу во всех его колонках, в шапке
@@ -182,7 +210,7 @@ export function InboxPage({
           selectionActive={selectionActive}
           onSelectionActiveChange={setSelectionActive}
           compactHeading={!embedded}
-        />
+        />}
       </div>
     </div>
   );

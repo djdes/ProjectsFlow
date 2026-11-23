@@ -105,10 +105,20 @@ export type TaskDigestResult = {
 
 export interface TaskRepository {
   get(projectId: string, taskId: string): Promise<Task>;
+  // Начать чтения окна задачи заранее (сама задача, комментарии, вложения, кого уведомить):
+  // окно рисует рамку первым кадром, а его разделы, смонтировавшись следом, берут готовые ответы.
+  prefetchWindow?(projectId: string, taskId: string): void;
   // Пульс диспетчера проекта для LIVE (задача в очереди). Опционально — тестовые фейки
   // и старые сборки без него просто не показывают «видел очередь N с назад».
   getDispatcherHeartbeat?(projectId: string, taskId: string): Promise<DispatcherHeartbeat>;
   list(projectId: string): Promise<Task[]>;
+  // Список для экрана, который следит за onReadRefreshed (lib/readRefreshed): известный список
+  // приходит сразу, без скелетона, свежий подгружается следом — экран перечитывает по сигналу.
+  // latest — дождаться актуального (обновление жестом, после своих правок, по событию).
+  // Пока ответ не менялся, отдаёт те же объекты (React не перерисовывает); не изменять их.
+  listForScreen(projectId: string, options?: { readonly latest?: boolean }): Promise<readonly Task[]>;
+  // Уже известный список — без запроса, для первого кадра; null — пока ничего.
+  peekList(projectId: string): readonly Task[] | null;
   create(projectId: string, input: CreateTaskInput): Promise<Task>;
   update(projectId: string, taskId: string, input: UpdateTaskInput): Promise<Task>;
   move(projectId: string, taskId: string, input: MoveTaskInput): Promise<Task>;

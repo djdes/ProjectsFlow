@@ -77,6 +77,23 @@ export default defineConfig({
       }
     },
   }],
+  build: {
+    rolldownOptions: {
+      output: {
+        // Startup used to fetch ~110 files, most under 1 KB (one per icon, small hooks and
+        // labels). Merged here: every icon (one file, ~26 KB gz), everything the entry imports
+        // statically, and small modules shared by three or more screens. Screens themselves stay
+        // separate lazy chunks. Measured: startup 108 → 20 files, 839 → 810 KB gz.
+        codeSplitting: {
+          groups: [
+            { name: 'icons', test: /[\\/]node_modules[\\/]lucide-react[\\/]/, priority: 30 },
+            { name: 'initial', tags: ['$initial'], priority: 20 },
+            { name: 'shared', test: /[\\/]src[\\/]/, minShareCount: 3, maxModuleSize: 4_000, priority: 10 },
+          ],
+        },
+      },
+    },
+  },
   resolve: {
     // Dialog and Popover must share the layer/focus stacks even when their Radix
     // dependencies resolve to different patch versions. Otherwise Escape in a

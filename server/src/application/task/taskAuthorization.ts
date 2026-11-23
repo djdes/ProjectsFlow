@@ -133,6 +133,19 @@ export async function requireTaskModifyAccess(
   if (!project) throw new ProjectNotFoundError();
   const task = await deps.tasks.getById(taskId);
   if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
+  return checkTaskModifyAccess(deps, project, task, userId, action);
+}
+
+// The same check for a task and its project that the caller has just loaded: a list checks
+// many tasks and must not read each of them again.
+export async function checkTaskModifyAccess(
+  deps: TaskModifyAccessDeps,
+  project: Project,
+  task: Task,
+  userId: string,
+  action: ProjectAction,
+): Promise<TaskAccessResult> {
+  if (task.projectId !== project.id) throw new ProjectNotFoundError();
   if (await isTaskHiddenByRules(deps, project, task, userId)) throw new ProjectNotFoundError();
 
   const managementActions: readonly ProjectAction[] = [
@@ -166,10 +179,10 @@ export async function requireTaskModifyAccess(
 
   if (task.assignee.userId === userId) {
     // Назначение не раскрывает проект постороннему: хотя бы viewer-membership обязателен.
-    await requireProjectAccess(deps, projectId, userId, 'read_project');
+    await requireProjectAccess(deps, project.id, userId, 'read_project');
     return { project, isAssignee: true };
   }
-  await requireProjectAccess(deps, projectId, userId, action);
+  await requireProjectAccess(deps, project.id, userId, action);
   return { project, isAssignee: false };
 }
 
@@ -200,7 +213,18 @@ export async function requireTaskReadAccess(
   if (!project) throw new ProjectNotFoundError();
   const task = await deps.tasks.getById(taskId);
   if (!task || task.projectId !== projectId) throw new ProjectNotFoundError();
+  return checkTaskReadAccess(deps, project, task, userId);
+}
 
+// The same check for a task and its project that the caller has just loaded (see
+// checkTaskModifyAccess).
+export async function checkTaskReadAccess(
+  deps: TaskAccessDeps,
+  project: Project,
+  task: Task,
+  userId: string,
+): Promise<TaskAccessResult> {
+  if (task.projectId !== project.id) throw new ProjectNotFoundError();
   if (project.isInbox) {
     if (await isSystemAdmin(userId) && !await deps.members.isProjectHidden?.(project.id, userId)) {
       return { project, isAssignee: task.assignee.userId === userId };
@@ -220,7 +244,7 @@ export async function requireTaskReadAccess(
     throw new ProjectNotFoundError();
   }
 
-  await requireProjectAccess(deps, projectId, userId, 'read_project');
+  await requireProjectAccess(deps, project.id, userId, 'read_project');
   if (await isTaskHiddenByRules(deps, project, task, userId)) throw new ProjectNotFoundError();
   return { project, isAssignee: task.assignee.userId === userId };
 }

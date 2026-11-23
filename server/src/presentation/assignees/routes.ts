@@ -7,7 +7,11 @@ import type { ListTasksAssignedToOthers } from '../../application/task/ListTasks
 import type { ListPersonalTasksOfColleagues } from '../../application/task/ListPersonalTasksOfColleagues.js';
 import type { ListMemberTasksForLead } from '../../application/task/ListMemberTasksForLead.js';
 import type { ListApprovalQueue } from '../../application/task/ListApprovalQueue.js';
-import type { ListTasksAwaitingMyReply } from '../../application/task/ListTasksAwaitingMyReply.js';
+import type {
+  AwaitingReplyView,
+  ListTasksAwaitingMyReply,
+} from '../../application/task/ListTasksAwaitingMyReply.js';
+import type { GetInboxOverview } from '../../application/task/GetInboxOverview.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { toDto as taskToDto } from '../tasks/routes.js';
 import { onlyFromGroups } from '../tasks/groupOriginFilter.js';
@@ -21,25 +25,33 @@ type Deps = {
   readonly listMemberTasksForLead: ListMemberTasksForLead;
   readonly listApprovalQueue: ListApprovalQueue;
   readonly listAwaitingMyReply: ListTasksAwaitingMyReply;
+  readonly getInboxOverview: GetInboxOverview;
 };
+
+// Shared by the separate list endpoints and /overview: each part of the overview must be
+// byte-for-byte the answer of its own endpoint (the client stores it as that endpoint's answer).
+const assignedViewToDto = (v: AssignedTaskView) => ({
+  task: taskToDto({
+    ...v.task,
+    commitCount: v.commitCount,
+    attachmentCount: v.attachmentCount,
+    commentCount: v.commentCount,
+  }),
+  projectId: v.projectId,
+  projectName: v.projectName,
+  isInbox: v.isInbox,
+  canModify: v.canModify,
+  inboxOwner: v.inboxOwner,
+});
+
+const awaitingReplyViewToDto = (v: AwaitingReplyView) => ({
+  ...assignedViewToDto(v),
+  question: { ...v.question, askedAt: v.question.askedAt.toISOString() },
+});
 
 export function taskAssigneesRouter(deps: Deps): Router {
   const r = Router();
   r.use(requireAuth);
-
-  const assignedViewToDto = (v: AssignedTaskView) => ({
-    task: taskToDto({
-      ...v.task,
-      commitCount: v.commitCount,
-      attachmentCount: v.attachmentCount,
-      commentCount: v.commentCount,
-    }),
-    projectId: v.projectId,
-    projectName: v.projectName,
-    isInbox: v.isInbox,
-    canModify: v.canModify,
-    inboxOwner: v.inboxOwner,
-  });
 
   // Все задачи, где caller — текущий ответственный.
   r.get('/mine', async (req: Request, res: Response, next: NextFunction) => {
@@ -102,11 +114,25 @@ export function taskAssigneesRouter(deps: Deps): Router {
   r.get('/awaiting-reply', async (req: Request, res: Response, next: NextFunction) => {
     try {
       const items = await deps.listAwaitingMyReply.execute(req.user!.id);
+      res.json({ items: items.map(awaitingReplyViewToDto) });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // Every inbox list in one request: { mine, others, personal, approvals, awaitingReply }, each
+  // part being { items } exactly as its own endpoint answers (?fromGroups=1 applies to the first
+  // three, as there). Auth and workspace lookups run once instead of five times, and the lists
+  // share the request's memoized permission lookups.
+  r.get('/overview', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const o = await deps.getInboxOverview.execute(req.user!.id);
       res.json({
-        items: items.map((v) => ({
-          ...assignedViewToDto(v),
-          question: { ...v.question, askedAt: v.question.askedAt.toISOString() },
-        })),
+        mine: { items: onlyFromGroups(o.mine, req.query, (v) => v.task).map(assignedViewToDto) },
+        others: { items: onlyFromGroups(o.others, req.query, (v) => v.task).map(assignedViewToDto) },
+        personal: { items: onlyFromGroups(o.personal, req.query, (v) => v.task).map(assignedViewToDto) },
+        approvals: { items: o.approvals.map(assignedViewToDto) },
+        awaitingReply: { items: o.awaitingReply.map(awaitingReplyViewToDto) },
       });
     } catch (e) {
       next(e);

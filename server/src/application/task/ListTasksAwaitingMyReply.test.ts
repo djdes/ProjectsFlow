@@ -38,7 +38,10 @@ function makeList(input: { projects: Project[]; tasks: Task[]; comments: TaskCom
         (input.readable ?? input.projects.map((p) => p.id)).includes(projectId) ? { role: 'lead' } : null,
       isProjectHidden: async () => false,
     } as never,
-    tasks: { getById: async (id: string) => input.tasks.find((t) => t.id === id) ?? null } as never,
+    tasks: {
+      getById: async (id: string) => input.tasks.find((t) => t.id === id) ?? null,
+      listByIds: async (ids: readonly string[]) => input.tasks.filter((t) => ids.includes(t.id)),
+    } as never,
     taskCommits: { countsByTasks: async () => new Map() } as never,
     attachments: { countsByTasks: async () => new Map() } as never,
     comments: {

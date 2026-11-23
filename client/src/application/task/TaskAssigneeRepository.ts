@@ -1,27 +1,28 @@
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import type { AwaitingReplyTask } from '@/domain/task/AwaitingReplyTask';
+import type { InboxOverview } from '@/domain/task/InboxOverview';
 
 export interface TaskAssigneeRepository {
-  // Все задачи, где caller — текущий обязательный ответственный.
-  listMine(): Promise<AssignedTask[]>;
-  // То же для другого пространства, где caller — участник («Все входящие»): активное
-  // пространство вкладки не меняется. Не участнику сервер отвечает 404.
+  // Задачи, где caller — текущий обязательный ответственный, в другом пространстве, где он
+  // участник («Все входящие»): активное пространство вкладки не меняется. Не участнику сервер
+  // отвечает 404. В своём пространстве этот список приходит в loadInboxOverview.
   listMineInWorkspace(workspaceId: string): Promise<AssignedTask[]>;
-  // Все видимые caller'у задачи, где отвечает другой участник.
-  listOthers(): Promise<AssignedTask[]>;
   // All readable tasks assigned to others in an explicit workspace, without switching it.
   listOthersInWorkspace(workspaceId: string): Promise<AssignedTask[]>;
-  // Личные (inbox) задачи коллег — тех, с кем есть общее рабочее пространство.
-  // Только чтение: canModify у таких задач всегда false.
-  listColleaguesPersonal(): Promise<AssignedTask[]>;
   // Доска сотрудника для руководителя пространства (BUG D): ВСЕ его незавершённые задачи
   // по всем проектам активного пространства, включая проекты, где сам вызывающий не
   // участник. Сервер гейтит доступ (только lead/owner) — 403/404 в остальных случаях.
   listMemberTasks(memberId: string): Promise<AssignedTask[]>;
-  // Очередь приёмки руководителя: все задачи «На утверждении» активного пространства, которые
-  // он вправе принять, в том числе поставленные не им. Не руководителю сервер отдаёт пустой список.
-  listApprovalQueue(): Promise<AssignedTask[]>;
   // Задачи активного пространства, где мне адресовали комментарий («Кого уведомить» или @),
   // а я ещё не ответил. Новые вопросы сверху; закрытые задачи сервер не отдаёт.
   listAwaitingReply(): Promise<AwaitingReplyTask[]>;
+  // Всё для «Входящих» одним запросом: мои задачи; задачи других участников; личные (inbox)
+  // задачи коллег по общим пространствам (только чтение, canModify — false); очередь приёмки
+  // руководителя («На утверждении», не руководителю — пусто); вопросы ко мне без ответа. Повторный визит получает известное сразу, а свежее подгружается следом: о нём
+  // сообщает onReadRefreshed (lib/readRefreshed) — экран перечитывает, уже из памяти.
+  // latest — дождаться актуального (обновление жестом, после своих правок, по событию).
+  // Пока ответ не менялся, отдаёт те же объекты (React не перерисовывает); не изменять их.
+  loadInboxOverview(options?: { readonly latest?: boolean }): Promise<InboxOverview>;
+  // Что об обзоре уже известно — без запроса, для первого кадра; null — пока ничего.
+  peekInboxOverview(): InboxOverview | null;
 }

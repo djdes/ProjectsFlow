@@ -471,9 +471,17 @@ export type ProjectImportAnalysis = {
 
 export interface ProjectRepository {
   list(): Promise<Project[]>;
+  // Список для экрана, который следит за onReadRefreshed (lib/readRefreshed): известный —
+  // сразу, свежий — следом; latest — дождаться актуального. Пока ответ не менялся, те же
+  // объекты (React не перерисовывает); не изменять их.
+  listForScreen(options?: { readonly latest?: boolean }): Promise<readonly Project[]>;
+  // Уже известный список — без запроса, для первого кадра; null — пока ничего.
+  peekList(): readonly Project[] | null;
   getById(id: string): Promise<Project | null>;
   // Inbox-проект юзера. Создаётся лениво при первом обращении на сервере.
   getInbox(): Promise<Project>;
+  // Уже известный проект «Входящих» — без запроса, для первого кадра; null — пока ничего.
+  peekInbox(): Project | null;
   create(input: CreateProjectInput): Promise<Project>;
   update(id: string, patch: UpdateProjectInput): Promise<Project>;
   // Загрузка своего файла-обложки (multipart). Сервер сохраняет и возвращает проект с
@@ -704,6 +712,11 @@ export interface ProjectRepository {
   // Дедуплицированный список user'ов, с которыми caller состоит в общих проектах
   // (без caller'а самого). Используется UI-выбором ответственного во входящих.
   listSharedMembers(): Promise<SharedMember[]>;
+  // Тот же список для экрана, который следит за onReadRefreshed (lib/readRefreshed): известный —
+  // сразу, свежий — следом; пока ответ не менялся, те же объекты (не изменять их).
+  listSharedMembersForScreen(): Promise<readonly SharedMember[]>;
+  // Уже известный список — без запроса, для первого кадра; null — пока ничего.
+  peekSharedMembers(): readonly SharedMember[] | null;
   // «Доступ пространств» проекта (db/182): подключённые пространства и правила видимости.
   getWorkspaceAccess(projectId: string): Promise<import('@/domain/project/ProjectSharing').ProjectSharing>;
   saveWorkspaceAccess(

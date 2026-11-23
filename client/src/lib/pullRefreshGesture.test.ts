@@ -45,3 +45,15 @@ test('pull does not steal controls or nested scrolling', () => {
     main.remove();
   }
 });
+
+test('a pull may start on a task card, but not on a control inside it', () => {
+  const main = document.createElement('main');
+  main.innerHTML = '<div role="button"><p>card title</p><button><i>done</i></button></div>';
+  document.body.append(main);
+  try {
+    assert.equal(mayStartPull(main.querySelector('p')!, main), true);
+    assert.equal(mayStartPull(main.querySelector('i')!, main), false);
+  } finally {
+    main.remove();
+  }
+});

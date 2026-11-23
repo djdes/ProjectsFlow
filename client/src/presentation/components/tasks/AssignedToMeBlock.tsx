@@ -91,11 +91,13 @@ import { useMotion } from '@/presentation/components/motion/MotionProvider';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 import { useSpotlightTask } from '@/presentation/hooks/useSpotlightTask';
 import { useInboxRealtimeRefresh } from '@/presentation/hooks/useInboxRealtimeRefresh';
+import { useReadRefreshed } from '@/presentation/hooks/useReadRefreshed';
 import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import type { Task, RalphMode, RunMode, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
+import type { InboxOverview } from '@/domain/task/InboxOverview';
 import {
   ASSIGNED_GROUPING_LABELS,
   ASSIGNED_GROUPINGS,
@@ -368,6 +370,13 @@ export function AssignedToMeBlock({
 }: Props): React.ReactElement | null {
   const { taskAssigneeRepository, taskRepository, userRepository, projectRepository } =
     useContainer();
+  // What an earlier visit (or the copy saved on this device) already knows: the first frame
+  // shows it — no skeleton — and the mount read below refreshes it.
+  const [known] = useState(() => ({
+    overview: taskAssigneeRepository.peekInboxOverview(),
+    prefs: userRepository.peekUiPrefs(),
+    members: projectRepository.peekSharedMembers(),
+  }));
   const navigate = useNavigate();
   const { user } = useCurrentUser();
   const { celebrate, forget } = useCompletedToday();
@@ -399,14 +408,15 @@ export function AssignedToMeBlock({
   // ответственным, чтобы задача, созданная с его доски, создавалась для него.
   const { member: focusedMember, setMember: setFocusedMember, setAssigneeFilter, setCreationFilters } = useFocusedInbox();
   const focusedMemberId = focusedMember?.userId ?? null;
-  const [tasks, setTasks] = useState<AssignedTask[]>([]); // «Для меня»
-  const [byMeTasks, setByMeTasks] = useState<AssignedTask[]>([]); // «Другим»
+  // Shared with the repository (the same objects while the answer is unchanged): never mutated.
+  const [tasks, setTasks] = useState<readonly AssignedTask[]>(known.overview?.mine ?? []); // «Для меня»
+  const [byMeTasks, setByMeTasks] = useState<readonly AssignedTask[]>(known.overview?.others ?? []); // «Другим»
   // Личные (inbox) задачи коллег — отдельный источник, вливается во вкладку «Другим».
   // Сервер отдаёт их только по кругу общих рабочих пространств и всегда canModify: false.
-  const [colleaguePersonalTasks, setColleaguePersonalTasks] = useState<AssignedTask[]>([]);
+  const [colleaguePersonalTasks, setColleaguePersonalTasks] = useState<readonly AssignedTask[]>(known.overview?.personal ?? []);
   // Очередь приёмки руководителя (ListApprovalQueue) — только для полки «На утверждении»:
   // задачи, которые он вправе принять, но не ставил сам. Во вкладки «Мне/Для всех» не вливается.
-  const [approvalQueue, setApprovalQueue] = useState<AssignedTask[]>([]);
+  const [approvalQueue, setApprovalQueue] = useState<readonly AssignedTask[]>(known.overview?.approvals ?? []);
   // Доска сотрудника (клик по кубику руководителем) — отдельный источник: ВСЕ его
   // незавершённые задачи по всем проектам пространства, включая те, где сам руководитель
   // не участник (см. BUG D). Личных инбоксов colleaguePersonalTasks для этого мало.
@@ -531,7 +541,7 @@ export function AssignedToMeBlock({
   // Подтверждение удаления карточки (кнопка-корзина в hover-панели).
   const [deleteTarget, setDeleteTarget] = useState<InboxBlockTask | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [grouping, setGrouping] = useState<AssignedGrouping>(DEFAULT_ASSIGNED_GROUPING);
+  const [grouping, setGrouping] = useState<AssignedGrouping>(known.prefs?.inboxAssignedGrouping ?? DEFAULT_ASSIGNED_GROUPING);
   // Персист гор. скролла ряда канбанов (по вкладке+группировке): старт слева, reload сохраняет.
   const { setRef: setHScrollRef, onScroll: onHScroll } = usePersistentScrollLeft(
     `pf:inbox-hscroll:${tab}:${grouping}`,
@@ -562,7 +572,9 @@ export function AssignedToMeBlock({
       behavior: animations ? 'smooth' : 'auto',
     });
   };
-  const [loading, setLoading] = useState(true);
+  // The block waits for the lists and the saved grouping together (no flash of the default
+  // grouping) — unless both are already known.
+  const [loading, setLoading] = useState(!(known.overview && known.prefs));
   const [drawerTask, setDrawerTask] = useState<InboxBlockTask | null>(null);
   // Something changed while the task window was open (edit, comment, status…): each change
   // already refreshed the lists; closing re-reads them once more only in that case — just
@@ -582,7 +594,7 @@ export function AssignedToMeBlock({
 
   // Зеркало focusedMemberId для refresh(): refresh не должен зависеть от него напрямую —
   // иначе его identity меняется при каждом открытии/закрытии доски сотрудника, а refresh
-  // стоит в deps mount-эффекта ниже (перечитал бы listMine/listOthers/listColleaguesPersonal
+  // стоит в deps mount-эффекта ниже (перечитал бы обзор «Входящих»
   // + getUiPrefs и заново мигнул скелетоном на КАЖДЫЙ клик по кубику — не то, ради чего он
   // существует). Читаем актуальное значение через ref в момент вызова.
   const focusedMemberIdRef = useRef(focusedMemberId);
@@ -592,34 +604,39 @@ export function AssignedToMeBlock({
     focusedMemberIdRef.current = focusedMemberId;
   }, [focusedMemberId]);
 
-  const refresh = useCallback(async (propagateError = false): Promise<void> => {
+  const applyOverview = useCallback((overview: InboxOverview): void => {
+    // Unchanged lists come back as the same arrays: these setters then skip the re-render.
+    setTasks(overview.mine);
+    setByMeTasks(overview.others);
+    setColleaguePersonalTasks(overview.personal);
+    setApprovalQueue(overview.approvals);
+  }, []);
+
+  // latest (default) — after a change, an event or a gesture: wait for the current lists.
+  // Otherwise (a newer answer was announced) take what is known.
+  const refresh = useCallback(async (propagateError = false, latest = true): Promise<void> => {
     const generation = ++refreshGeneration.current;
-    const focusedRequest = ++focusedGeneration.current;
     lastRefreshAtRef.current = Date.now();
     // Снимок на момент старта запроса — сверяем с актуальным ПОСЛЕ await (см. ниже), а не
     // просто читаем ref второй раз: доска могла закрыться и открыться на ДРУГОГО сотрудника
     // за время в полёте, и тогда актуальный id формально снова совпал бы со снимком, но
-    // ответ всё равно принадлежал бы уже не тому запросу.
-    const focusedAtStart = focusedMemberIdRef.current;
+    // ответ всё равно принадлежал бы уже не тому запросу. Доску сотрудника перечитываем
+    // только за актуальным (latest): тихое перечтение известного не трогает её загрузку.
+    const focusedAtStart = latest ? focusedMemberIdRef.current : null;
+    const focusedRequest = latest ? ++focusedGeneration.current : focusedGeneration.current;
     try {
-      const [mine, byMe, personal, queue, focused] = await Promise.all([
-        taskAssigneeRepository.listMine(),
-        taskAssigneeRepository.listOthers(),
-        taskAssigneeRepository.listColleaguesPersonal(),
-        taskAssigneeRepository.listApprovalQueue(),
+      const [overview, focused] = await Promise.all([
+        taskAssigneeRepository.loadInboxOverview({ latest }),
         focusedAtStart
           ? taskAssigneeRepository.listMemberTasks(focusedAtStart)
-          : Promise.resolve<AssignedTask[]>([]),
+          : Promise.resolve<AssignedTask[] | null>(null),
       ]);
       if (generation !== refreshGeneration.current) return;
       setLoadError(false);
-      setTasks(mine);
-      setByMeTasks(byMe);
-      setColleaguePersonalTasks(personal);
-      setApprovalQueue(queue);
+      applyOverview(overview);
       // Пишем focusedMemberTasks только если доска всё ещё открыта на ТОГО ЖЕ сотрудника —
       // иначе устаревший ответ перезаписал бы уже актуальные данные другого/пустого фокуса.
-      if (focusedAtStart && focusedMemberIdRef.current === focusedAtStart && focusedRequest === focusedGeneration.current) {
+      if (focused && focusedAtStart && focusedMemberIdRef.current === focusedAtStart && focusedRequest === focusedGeneration.current) {
         setFocusedResult({ memberId: focusedAtStart, items: focused });
       }
     } catch (e) {
@@ -635,7 +652,7 @@ export function AssignedToMeBlock({
       // только-только легли в state.
       lastRefreshAtRef.current = Date.now();
     }
-  }, [taskAssigneeRepository]);
+  }, [taskAssigneeRepository, applyOverview]);
   usePageRefresh(() => refresh(true));
 
   // Открыли доску сотрудника (клик по кубику) — подтягиваем его задачи сразу, не дожидаясь
@@ -673,24 +690,13 @@ export function AssignedToMeBlock({
   useEffect(() => {
     let cancelled = false;
     const generation = ++refreshGeneration.current;
-    setLoading(true);
-    // Обе вкладки + сохранённую группировку грузим вместе и гейтим первый рендер на всё —
-    // блок не «мигает» дефолтной группировкой/счётчиками перед применением реальных.
-    Promise.all([
-      taskAssigneeRepository.listMine(),
-      taskAssigneeRepository.listOthers(),
-      taskAssigneeRepository.listColleaguesPersonal(),
-      taskAssigneeRepository.listApprovalQueue(),
-      userRepository.getUiPrefs(),
-    ])
-      .then(([mine, byMe, personal, queue, prefs]) => {
+    // Все списки «Входящих» одним запросом + сохранённая группировка: первый рендер гейтим на
+    // всё — блок не «мигает» дефолтной группировкой/счётчиками. Уже известное показано сразу
+    // (known выше): тогда это чтение лишь подтягивает свежее, без скелетона.
+    Promise.all([taskAssigneeRepository.loadInboxOverview(), userRepository.getUiPrefs()])
+      .then(([overview, prefs]) => {
         if (cancelled) return;
-        if (generation === refreshGeneration.current) {
-          setTasks(mine);
-          setByMeTasks(byMe);
-          setColleaguePersonalTasks(personal);
-          setApprovalQueue(queue);
-        }
+        if (generation === refreshGeneration.current) applyOverview(overview);
         // Сортировка ПЕРСИСТИТСЯ за аккаунтом (users.ui_prefs) — при перезагрузке та же.
         // (Была session-only «точка 4» — юзер передумал 2026-07-11.)
         if (prefs.inboxAssignedGrouping) setGrouping(prefs.inboxAssignedGrouping);
@@ -709,7 +715,7 @@ export function AssignedToMeBlock({
       focusedGeneration.current += 1;
       stopTabReturn();
     };
-  }, [taskAssigneeRepository, userRepository, refresh]);
+  }, [taskAssigneeRepository, userRepository, refresh, applyOverview]);
 
   const handleGroupingChange = (next: AssignedGrouping): void => {
     // Оптимистично: сортировка применяется мгновенно, сохранение летит в фоне.
@@ -747,7 +753,7 @@ export function AssignedToMeBlock({
         ?? [...tasks, ...byMeTasks, ...focusedMemberTasks].find((t) => t.projectId === projectId)?.projectName
         ?? 'Проект';
       const saved: AssignedTask = { ...created, projectName, isInbox: false, canModify: true };
-      const insert = (items: AssignedTask[]): AssignedTask[] => [saved, ...items.filter((t) => t.id !== saved.id)];
+      const insert = (items: readonly AssignedTask[]): AssignedTask[] => [saved, ...items.filter((t) => t.id !== saved.id)];
       if (assigneeUserId === user.id) setTasks(insert);
       else setByMeTasks(insert);
       if (focusedMemberIdRef.current === assigneeUserId) setFocusedResult((prev) => ({ memberId: assigneeUserId, items: insert(prev?.memberId === assigneeUserId ? prev.items : []) }));
@@ -1206,7 +1212,7 @@ export function AssignedToMeBlock({
   // Оптимистично проставить дедлайн задачи в обоих endpoint-списках.
   // Личное зеркало обновляется через useTasks нижней доски.
   const patchDeadlineLocal = useCallback((id: string, deadline: string | null): void => {
-    const patch = (arr: AssignedTask[]): AssignedTask[] =>
+    const patch = (arr: readonly AssignedTask[]): AssignedTask[] =>
       arr.map((t) => (t.id === id ? { ...t, deadline } : t));
     setTasks(patch);
     setByMeTasks(patch);
@@ -1241,27 +1247,31 @@ export function AssignedToMeBlock({
 
   // Кубики людей: все участники проектов пространства (shared-members) — цель для
   // drag-назначения. Грузим один раз; себя список уже не содержит (сервер исключает).
-  const [members, setMembers] = useState<SharedMember[]>([]);
-  const [membersLoading, setMembersLoading] = useState(true);
+  const [members, setMembers] = useState<readonly SharedMember[]>(known.members ?? []);
+  const [membersLoading, setMembersLoading] = useState(known.members === null);
   // Имя на чипе человека: одного имени хватает, пока в пространстве нет тёзок.
   const shortLabels = useMemo(
     () => shortUserLabels(members.map((m) => ({ id: m.id, label: userLabel(m) }))),
     [members],
   );
-  useEffect(() => {
-    let cancelled = false;
-    projectRepository
-      .listSharedMembers()
-      .then((m) => {
-        if (!cancelled) setMembers(m);
-      })
-      .catch(() => {
-        /* The task list remains usable when members are unavailable. */
-      }).finally(() => { if (!cancelled) setMembersLoading(false); });
-    return () => {
-      cancelled = true;
-    };
+  const loadMembers = useCallback(async (): Promise<void> => {
+    try {
+      setMembers(await projectRepository.listSharedMembersForScreen());
+    } catch {
+      /* The task list remains usable when members are unavailable. */
+    } finally {
+      setMembersLoading(false);
+    }
   }, [projectRepository]);
+  useEffect(() => {
+    void loadMembers();
+  }, [loadMembers]);
+  // A newer answer than the one shown arrived in the background (lists, people): re-read —
+  // from memory now; only what changed re-renders.
+  useReadRefreshed(() => {
+    void refresh(false, false);
+    void loadMembers();
+  });
   // Сотрудник выпал из пространства (или роль перестала быть руководящей) — возвращаемся
   // к своим входящим, иначе блок завис бы на пустой чужой доске без выхода.
   useEffect(() => {

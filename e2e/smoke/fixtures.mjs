@@ -318,7 +318,7 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
   const scopedMembers = () => state.membersByWorkspace?.[workspaceId] ?? COLLEAGUES;
 
   const projectById = (id) => state.projects.find((p) => p.id === id);
-  return [
+  const routes = [
     [/^\/auth\/me$/, () => json({ user: state.user })],
     [/^\/auth\/me\/usage$/, () => json(usageDto())],
     [/^\/workspaces$/, () => json({ workspaces: (state.workspaces ?? [workspaceDto()]).map((w) => ({ ...w, isCurrent: w.id === (state.activeWorkspaceId ?? WORKSPACE_ID) })) })],
@@ -616,6 +616,23 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
           : [],
       });
     }],
+    // «Входящие» одним запросом: те же ответы, что у отдельных списков выше.
+    [/^\/assignees\/overview$/, (_match, query) => {
+      const part = (path) => {
+        for (const [pattern, handler] of routes) {
+          const match = path.match(pattern);
+          if (match) return handler(match, query)?.body;
+        }
+        return undefined;
+      };
+      return json({
+        mine: part('/assignees/mine'),
+        others: part('/assignees/others'),
+        personal: part('/assignees/personal'),
+        approvals: part('/assignees/approvals'),
+        awaitingReply: part('/assignees/awaiting-reply'),
+      });
+    }],
     [/^\/assignees\/member\/([^/]+)$/, ([, memberId]) =>
       json({
         items: scopedTasks()
@@ -672,6 +689,7 @@ function getRoutes(state, workspaceId = WORKSPACE_ID) {
     [/^\/admin\/users\/([^/]+)\/deletion-preview$/, (m) => json(adminDeletionPreview(state, m[1]))],
     [/^\/admin\/users\/([^/]+)\/overview$/, (m) => adminUserOverview(state, m[1])],
   ];
+  return routes;
 }
 
 // --- Admin users ------------------------------------------------------------------

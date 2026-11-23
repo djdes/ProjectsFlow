@@ -10,9 +10,11 @@ import {
 import type { Project } from '@/domain/project/Project';
 import { useContainer } from '@/infrastructure/di/container';
 import { PROJECT_CHANGED_EVENT, TASK_CHANGED_EVENT } from './useNotificationStream';
+import { useReadRefreshed } from './useReadRefreshed';
 
 type ProjectsContextValue = {
-  data: Project[] | null;
+  // Shared with the repository while the answer is unchanged: never mutated in place.
+  data: readonly Project[] | null;
   loading: boolean;
   error: Error | null;
   // Добавить только что созданный проект в начало списка (оптимистичное обновление).
@@ -36,15 +38,19 @@ const ProjectsCtx = createContext<ProjectsContextValue | null>(null);
 
 export function ProjectsProvider({ children }: { children: ReactNode }): React.ReactElement {
   const { listProjects } = useContainer();
-  const [data, setData] = useState<Project[] | null>(null);
+  // Known from an earlier visit or the copy saved on this device: the sidebar and a project
+  // opened by a direct link render at once, and the list refreshes in the background.
+  const [data, setData] = useState<readonly Project[] | null>(() => listProjects.peek());
   const [error, setError] = useState<Error | null>(null);
   // Гард от гонок: учитываем результат только последней загрузки.
   const loadSeq = useRef(0);
 
-  const refresh = useCallback(() => {
+  // latest (default) — after a change or an event: wait for the current list. Otherwise what is
+  // known comes at once and a newer list is announced (useReadRefreshed below).
+  const load = useCallback((latest: boolean) => {
     const seq = (loadSeq.current += 1);
     listProjects
-      .execute()
+      .forScreen({ latest })
       .then((projects) => {
         if (seq === loadSeq.current) {
           setData(projects);
@@ -55,10 +61,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }): React.R
         if (seq === loadSeq.current) setError(e);
       });
   }, [listProjects]);
+  const refresh = useCallback(() => load(true), [load]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    load(false);
+  }, [load]);
+  useReadRefreshed(() => load(false));
 
   // Live-обновление списка проектов.
   useEffect(() => {

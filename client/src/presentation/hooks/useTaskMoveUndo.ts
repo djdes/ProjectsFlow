@@ -10,7 +10,7 @@ const reversible = new Set(['backlog', 'manual', 'done']);
 /** A short undo window for manual moves; worker and approval transitions stay explicit. */
 export function useTaskMoveUndo(
   projectId: string,
-  tasks: Task[],
+  tasks: readonly Task[],
   move: UseTasks['move'],
 ) {
   const { taskRepository } = useContainer();

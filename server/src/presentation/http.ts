@@ -191,6 +191,7 @@ import type { ListTasksAssignedToOthers } from '../application/task/ListTasksAss
 import type { ListPersonalTasksOfColleagues } from '../application/task/ListPersonalTasksOfColleagues.js';
 import type { ListApprovalQueue } from '../application/task/ListApprovalQueue.js';
 import type { ListTasksAwaitingMyReply } from '../application/task/ListTasksAwaitingMyReply.js';
+import type { GetInboxOverview } from '../application/task/GetInboxOverview.js';
 import type { ListMemberTasksForLead } from '../application/task/ListMemberTasksForLead.js';
 import type { MoveTaskToProject } from '../application/task/MoveTaskToProject.js';
 import type { ChangeTaskAssignee } from '../application/task/ChangeTaskAssignee.js';
@@ -376,6 +377,8 @@ type AppDeps = {
   readonly appErrors?: AppErrorReports;
   readonly voiceTranscriber?: VoiceTranscriber;
   readonly workspaceScope?: RequestHandler;
+  // Per-request memo of read-only permission lookups (see requestMemoScope).
+  readonly requestMemoScope?: RequestHandler;
   readonly emailActions: {
     readonly service: EmailActionService;
     readonly appUrl: string;
@@ -777,6 +780,7 @@ type AppDeps = {
     readonly listMemberTasksForLead: ListMemberTasksForLead;
     readonly listApprovalQueue: ListApprovalQueue;
     readonly listAwaitingMyReply: ListTasksAwaitingMyReply;
+    readonly getInboxOverview: GetInboxOverview;
     readonly assignToProject: MoveTaskToProject;
     readonly changeAssignee: ChangeTaskAssignee;
   };
@@ -998,6 +1002,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   // Развёрнутая заметка (приложение для Windows): комментарии и файлы задачи по токену аккаунта.
   app.use(accountTokenOnTaskPaths(deps.agent.authenticateAgentToken));
   if (deps.workspaceScope) app.use('/api', deps.workspaceScope);
+  if (deps.requestMemoScope) app.use('/api', deps.requestMemoScope);
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });

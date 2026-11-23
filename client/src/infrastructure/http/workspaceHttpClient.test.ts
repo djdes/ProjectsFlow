@@ -20,7 +20,7 @@ test('parallel workspace boards bind every read and mutation without changing th
   await Promise.all([a.post('/create', {}), b.patch('/edit', {}), a.put('/move', {}), b.delete('/remove')]);
   assert.deepEqual(requests.slice(2).map((request) => [request.method, request.scope]), [['POST', 'a'], ['PATCH', 'b'], ['PUT', 'a'], ['DELETE', 'b']]);
   await httpClient.get('/selected'); assert.equal(requests.at(-1)!.scope, 'selected');
-  await new HttpTaskAssigneeRepository(a).listMine();
+  await new HttpTaskAssigneeRepository(a).listMemberTasks('u1');
   await new HttpStatsRepository(b).unreadTaskIds();
   assert.equal(requests.at(-2)!.scope, 'a'); assert.equal(requests.at(-1)!.scope, 'b');
   await new HttpRecentTaskViewRepository(b).record('task-in-b');

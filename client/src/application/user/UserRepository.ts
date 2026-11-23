@@ -23,5 +23,7 @@ export interface UserRepository {
 
   // Персональные UI-настройки клиента (за аккаунтом). {} = дефолты. setUiPrefs мержит.
   getUiPrefs(): Promise<UiPrefs>;
+  // Уже известные настройки — без запроса, для первого кадра; null — пока ничего.
+  peekUiPrefs(): UiPrefs | null;
   setUiPrefs(prefs: UiPrefs): Promise<UiPrefs>;
 }
