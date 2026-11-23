@@ -4,6 +4,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -108,6 +109,7 @@ import { ProjectPublishedBanner } from '@/presentation/components/project/Projec
 import { TaskVersionsDialog } from './TaskVersionsDialog';
 import { TaskCreatedValue } from './TaskCreatedValue';
 import { TaskGroupOriginBadge } from './TaskGroupOriginBadge';
+import { useAfterFirstFrame } from '@/presentation/hooks/useAfterFirstFrame';
 
 // Tiptap-редактор грузим лениво — он тяжёлый и не нужен на read-heavy экранах,
 // которые не открывают drawer. Suspense-fallback держит высоту, чтобы layout не прыгал.
@@ -608,7 +610,7 @@ export function TaskDrawer({
   highlightField = null,
 }: Props): React.ReactElement {
   const { user: currentUser } = useCurrentUser();
-  const { taskRepository, recordTaskView } = useContainer();
+  const { taskRepository, recordTaskView, liveRepository } = useContainer();
   // Флеш-подсветка тела при переходе из ленты активности (?hl=<поле>): мигаем ~1.8с.
   const [flashBody, setFlashBody] = React.useState(false);
   React.useEffect(() => {
@@ -677,6 +679,18 @@ export function TaskDrawer({
   // раньше любой просмотр помечал задачу «только что» и кидал её наверх. Один раз на taskId.
   const recordedTaskIdRef = useRef<string | null>(null);
   const openTaskId = state?.mode === 'edit' ? state.task.id : null;
+  // The window opens as a frame — header, title, properties — and its heavy parts (the
+  // description editor, the discussion with LIVE, the comment composer) mount right after the
+  // first frame, while it slides in (see useAfterFirstFrame).
+  const frameReady = useAfterFirstFrame(openTaskId);
+  // Their reads start now, with the frame's commit, not when they mount: the discussion and
+  // LIVE then take ready answers (one request each, not two).
+  const openProjectId = state?.mode === 'edit' ? state.task.projectId : null;
+  useLayoutEffect(() => {
+    if (!openTaskId || !openProjectId) return;
+    taskRepository.prefetchWindow?.(openProjectId, openTaskId);
+    liveRepository.prefetchSessions?.(openProjectId, openTaskId);
+  }, [openTaskId, openProjectId, taskRepository, liveRepository]);
   const openTaskIdRef = useRef<string | null>(null);
   useEffect(() => {
     openTaskIdRef.current = openTaskId;
@@ -1977,6 +1991,7 @@ export function TaskDrawer({
               >
                 <TaskBodyEditor
                   key={`desc-${task.id}`}
+                  deferred={!frameReady}
                   editorRef={bodyEditorRef}
                   onUploadImage={uploadImageInline}
                   onImageRemoved={handleInlineImageRemoved}
@@ -2204,6 +2219,7 @@ export function TaskDrawer({
                 isSplit ? 'min-h-0 w-[44%] shrink-0 overflow-hidden' : 'shrink-0',
               )}
             >
+              {frameReady && (<>
               {/* === SCROLLABLE BODY — вкладки Обсуждение | LIVE === */}
               {/* Tabs тянется flex-1; каждая вкладка — свой scroll-контейнер. forceMount
                   на обеих вкладках, чтобы LiveTab жил в фоне (бейдж 🔴 / live-стрим
@@ -2363,6 +2379,7 @@ export function TaskDrawer({
                     )}
                   </div>
                 ))}
+              </>)}
             </div>
             </div>
           </div>
@@ -2652,6 +2669,11 @@ function TaskCommentsSection({
   // Ошибка load'а members не блокирует комментарии (degrade gracefully — без пикера).
   const [members, setMembers] = useState<ProjectMember[]>([]);
 
+  // Через ref: смена колбэка родителя не должна перечитывать комментарии.
+  const onFirstLoadRef = useRef(onFirstLoad);
+  useEffect(() => {
+    onFirstLoadRef.current = onFirstLoad;
+  });
   useEffect(() => {
     let cancelled = false;
     let sequence = 0;
@@ -2662,7 +2684,7 @@ function TaskCommentsSection({
       void taskRepository.listComments(projectId, taskId).then(list => {
         if (cancelled || request !== sequence) return;
         setComments(list);
-        if (!firstLoaded) { firstLoaded = true; onFirstLoad?.(); }
+        if (!firstLoaded) { firstLoaded = true; onFirstLoadRef.current?.(); }
       }).catch((e: unknown) => {
         if (!cancelled && request === sequence && !firstLoaded) toast.error(`Не удалось загрузить комментарии: ${(e as Error).message}`);
       }).finally(() => {
@@ -2677,6 +2699,17 @@ function TaskCommentsSection({
     reload();
     window.addEventListener(TASK_CHANGED_EVENT, onChanged);
     window.addEventListener(REALTIME_CONNECTED_EVENT, onChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(TASK_CHANGED_EVENT, onChanged);
+      window.removeEventListener(REALTIME_CONNECTED_EVENT, onChanged);
+    };
+  }, [projectId, taskId, taskRepository]);
+
+  // Участники для @-упоминаний — отдельно: право читать проект становится известно, когда
+  // догружается полная задача, и комментарии из-за этого перечитывать незачем.
+  useEffect(() => {
+    let cancelled = false;
     (canReadProject ? projectRepository.listMembers(projectId) : Promise.resolve([]))
       .then((list) => {
         if (!cancelled) setMembers(list);
@@ -2686,10 +2719,8 @@ function TaskCommentsSection({
       });
     return () => {
       cancelled = true;
-      window.removeEventListener(TASK_CHANGED_EVENT, onChanged);
-      window.removeEventListener(REALTIME_CONNECTED_EVENT, onChanged);
     };
-  }, [projectId, taskId, taskRepository, projectRepository, onFirstLoad, canReadProject]);
+  }, [projectId, projectRepository, canReadProject]);
 
   // Deep-link из письма/TG: ?task=X#comment-Y → скроллим к комментарию и подсвечиваем.
   // id приходит пропом (KanbanBoard ловит его из hash до того как очистит ?task=).

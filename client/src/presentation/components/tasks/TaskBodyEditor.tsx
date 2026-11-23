@@ -40,6 +40,9 @@ type Props = {
   // (иначе картинка теряется на reload, а аттач «осиротеет» в «Файлы»).
   onImageUploaded?: (markdown: string) => void;
   disabled?: boolean;
+  // Пока окно только открылось: тело — тот же текст без редактора (он тяжёлый), редактор
+  // встаёт на его место сразу после первого кадра (useAfterFirstFrame в TaskDrawer).
+  deferred?: boolean;
   // Плейсхолдер редактора (по умолчанию — для тела; для объединённого поля переопределяем).
   placeholder?: string;
   // Императивный handle редактора — даёт родителю вставить чек-лист-пункт и сфокусироваться
@@ -58,22 +61,23 @@ export function TaskBodyEditor({
   onImageRemoved,
   onImageUploaded,
   disabled = false,
+  deferred = false,
   placeholder = 'Описание, детали, подзадачи…',
   editorRef,
 }: Props): React.ReactElement {
+  const readOnlyBody = (
+    <div className="min-h-[1.75rem] py-1.5 text-sm leading-snug">
+      {body.trim().length > 0 ? (
+        <Markdown>{body}</Markdown>
+      ) : (
+        <span className="italic text-muted-foreground">Описание…</span>
+      )}
+    </div>
+  );
+  if (deferred) return <div className="relative">{readOnlyBody}</div>;
   return (
     <div className="relative">
-      <Suspense
-        fallback={
-          <div className="min-h-[1.75rem] py-1.5 text-sm leading-snug">
-            {body.trim().length > 0 ? (
-              <Markdown>{body}</Markdown>
-            ) : (
-              <span className="italic text-muted-foreground">Описание…</span>
-            )}
-          </div>
-        }
-      >
+      <Suspense fallback={readOnlyBody}>
         <RichTextEditor
           ref={editorRef}
           variant="description"

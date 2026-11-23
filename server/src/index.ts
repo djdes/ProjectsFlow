@@ -19,6 +19,8 @@ import { MysqlAppErrorReportRepository } from './infrastructure/repositories/Mys
 import { AppErrorReports } from './application/app-errors/AppErrorReports.js';
 import { RequestWorkspaceContext } from './infrastructure/workspace/RequestWorkspaceContext.js';
 import { workspaceScope } from './presentation/middleware/workspaceScope.js';
+import { RequestMemo, requestScopedAdminCheck } from './infrastructure/request/RequestMemo.js';
+import { requestMemoScope } from './presentation/middleware/requestMemoScope.js';
 // Composition root: собираем зависимости + поднимаем HTTP-сервер.
 
 import { resolve as resolvePath } from 'node:path';
@@ -236,6 +238,7 @@ import { ListUnreadTasks } from './application/task/ListUnreadTasks.js';
 import { ListTasksAssignedToOthers } from './application/task/ListTasksAssignedToOthers.js';
 import { ListPersonalTasksOfColleagues } from './application/task/ListPersonalTasksOfColleagues.js';
 import { ListApprovalQueue } from './application/task/ListApprovalQueue.js';
+import { GetInboxOverview } from './application/task/GetInboxOverview.js';
 import { ListMemberTasksForLead } from './application/task/ListMemberTasksForLead.js';
 import { MoveTaskToProject } from './application/task/MoveTaskToProject.js';
 import { ChangeTaskAssignee } from './application/task/ChangeTaskAssignee.js';
@@ -501,15 +504,19 @@ const sessionRepo = new DrizzleSessionRepository(db);
 const passwordResetTokenRepo = new DrizzlePasswordResetTokenRepository(db);
 const projectRepo = new DrizzleProjectRepository(db);
 const productTelemetryRepo = new DrizzleProductTelemetryRepository(db);
+// Read-only permission lookups (admin flag, hidden project, membership, approvers, shared-project
+// rules) are memoized for the duration of one GET request (requestMemoScope): a task list asks
+// them once per task. Nothing is cached across requests.
+const requestMemo = new RequestMemo();
 // Один проект в нескольких пространствах (db/182): правила видимости задач. Пространство
 // запроса берём из контекста X-Workspace-Id (объявлен ниже, читается только во время запроса).
-const projectSharingRepo = new DrizzleProjectSharingRepository(db);
+const projectSharingRepo = new DrizzleProjectSharingRepository(db, requestMemo);
 const taskVisibility = new TaskVisibility({
   sharing: projectSharingRepo,
   currentWorkspaceId: (userId) => requestWorkspaceContext.get(userId)?.workspace?.id ?? null,
   isSystemAdmin,
 });
-const projectMemberRepo = new DrizzleProjectMemberRepository(db, taskVisibility);
+const projectMemberRepo = new DrizzleProjectMemberRepository(db, taskVisibility, requestMemo);
 const projectInviteRepo = new DrizzleProjectInviteRepository(db);
 const workspaceInviteRepo = new DrizzleWorkspaceInviteRepository(db);
 const recentTaskViewRepo = new DrizzleRecentTaskViewRepository(db, projectMemberRepo);
@@ -1757,11 +1764,9 @@ const telegramPoller = new TelegramPoller({
 });
 
 // Admin-bypass: системный админ (users.is_admin) получает доступ ко всем проектам
-// через requireProjectAccess. Кешировать не нужно — getById дешёвый, вызов на access-check.
-configureAdminBypass(async (userId) => {
-  const u = await userRepo.getById(userId);
-  return u?.isAdmin ?? false;
-});
+// через requireProjectAccess. The flag is read once per request (lists check it for every
+// task) and never cached across requests, so revoking admin rights applies to the next request.
+configureAdminBypass(requestScopedAdminCheck(requestMemo, userRepo));
 
 // --- Задеплоенные статические сайты проектов (self-serve воркер-раннер, db/098) ---
 // SITE_ARTIFACTS_DIR в prod — вне tarball'а деплоя (переживает релизы). Поддомен собранного
@@ -2532,6 +2537,58 @@ void publicBoardSnapshotCache.refreshAll().catch((err) => {
   console.warn('[promo-cache] initial warm failed:', (err as Error)?.message ?? err);
 });
 
+// The inbox lists: each has its own endpoint, and /api/assignees/overview runs all five at once.
+const listAssignedToMe = new ListTasksAssignedToMe({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  tasks: taskRepo,
+  taskCommits: taskCommitRepo,
+  attachments: taskAttachmentRepo,
+  comments: taskCommentRepo,
+  resolveActiveWorkspace,
+  users: userRepo,
+});
+const listAssignedToOthers = new ListTasksAssignedToOthers({
+  members: projectMemberRepo,
+  tasks: taskRepo,
+  taskCommits: taskCommitRepo,
+  attachments: taskAttachmentRepo,
+  comments: taskCommentRepo,
+  resolveActiveWorkspace,
+  users: userRepo,
+});
+const listPersonalOfColleagues = new ListPersonalTasksOfColleagues({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  tasks: taskRepo,
+  taskCommits: taskCommitRepo,
+  attachments: taskAttachmentRepo,
+  comments: taskCommentRepo,
+  resolveActiveWorkspace,
+});
+const listApprovalQueue = new ListApprovalQueue({
+  approval: taskApprovalService,
+  projects: projectRepo,
+  members: projectMemberRepo,
+  workspaces: workspaceRepo,
+  tasks: taskRepo,
+  taskCommits: taskCommitRepo,
+  attachments: taskAttachmentRepo,
+  comments: taskCommentRepo,
+  resolveActiveWorkspace,
+  users: userRepo,
+});
+const listAwaitingMyReply = new ListTasksAwaitingMyReply({
+  projects: projectRepo,
+  members: projectMemberRepo,
+  tasks: taskRepo,
+  taskCommits: taskCommitRepo,
+  attachments: taskAttachmentRepo,
+  comments: taskCommentRepo,
+  resolveActiveWorkspace,
+  users: userRepo,
+});
+
 const deploymentAuditRuns = new Set<string>();
 const { app, devProxyUpgrade } = createApp({
   deployment: new GetDeploymentStatus({
@@ -2574,6 +2631,7 @@ const { app, devProxyUpgrade } = createApp({
   }),
   voiceTranscriber: groqVoiceTranscriber,
   workspaceScope: workspaceScope({ workspaces: workspaceRepo, run: (userId, workspace, next) => requestWorkspaceContext.run(userId, workspace, next) }),
+  requestMemoScope: requestMemoScope({ run: (active, next) => requestMemo.run(active, next) }),
   emailActions: { service: emailActionService, appUrl: appBaseUrl },
   mailing: { service: mailingService },
   telegramDigestActions: { service: telegramDigestActionService },
@@ -3507,34 +3565,9 @@ const { app, devProxyUpgrade } = createApp({
     listUnreadTasks: new ListUnreadTasks({ views: recentTaskViewRepo, resolveActiveWorkspace }),
   },
   assignees: {
-    listAssignedToMe: new ListTasksAssignedToMe({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      tasks: taskRepo,
-      taskCommits: taskCommitRepo,
-      attachments: taskAttachmentRepo,
-      comments: taskCommentRepo,
-      resolveActiveWorkspace,
-      users: userRepo,
-    }),
-    listAssignedToOthers: new ListTasksAssignedToOthers({
-      members: projectMemberRepo,
-      tasks: taskRepo,
-      taskCommits: taskCommitRepo,
-      attachments: taskAttachmentRepo,
-      comments: taskCommentRepo,
-      resolveActiveWorkspace,
-      users: userRepo,
-    }),
-    listPersonalOfColleagues: new ListPersonalTasksOfColleagues({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      tasks: taskRepo,
-      taskCommits: taskCommitRepo,
-      attachments: taskAttachmentRepo,
-      comments: taskCommentRepo,
-      resolveActiveWorkspace,
-    }),
+    listAssignedToMe,
+    listAssignedToOthers,
+    listPersonalOfColleagues,
     listMemberTasksForLead: new ListMemberTasksForLead({
       projects: projectRepo,
       members: projectMemberRepo,
@@ -3546,27 +3579,14 @@ const { app, devProxyUpgrade } = createApp({
       resolveActiveWorkspace,
       users: userRepo,
     }),
-    listApprovalQueue: new ListApprovalQueue({
-      approval: taskApprovalService,
-      projects: projectRepo,
-      members: projectMemberRepo,
-      workspaces: workspaceRepo,
-      tasks: taskRepo,
-      taskCommits: taskCommitRepo,
-      attachments: taskAttachmentRepo,
-      comments: taskCommentRepo,
-      resolveActiveWorkspace,
-      users: userRepo,
-    }),
-    listAwaitingMyReply: new ListTasksAwaitingMyReply({
-      projects: projectRepo,
-      members: projectMemberRepo,
-      tasks: taskRepo,
-      taskCommits: taskCommitRepo,
-      attachments: taskAttachmentRepo,
-      comments: taskCommentRepo,
-      resolveActiveWorkspace,
-      users: userRepo,
+    listApprovalQueue,
+    listAwaitingMyReply,
+    getInboxOverview: new GetInboxOverview({
+      listAssignedToMe,
+      listAssignedToOthers,
+      listPersonalOfColleagues,
+      listApprovalQueue,
+      listAwaitingMyReply,
     }),
     assignToProject: new MoveTaskToProject({
       tasks: taskRepo,

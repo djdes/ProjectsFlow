@@ -2,7 +2,7 @@ import type { Project } from '@/domain/project/Project';
 import { useProjectsContext } from './ProjectsProvider';
 
 export function useProjects(): {
-  data: Project[] | null;
+  data: readonly Project[] | null;
   loading: boolean;
   error: Error | null;
 } {

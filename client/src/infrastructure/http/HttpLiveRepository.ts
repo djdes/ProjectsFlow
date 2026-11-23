@@ -38,6 +38,10 @@ export class HttpLiveRepository implements LiveRepository {
     const { taskIds } = await httpClient.get<{ taskIds: string[] }>(`/projects/${projectId}/live/running`);
     return taskIds;
   }
+  prefetchSessions(projectId: string, taskId: string): void {
+    httpClient.prefetch(`/projects/${projectId}/tasks/${taskId}/live/sessions`);
+  }
+
   async listSessions(projectId: string, taskId: string): Promise<LiveSession[]> {
     const { sessions } = await httpClient.get<{ sessions: LiveSessionDto[] }>(
       `/projects/${projectId}/tasks/${taskId}/live/sessions`,

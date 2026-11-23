@@ -26,7 +26,8 @@ import type {
   TaskRepository,
   UpdateTaskInput,
 } from '@/application/task/TaskRepository';
-import { httpClient } from './httpClient';
+import { memoByAnswer } from './answerMemo';
+import { httpClient, type Answer } from './httpClient';
 
 type TaskAssigneeDto = {
   userId: string;
@@ -256,8 +257,29 @@ function taskVersionsFromDto(res: TaskVersionsDto): TaskVersionsResult {
   };
 }
 
+type TaskListDto = { tasks: TaskDto[] };
+
 export class HttpTaskRepository implements TaskRepository {
+  // Per project: an unchanged answer gives the same task objects (see memoByAnswer).
+  private readonly screenLists = new Map<string, (answer: Answer<TaskListDto>) => readonly Task[]>();
+
   constructor(private readonly client: typeof httpClient = httpClient) {}
+
+  private screenListOf(projectId: string): (answer: Answer<TaskListDto>) => readonly Task[] {
+    let build = this.screenLists.get(projectId);
+    if (!build) {
+      build = memoByAnswer((dto: TaskListDto) => dto.tasks.map(fromDto));
+      this.screenLists.set(projectId, build);
+    }
+    return build;
+  }
+
+  prefetchWindow(projectId: string, taskId: string): void {
+    const base = `/projects/${projectId}/tasks/${taskId}`;
+    for (const path of [base, `${base}/comments`, `${base}/attachments`, `${base}/comment-notify-candidates`]) {
+      this.client.prefetch(path);
+    }
+  }
 
   async get(projectId: string, taskId: string): Promise<Task> {
     const { task } = await this.client.get<{ task: TaskDto }>(`/projects/${projectId}/tasks/${taskId}`);
@@ -281,8 +303,18 @@ export class HttpTaskRepository implements TaskRepository {
     };
   }
   async list(projectId: string): Promise<Task[]> {
-    const { tasks } = await this.client.get<{ tasks: TaskDto[] }>(`/projects/${projectId}/tasks`);
+    const { tasks } = await this.client.get<TaskListDto>(`/projects/${projectId}/tasks`);
     return tasks.map(fromDto);
+  }
+
+  async listForScreen(projectId: string, options?: { readonly latest?: boolean }): Promise<readonly Task[]> {
+    const answer = await this.client.read<TaskListDto>(`/projects/${projectId}/tasks`, { swr: !options?.latest });
+    return this.screenListOf(projectId)(answer);
+  }
+
+  peekList(projectId: string): readonly Task[] | null {
+    const answer = this.client.peekAnswer<TaskListDto>(`/projects/${projectId}/tasks`);
+    return answer ? this.screenListOf(projectId)(answer) : null;
   }
   async create(projectId: string, input: CreateTaskInput): Promise<Task> {
     const { task } = await this.client.post<{ task: TaskDto }>(

@@ -1,116 +1,219 @@
 /**
- * Short-lived cache for reads of slowly changing resources: the project list, a project's
- * settings, members and site, workspaces, UI preferences. The app re-reads them on every task
- * opening and page visit; within the TTL the answer comes from memory instead of the network.
+ * Read cache for slowly changing resources — the project list, a project's settings, members
+ * and site, workspaces, UI preferences — and for task lists.
  *
- * Task lists are kept only for 15 s — enough to make switching pages back and forth instant.
+ * Every entry has two windows (see POLICIES):
+ * - fresh: the answer comes from memory, no request at all;
+ * - keep: past `fresh`, the old answer is still shown at once — on a screen's first frame
+ *   (httpClient `peek`) and to readers that follow `pf:read-refreshed` (httpClient `swr`) — while
+ *   a fresh copy loads in the background: no skeleton for data the app already knows. Other
+ *   readers treat an expired entry as missing.
  *
- * Freshness: any write clears the cache (except the two writes that happen while merely
- * browsing — recording a task view and a board view — which clear only their own resource);
- * so do a realtime «project changed» event, a reconnect of the realtime stream, coming back
- * online, a logout or an expired session. Realtime task, worker and notification events drop
- * the task lists and the project list (task counts). Everything not listed in POLICIES — a
- * task itself, comments, unread marks, notifications, activity — is always read fresh.
+ * Two kinds of change:
+ * - own write: what it may have changed is dropped (WRITE_SCOPES) — the user never sees the copy
+ *   from before their own change, not even the one saved on the device;
+ * - a change made elsewhere (realtime events), or possibly missed (reconnect, back online): what
+ *   it may have changed expires — strict readers go to the network, while screens keep showing
+ *   the known answer until the fresh one arrives.
+ * A logout or an expired session drops everything. Everything not listed in POLICIES — a task
+ * itself, comments, unread marks, notifications, activity — is always read from the network.
  */
 
+import { REFRESH_REQUESTED_EVENT } from '@/lib/readRefreshed';
+
 const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+const DAY = 24 * 60 * MINUTE;
 
-const POLICIES: ReadonlyArray<readonly [RegExp, number]> = [
-  // Task lists: only long enough to make going back and forth between pages instant. Any
-  // write and any realtime task, worker or notification event drops them at once.
-  [/^\/assignees\/(mine|others|personal|approvals|awaiting-reply)$/, 15 * SECOND],
-  [/^\/projects\/[^/]+\/tasks$/, 15 * SECOND],
-  [/^\/inbox$/, 60 * SECOND],
-  [/^\/me\/(ui-prefs|kanban-colors)$/, 5 * 60 * SECOND],
-  [/^\/integrations\/github\/me$/, 5 * 60 * SECOND],
-  [/^\/workspaces$/, 60 * SECOND],
-  [/^\/workspaces\/[^/]+\/members$/, 60 * SECOND],
-  [/^\/projects$/, 60 * SECOND],
-  [/^\/projects\/[^/]+$/, 60 * SECOND],
-  [/^\/projects\/[^/]+\/(kanban-settings|members|templates|views)$/, 60 * SECOND],
+export type ReadPolicy = { readonly fresh: number; readonly keep: number };
+
+const POLICIES: ReadonlyArray<readonly [RegExp, ReadPolicy]> = [
+  // Task lists: fresh only long enough to make going back and forth between pages instant.
+  [/^\/assignees\/(overview|mine|others|personal|approvals|awaiting-reply)$/, { fresh: 15 * SECOND, keep: DAY }],
+  [/^\/projects\/[^/]+\/tasks$/, { fresh: 15 * SECOND, keep: DAY }],
+  // The workspace's inbox project (read for its id and name) and the user's own preferences
+  // practically never change.
+  [/^\/inbox$/, { fresh: 10 * MINUTE, keep: 30 * DAY }],
+  [/^\/me\/(ui-prefs|kanban-colors)$/, { fresh: 10 * MINUTE, keep: 30 * DAY }],
+  [/^\/integrations\/github\/me$/, { fresh: 5 * MINUTE, keep: DAY }],
+  [/^\/workspaces$/, { fresh: MINUTE, keep: 30 * DAY }],
+  [/^\/workspaces\/[^/]+\/members$/, { fresh: MINUTE, keep: DAY }],
+  // People of the workspace's projects: always re-read (pickers must see a removed colleague at
+  // once), but known for a screen's first frame — the inbox people ribbon.
+  [/^\/me\/shared-members$/, { fresh: 0, keep: DAY }],
+  [/^\/projects$/, { fresh: MINUTE, keep: 30 * DAY }],
+  [/^\/projects\/[^/]+$/, { fresh: MINUTE, keep: 30 * DAY }],
+  [/^\/projects\/[^/]+\/(kanban-settings|members|templates|views)$/, { fresh: MINUTE, keep: 30 * DAY }],
   // Deploy state of the project's site changes when a worker publishes it.
-  [/^\/projects\/[^/]+\/site$/, 20 * SECOND],
+  [/^\/projects\/[^/]+\/site$/, { fresh: 20 * SECOND, keep: DAY }],
 ];
 
-// Writes that happen while just looking around: they must not throw the whole cache away.
-const SCOPED_WRITES: ReadonlyArray<readonly [RegExp, (match: RegExpMatchArray) => string | null]> = [
+type PathMatch = (path: string) => boolean;
+
+const EVERYTHING: PathMatch = () => true;
+const exactly = (target: string): PathMatch => (path) => path === target;
+const under = (prefix: string): PathMatch => (path) => path === prefix || path.startsWith(`${prefix}/`);
+
+/**
+ * Task lists, the inbox overview and the task counts shown with projects (projectId null —
+ * every project's).
+ */
+function taskLists(projectId: string | null): PathMatch {
+  return (path) =>
+    path === '/projects' ||
+    path.startsWith('/assignees/') ||
+    (projectId === null
+      ? /^\/projects\/[^/]+(\/tasks)?$/.test(path)
+      : path === `/projects/${projectId}` || path === `/projects/${projectId}/tasks`);
+}
+
+// What an own write may change. A write not listed here may change anything.
+const WRITE_SCOPES: ReadonlyArray<readonly [RegExp, (match: RegExpMatchArray) => PathMatch | null]> = [
+  // Made while just looking around: no cached resource depends on them.
   [/^\/recent-task-views(\/|$)/, () => null],
-  [/^\/projects\/([^/]+)\/views$/, (m) => `/projects/${m[1]}/views`],
-  [/^\/me\/(ui-prefs|kanban-colors)$/, (m) => `/me/${m[1]}`],
+  [/^\/notifications(\/|$)/, () => null],
+  [/^\/workspaces\/[^/]+\/chat(\/|$)/, () => null],
+  [/^\/push\//, () => null],
+  [/^\/me\/(notification-prefs|telegram)(\/|$)/, () => null],
+  // Own preferences and saved board views change only themselves.
+  [/^\/me\/(ui-prefs|kanban-colors)$/, (m) => exactly(`/me/${m[1]}`)],
+  [/^\/projects\/([^/]+)\/views(\/|$)/, (m) => under(`/projects/${m[1]}/views`)],
+  // The order of the project list and the favourites.
+  [/^\/projects\/(reorder|reorder-favorites)$/, () => exactly('/projects')],
+  [/^\/projects\/([^/]+)\/favorite$/, (m) => (path) => path === '/projects' || path === `/projects/${m[1]}`],
+  // A task and everything in it (comments, checklist, attachments, approval, commits): every
+  // task list — a task may move to another project — and the counts shown with projects.
+  [/^\/projects\/[^/]+\/tasks(\/|$)/, () => taskLists(null)],
 ];
 
-export function readCacheTtl(path: string): number | null {
+export function readCachePolicy(path: string): ReadPolicy | null {
   if (path.includes('?')) return null;
-  for (const [pattern, ttl] of POLICIES) if (pattern.test(path)) return ttl;
+  for (const [pattern, policy] of POLICIES) if (pattern.test(path)) return policy;
   return null;
 }
 
-type Entry = { readonly path: string; readonly value: unknown; readonly until: number };
+/** How long a read is served from memory without a request (null — never cached). */
+export function readCacheTtl(path: string): number | null {
+  return readCachePolicy(path)?.fresh ?? null;
+}
+
+type Entry = {
+  readonly path: string;
+  readonly value: unknown;
+  // The response body as received: compared with the next one to tell whether anything changed.
+  readonly text: string | null;
+  // When the request for it was sent (or the device copy was saved).
+  readonly fetchedAt: number;
+  readonly freshUntil: number;
+  readonly keepUntil: number;
+};
+
+export type CacheHit = { readonly value: unknown; readonly stale: boolean; readonly text: string | null };
+
+type Change = { readonly at: number; readonly kind: 'dropped' | 'expired'; readonly matches: PathMatch };
+
+// Expiries matter only to reads that were in flight across them (requests time out well before).
+const EXPIRY_MEMORY = 2 * MINUTE;
+// Own writes are remembered for the page's life (copies saved before one must not be shown);
+// past this many, they merge into one «everything changed» at the latest time — stricter, never wrong.
+const MAX_WRITES = 64;
 
 export class ReadCache {
   private readonly entries = new Map<string, Entry>();
-  // Bumped on every invalidation: a read that was in flight across one may carry data from
-  // before the change and must not be stored.
-  private generationValue = 0;
+  private changes: Change[] = [];
 
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly now: () => number = () => Date.now(),
+    // Told about every drop and expiry (httpClient stops sharing reads already in flight).
+    private readonly onChange: (kind: 'dropped' | 'expired') => void = () => undefined,
+  ) {}
 
-  get generation(): number {
-    return this.generationValue;
-  }
-
-  /** A copy of the cached answer, or undefined when there is none (or it has expired). */
-  get(key: string): unknown {
+  /** The cached answer (a copy) and whether it is past its fresh window; undefined past `keep`. */
+  lookup(key: string): CacheHit | undefined {
     const entry = this.entries.get(key);
     if (!entry) return undefined;
-    if (entry.until <= this.now()) {
+    const now = this.now();
+    if (entry.keepUntil <= now) {
       this.entries.delete(key);
       return undefined;
     }
     // Callers may sort or edit what they get: every reader receives its own copy.
-    return structuredClone(entry.value);
+    return { value: structuredClone(entry.value), stale: entry.freshUntil <= now, text: entry.text };
   }
 
-  set(key: string, path: string, value: unknown, ttlMs: number): void {
-    this.entries.set(key, { path, value: structuredClone(value), until: this.now() + ttlMs });
+  /** A fresh answer (a copy), or undefined when there is none. */
+  get(key: string): unknown {
+    const hit = this.lookup(key);
+    return hit && !hit.stale ? hit.value : undefined;
   }
 
-  /** Drops the cached reads of `path` and of everything under it. */
-  forget(path: string): void {
-    this.generationValue += 1;
-    for (const [key, entry] of this.entries) {
-      if (entry.path === path || entry.path.startsWith(`${path}/`)) this.entries.delete(key);
+  /** Whatever is known — fresh or kept — for a first render; undefined when nothing is. */
+  peek(key: string): unknown {
+    return this.lookup(key)?.value;
+  }
+
+  /**
+   * Stores an answer obtained at `at` (the request was sent, or the device copy saved) unless a
+   * newer one is already here or an own write since `at` may have changed it. A change made
+   * elsewhere since `at` stores it as already expired: the answer may predate that change.
+   * Returns whether it was stored.
+   */
+  store(key: string, path: string, value: unknown, policy: ReadPolicy, text: string | null = null, at = this.now()): boolean {
+    const now = this.now();
+    const keepUntil = at + policy.keep;
+    if (keepUntil <= now) return false;
+    const current = this.entries.get(key);
+    if (current && current.fetchedAt > at) return false;
+    const change = this.changedSince(path, at);
+    if (change === 'dropped') return false;
+    const freshUntil = change === 'expired' ? 0 : at + policy.fresh;
+    this.entries.set(key, { path, value: structuredClone(value), text, fetchedAt: at, freshUntil, keepUntil });
+    return true;
+  }
+
+  /**
+   * The strongest change to `path` since `time`: 'dropped' (an own write — a copy from before
+   * it must not be shown), 'expired' (changed elsewhere — showable, not fresh) or null.
+   */
+  changedSince(path: string, time: number): 'dropped' | 'expired' | null {
+    let found: 'expired' | null = null;
+    for (const change of this.changes) {
+      if (change.at < time || !change.matches(path)) continue;
+      if (change.kind === 'dropped') return 'dropped';
+      found = 'expired';
     }
+    return found;
   }
 
-  /** Drops the cached reads whose path matches. */
-  forgetWhere(matches: (path: string) => boolean): void {
-    this.generationValue += 1;
+  /** An own write (or a logout): drops what it may have changed. */
+  drop(matches: PathMatch = EVERYTHING): void {
     for (const [key, entry] of this.entries) if (matches(entry.path)) this.entries.delete(key);
+    this.remember('dropped', matches);
   }
 
-  /** Drops exactly the cached reads of `path`. */
-  forgetExact(path: string): void {
-    this.generationValue += 1;
-    for (const [key, entry] of this.entries) if (entry.path === path) this.entries.delete(key);
+  /** A change made elsewhere: what it may have changed stays showable but is no longer fresh. */
+  expire(matches: PathMatch = EVERYTHING): void {
+    for (const [key, entry] of this.entries) {
+      if (matches(entry.path) && entry.freshUntil > 0) this.entries.set(key, { ...entry, freshUntil: 0 });
+    }
+    this.remember('expired', matches);
   }
 
   clear(): void {
-    this.generationValue += 1;
-    this.entries.clear();
+    this.drop(EVERYTHING);
   }
 
-  /** What a successful write to `path` makes stale. */
+  /** What a write to `path` may have changed is dropped. */
   afterWrite(path: string): void {
     const bare = path.split('?')[0]!;
-    for (const [pattern, scope] of SCOPED_WRITES) {
+    for (const [pattern, scope] of WRITE_SCOPES) {
       const match = bare.match(pattern);
       if (!match) continue;
-      const target = scope(match);
-      if (target) this.forget(target);
+      const matches = scope(match);
+      if (matches) this.drop(matches);
       return;
     }
-    this.clear();
+    this.drop(EVERYTHING);
   }
 
   /** Realtime and connectivity events that may carry changes made elsewhere. */
@@ -119,37 +222,44 @@ export class ReadCache {
       const id = (event as CustomEvent<{ projectId?: unknown }>).detail?.projectId;
       return typeof id === 'string' && id ? id : null;
     };
-    // A task changed somewhere (by a colleague, a worker): lists, counts and the project's
-    // card in the list are stale. Without a project id — every project's lists.
-    const forgetTaskLists = (projectId: string | null): void => {
-      this.forgetExact('/projects');
-      this.forget('/assignees');
-      if (projectId) {
-        this.forgetExact(`/projects/${projectId}`);
-        this.forget(`/projects/${projectId}/tasks`);
-      } else {
-        this.forgetWhere((path) => /^\/projects\/[^/]+(\/tasks)?$/.test(path));
-      }
-    };
-    target.addEventListener('pf:task-changed', (event) => forgetTaskLists(projectOf(event)));
-    target.addEventListener('pf:notifications-changed', () => forgetTaskLists(null));
+    // A task changed somewhere (by a colleague, a worker): its lists and counts.
+    target.addEventListener('pf:task-changed', (event) => this.expire(taskLists(projectOf(event))));
+    target.addEventListener('pf:notifications-changed', () => this.expire(taskLists(null)));
     target.addEventListener('pf:live-changed', (event) => {
       const projectId = projectOf(event);
-      forgetTaskLists(projectId);
-      if (projectId) this.forget(`/projects/${projectId}/site`);
+      // A worker run moves tasks and may publish the project's site.
+      this.expire(projectId ? (path) => taskLists(projectId)(path) || path === `/projects/${projectId}/site` : taskLists(null));
     });
     target.addEventListener('pf:project-site-published', (event) => {
       const projectId = projectOf(event);
-      if (projectId) this.forget(`/projects/${projectId}/site`);
+      if (projectId) this.expire(exactly(`/projects/${projectId}/site`));
     });
     // Invites and members change in another tab too: the members panel echoes the change via
-    // localStorage, and that tab's own write cleared only its own cache.
-    target.addEventListener('pf:workspace-invites-changed', () => this.forget('/workspaces'));
+    // localStorage, and that tab's own write dropped only its own cache.
+    target.addEventListener('pf:workspace-invites-changed', () => this.expire(under('/workspaces')));
     target.addEventListener('storage', (event) => {
-      if ((event as StorageEvent).key === 'pf:workspace-invites-changed') this.forget('/workspaces');
+      if ((event as StorageEvent).key === 'pf:workspace-invites-changed') this.expire(under('/workspaces'));
     });
-    for (const name of ['pf:project-changed', 'pf:realtime-connected', 'pf:session-expired', 'online']) {
-      target.addEventListener(name, () => this.clear());
+    // A project's settings or members changed elsewhere; events may have been missed while
+    // disconnected or offline; the user asked for the latest (pull to refresh).
+    for (const name of ['pf:project-changed', 'pf:realtime-connected', 'online', REFRESH_REQUESTED_EVENT]) {
+      target.addEventListener(name, () => this.expire());
     }
+    target.addEventListener('pf:session-expired', () => this.drop());
+  }
+
+  private remember(kind: Change['kind'], matches: PathMatch): void {
+    const at = this.now();
+    if (kind === 'dropped' && matches === EVERYTHING) {
+      // Everything earlier is covered by this one.
+      this.changes = [{ at, kind, matches }];
+    } else {
+      this.changes = this.changes.filter((c) => c.kind === 'dropped' || c.at > at - EXPIRY_MEMORY);
+      this.changes.push({ at, kind, matches });
+      if (this.changes.filter((c) => c.kind === 'dropped').length > MAX_WRITES) {
+        this.changes = [{ at, kind: 'dropped', matches: EVERYTHING }];
+      }
+    }
+    this.onChange(kind);
   }
 }

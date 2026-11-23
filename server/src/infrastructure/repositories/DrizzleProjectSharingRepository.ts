@@ -9,6 +9,7 @@ import {
   workspaceProjectExclusions,
 } from '../db/schema.js';
 import { parseJsonCol } from './jsonCol.js';
+import { memoKey, type RequestMemo } from '../request/RequestMemo.js';
 import {
   DEFAULT_HOME_SCOPE,
   type MemberTaskScope,
@@ -38,14 +39,25 @@ const fromOf = (scope: WorkspaceTaskScope | MemberTaskScope): string[] | null =>
   scope.kind === 'selected' ? [...new Set(scope.from)] : null;
 
 export class DrizzleProjectSharingRepository implements ProjectSharingRepository {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    // Per-request memo (RequestMemo) of the visibility reads: canManageTask asks about the same
+    // project for every task of a list. Without it every call reads.
+    private readonly memo?: Pick<RequestMemo, 'memoize'>,
+  ) {}
 
   async loadMany(
     projectIds: readonly string[],
   ): Promise<Map<string, LoadedProjectSharing>> {
-    const result = new Map<string, LoadedProjectSharing>();
     const ids = [...new Set(projectIds)];
-    if (ids.length === 0) return result;
+    if (ids.length === 0) return new Map();
+    if (!this.memo) return this.readMany(ids);
+    // A copy: callers own the map they get, the memo keeps its own.
+    return new Map(await this.memo.memoize(memoKey('sharing.loadMany', [...ids].sort()), () => this.readMany(ids)));
+  }
+
+  private async readMany(ids: string[]): Promise<Map<string, LoadedProjectSharing>> {
+    const result = new Map<string, LoadedProjectSharing>();
     const access = await this.db
       .select()
       .from(projectWorkspaceAccess)
@@ -104,6 +116,18 @@ export class DrizzleProjectSharingRepository implements ProjectSharingRepository
   }
 
   async memberships(
+    userIds: readonly string[],
+    projectWorkspaces: ReadonlyArray<{ readonly projectId: string; readonly workspaceIds: readonly string[] }>,
+  ): Promise<Array<ProjectWorkspaceMembership & { readonly projectId: string }>> {
+    if (!this.memo) return this.readMemberships(userIds, projectWorkspaces);
+    return [
+      ...(await this.memo.memoize(memoKey('sharing.memberships', userIds, projectWorkspaces), () =>
+        this.readMemberships(userIds, projectWorkspaces),
+      )),
+    ];
+  }
+
+  private async readMemberships(
     userIds: readonly string[],
     projectWorkspaces: ReadonlyArray<{ readonly projectId: string; readonly workspaceIds: readonly string[] }>,
   ): Promise<Array<ProjectWorkspaceMembership & { readonly projectId: string }>> {

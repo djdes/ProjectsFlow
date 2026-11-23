@@ -1,3 +1,5 @@
+import { REFRESH_REQUESTED_EVENT } from '@/lib/readRefreshed';
+
 type Reader = { scope: string; run: () => Promise<void> };
 const readers = new Set<Reader>();
 const pending = new Map<string, Promise<void>>();
@@ -34,6 +36,12 @@ export function refreshPage(scope: string): Promise<void> {
   if (existing) return existing;
   const current = [...readers].filter((reader) => reader.scope === scope);
   if (!current.length) return Promise.resolve();
+  // The user asks for the latest: what is known is no longer taken as fresh.
+  try {
+    window.dispatchEvent(new Event(REFRESH_REQUESTED_EVENT));
+  } catch {
+    /* non-browser environment */
+  }
   // Schedule callbacks after registering pending, so simultaneous gestures share one run.
   const work = Promise.resolve()
     .then(async () => {

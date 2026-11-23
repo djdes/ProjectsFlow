@@ -24,6 +24,9 @@ import {
   subscribeRefresh,
 } from './refreshRegistry';
 
+// Touch drag-and-drop of cards activates after a 220 ms hold; a press held this long is a drag.
+const CARD_DRAG_HOLD_MS = 200;
+
 export function AppExperience({
   desktop,
 }: {
@@ -103,7 +106,7 @@ export function AppExperience({
 
   useEffect(() => {
     if (!main || desktop || !supported || refreshing) return;
-    let start: { x: number; y: number; target: Element; checked: boolean } | null = null;
+    let start: { x: number; y: number; at: number; target: Element; checked: boolean } | null = null;
     let pull = 0;
     const cancel = (): void => {
       start = null;
@@ -119,7 +122,7 @@ export function AppExperience({
         return;
       }
       const touch = event.touches[0]!;
-      start = { x: touch.clientX, y: touch.clientY, target: event.target, checked: false };
+      start = { x: touch.clientX, y: touch.clientY, at: performance.now(), target: event.target, checked: false };
     };
     const move = (event: TouchEvent): void => {
       if (!start) return;
@@ -137,7 +140,10 @@ export function AppExperience({
       if (!start.checked) {
         if (dy <= 0) return;
         start.checked = true;
+        // A card held still before moving is being dragged (touch drag starts after 220 ms).
+        const heldCard = performance.now() - start.at > CARD_DRAG_HOLD_MS && start.target.closest('[role="button"]');
         if (
+          heldCard ||
           document.querySelector('[role="dialog"][data-state="open"], [role="menu"][data-state="open"]') ||
           !mayStartPull(start.target, main)
         ) {

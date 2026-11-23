@@ -46,7 +46,7 @@ async function assertOnlyWorkspace(t, id) {
     await t.visible(t.page.locator(`[data-pf-completed-today][aria-label="Сегодня выполнено задач: ${count}"]`), 'счётчик текущего пространства');
   }
   t.assert(t.journal.reads.some((r) => r.workspaceId === id && r.path === '/me/shared-members'), 'участники не перезагружены');
-  t.assert(t.journal.reads.some((r) => r.workspaceId === id && r.path === '/assignees/mine'), 'задачи не перезагружены');
+  t.assert(t.journal.reads.some((r) => r.workspaceId === id && r.path === '/assignees/overview'), 'задачи не перезагружены');
 }
 
 export const workspaceIsolationScenarios = [
@@ -54,11 +54,11 @@ export const workspaceIsolationScenarios = [
     id: 'workspace-isolation-load-error', title: 'Ошибка загрузки задач не маскируется пустой доской', matrix: [['desktop', 'light'], ['phone', 'dark']],
     async run(t) {
       addIsolationWorkspaces(t.state);
-      t.state.failReads = { [`${WORKSPACE_ID}:/assignees/mine`]: { status: 403, error: 'temporary_access_failure' } };
+      t.state.failReads = { [`${WORKSPACE_ID}:/assignees/overview`]: { status: 403, error: 'temporary_access_failure' } };
       await t.goto('/inbox', { ready: () => t.page.getByText('Не удалось загрузить задачи этого пространства.', { exact: true }), readyName: 'ошибка загрузки с повтором' });
       await t.step('повтор загружает доску со скелетоном', async () => {
-        delete t.state.failReads[`${WORKSPACE_ID}:/assignees/mine`];
-        t.state.delays = { [`${WORKSPACE_ID}:/assignees/mine`]: 450 };
+        delete t.state.failReads[`${WORKSPACE_ID}:/assignees/overview`];
+        t.state.delays = { [`${WORKSPACE_ID}:/assignees/overview`]: 450 };
         await t.page.getByRole('button', { name: 'Повторить', exact: true }).click();
         await t.visible(t.page.locator('[data-pf-inbox-loading]'), 'скелетон повторной загрузки');
         await t.visible(t.page.locator(card('t-form')), 'задачи после восстановления');
@@ -124,7 +124,7 @@ export const workspaceIsolationScenarios = [
         await t.visible(t.page.locator('[data-pf-workspace-tasks="ws-personal"]'), 'блок личного пространства');
         if (t.isMobile) await other.locator(section('queue')).click();
         await t.visible(other.locator('[data-pf-task-id="queue-ws-other"]'), 'задача другой команды');
-        t.assert(t.journal.reads.some((r) => r.workspaceId === 'ws-other' && r.path === '/assignees/mine'), 'нет запроса задач другого пространства');
+        t.assert(t.journal.reads.some((r) => r.workspaceId === 'ws-other' && r.path === '/assignees/overview'), 'нет запроса задач другого пространства');
         t.assert(t.state.activeWorkspaceId !== 'ws-other', 'чтение блока переключило пространство');
         t.assert(await other.locator('[data-pf-task-id="colleague-invoice"]').count() === 0, 'чужая накладная попала в «Для меня»');
         t.assert(await t.page.locator('#assigned-to-me [data-pf-task-id="queue-ws-other"]').count() === 0, 'чужая задача попала в основной блок');

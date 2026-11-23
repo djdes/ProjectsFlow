@@ -118,13 +118,20 @@ async function harness(
     const c = useContainer();
     if (!restore) {
       const originalList = c.taskRepository.list;
+      const originalScreenList = c.taskRepository.listForScreen;
+      const originalPeek = c.taskRepository.peekList;
       const originalMove = c.taskRepository.move;
       const originalAuth = c.authRepository.getCurrentOrNull;
       c.taskRepository.list = list;
+      // The board reads through the screen list; nothing is known before the first read.
+      c.taskRepository.listForScreen = (projectId) => list(projectId);
+      c.taskRepository.peekList = () => null;
       if (move) c.taskRepository.move = move;
       c.authRepository.getCurrentOrNull = async () => null;
       restore = () => {
         c.taskRepository.list = originalList;
+        c.taskRepository.listForScreen = originalScreenList;
+        c.taskRepository.peekList = originalPeek;
         c.taskRepository.move = originalMove;
         c.authRepository.getCurrentOrNull = originalAuth;
       };

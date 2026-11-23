@@ -27,6 +27,19 @@ function fromDto(dto: UserDto): User {
   };
 }
 
+function uiPrefsFromDto({ prefs }: { prefs?: unknown }): UiPrefs {
+  // Защита от строкового JSON-значения колонки (старый сервер) — нормализуем в объект.
+  let val: unknown = prefs;
+  if (typeof val === 'string') {
+    try {
+      val = JSON.parse(val);
+    } catch {
+      return {};
+    }
+  }
+  return val && typeof val === 'object' && !Array.isArray(val) ? (val as UiPrefs) : {};
+}
+
 export class HttpUserRepository implements UserRepository {
   async getCurrent(): Promise<User> {
     const { user } = await httpClient.get<{ user: UserDto }>('/auth/me');
@@ -96,17 +109,15 @@ export class HttpUserRepository implements UserRepository {
   }
 
   async getUiPrefs(): Promise<UiPrefs> {
-    const { prefs } = await httpClient.get<{ prefs?: unknown }>('/me/ui-prefs');
-    // Защита от строкового JSON-значения колонки (старый сервер) — нормализуем в объект.
-    let val: unknown = prefs;
-    if (typeof val === 'string') {
-      try {
-        val = JSON.parse(val);
-      } catch {
-        return {};
-      }
-    }
-    return val && typeof val === 'object' && !Array.isArray(val) ? (val as UiPrefs) : {};
+    // Own edits drop the cached prefs at once; a kept copy (another device changed them) is
+    // replaced as soon as the fresh one arrives.
+    const dto = await httpClient.get<{ prefs?: unknown }>('/me/ui-prefs', { swr: true });
+    return uiPrefsFromDto(dto);
+  }
+
+  peekUiPrefs(): UiPrefs | null {
+    const dto = httpClient.peek<{ prefs?: unknown }>('/me/ui-prefs');
+    return dto ? uiPrefsFromDto(dto) : null;
   }
 
   async setUiPrefs(prefs: UiPrefs): Promise<UiPrefs> {

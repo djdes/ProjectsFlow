@@ -6,8 +6,12 @@
 export type OfflineStore = {
   put(key: string, text: string): Promise<void>;
   get(key: string): Promise<string | null>;
+  /** The saved copy with the time it was saved (null for copies saved before times were kept). */
+  read(key: string): Promise<{ text: string; savedAt: number | null } | null>;
   clear(): Promise<void>;
 };
+
+const SAVED_AT_HEADER = 'X-Pf-Saved-At';
 
 const CACHE_NAME = 'pf-offline-reads-v1';
 const MAX_BYTES = 400_000;
@@ -39,12 +43,22 @@ export function cacheStorageStore(): OfflineStore | null {
   return {
     async put(key, text) {
       const cache = await caches.open(CACHE_NAME);
-      await cache.put(key, new Response(text, { headers: { 'Content-Type': 'application/json' } }));
+      await cache.put(
+        key,
+        new Response(text, { headers: { 'Content-Type': 'application/json', [SAVED_AT_HEADER]: String(Date.now()) } }),
+      );
     },
     async get(key) {
       const cache = await caches.open(CACHE_NAME);
       const hit = await cache.match(key);
       return hit ? hit.text() : null;
+    },
+    async read(key) {
+      const cache = await caches.open(CACHE_NAME);
+      const hit = await cache.match(key);
+      if (!hit) return null;
+      const savedAt = Number(hit.headers.get(SAVED_AT_HEADER));
+      return { text: await hit.text(), savedAt: Number.isFinite(savedAt) && savedAt > 0 ? savedAt : null };
     },
     async clear() {
       await caches.delete(CACHE_NAME);

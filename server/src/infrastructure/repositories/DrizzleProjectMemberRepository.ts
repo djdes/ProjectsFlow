@@ -38,6 +38,7 @@ import {
   type ProjectAccessRow,
   type ProjectWorkspaceAccessRow,
 } from './workspaceMembershipView.js';
+import { memoKey, type RequestMemo } from '../request/RequestMemo.js';
 
 // Единое пространство (спека unified-workspace §3.2): доступ к проекту читается
 // «насквозь» через projects.workspace_id → workspace_members (роль 1:1).
@@ -100,7 +101,19 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     private readonly db: Database,
     // Видимость задач общих проектов (db/182). Без неё все задачи видны, как раньше.
     private readonly visibility?: Pick<TaskVisibility, 'filterTasks' | 'filterAudience' | 'canSee'>,
+    // Per-request memo of the read-only access lookups below: a task list checks the same
+    // project for every task (canManageTask, requireTask*Access). Without it every call reads.
+    private readonly memo?: Pick<RequestMemo, 'memoize'>,
   ) {}
+
+  private remember<T>(key: string, load: () => Promise<T>): Promise<T> {
+    return this.memo ? this.memo.memoize(key, load) : load();
+  }
+
+  // Lists are copied: callers own the array they get, the memo keeps its own.
+  private async rememberList<T>(key: string, load: () => Promise<T[]>): Promise<T[]> {
+    return [...(await this.remember(key, load))];
+  }
 
   async canSeeTask(userId: string, task: VisibleTaskLike): Promise<boolean> {
     return this.visibility ? this.visibility.canSee(userId, task) : true;
@@ -117,6 +130,12 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   // Явно скрыт галочкой: членство в пространствах проекта есть, а доступа нет (скрыт в
   // основном пространстве или во всех подключённых, где состоит).
   async isProjectHidden(projectId: string, userId: string): Promise<boolean> {
+    return this.remember(memoKey('members.isProjectHidden', projectId, userId), () =>
+      this.readIsProjectHidden(projectId, userId),
+    );
+  }
+
+  private async readIsProjectHidden(projectId: string, userId: string): Promise<boolean> {
     // Быстрый путь (один запрос, как без подключений): скрыт галочкой в основном
     // пространстве, где он не owner/lead. Подключённые пространства смотрим, только если есть.
     const [quick] = await this.db
@@ -211,6 +230,12 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   }
 
   async findForProject(projectId: string, userId: string): Promise<ProjectMembership | null> {
+    return this.remember(memoKey('members.findForProject', projectId, userId), () =>
+      this.readMembership(projectId, userId),
+    );
+  }
+
+  private async readMembership(projectId: string, userId: string): Promise<ProjectMembership | null> {
     // Быстрый путь — как без подключённых пространств: членство в основном пространстве
     // решает всё (см. deriveSharedMembership). Подключённые смотрим, только если его нет.
     const rows = await this.db
@@ -634,6 +659,12 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
     userId: string,
     workspaceId: string,
   ): Promise<SharedUser[]> {
+    return this.rememberList(memoKey('members.listSharedUsersInWorkspace', userId, workspaceId), () =>
+      this.readSharedUsersInWorkspace(userId, workspaceId),
+    );
+  }
+
+  private async readSharedUsersInWorkspace(userId: string, workspaceId: string): Promise<SharedUser[]> {
     // То же, что listSharedUsers, но круг ограничен со-участниками ОДНОГО пространства:
     // wm1 — членство caller-а именно в workspaceId, wm2 — остальные участники того же
     // пространства (workspaceId наследуется через join wm2.workspace_id = wm1.workspace_id).
@@ -668,6 +699,12 @@ export class DrizzleProjectMemberRepository implements ProjectMemberRepository {
   }
 
   async listApproverUserIdsForProject(projectId: string, originWorkspaceId?: string | null): Promise<string[]> {
+    return this.rememberList(memoKey('members.listApproverUserIdsForProject', projectId, originWorkspaceId ?? null), () =>
+      this.readApproverUserIds(projectId, originWorkspaceId),
+    );
+  }
+
+  private async readApproverUserIds(projectId: string, originWorkspaceId?: string | null): Promise<string[]> {
     const rows = await this.db
       .select({ userId: workspaceMembers.userId })
       .from(projects)

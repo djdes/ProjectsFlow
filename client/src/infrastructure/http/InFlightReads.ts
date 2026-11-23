@@ -14,6 +14,17 @@ export class InFlightReads {
     return promise;
   }
 
+  /** Shares a read started elsewhere (a prefetch) with the readers that ask while it is in flight. */
+  adopt<T>(key: string, promise: Promise<T>): void {
+    if (this.pending.has(key)) return;
+    const shared: Promise<unknown> = promise.finally(() => {
+      if (this.pending.get(key) === shared) this.pending.delete(key);
+    });
+    // The reader handles failures; this copy only must not surface as unhandled.
+    shared.catch(() => undefined);
+    this.pending.set(key, shared);
+  }
+
   invalidate(): void {
     this.pending.clear();
   }
