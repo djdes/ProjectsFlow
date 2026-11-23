@@ -1,3 +1,26 @@
+/* The drag offset changes on every frame of a swipe. Registered as non-inherited: only the
+   sheet itself restyles, not every element inside it (an inherited custom property would
+   restyle the whole subtree on each frame). */
+@property --pf-sheet-y {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --pf-sheet-release-y {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes pf-grabber-nod-start {
+  0%, 100% { transform: none; }
+  35%, 55% { transform: rotate(18deg); }
+}
+@keyframes pf-grabber-nod-end {
+  0%, 100% { transform: none; }
+  35%, 55% { transform: rotate(-18deg); }
+}
+
 /* Geometry is opt-in on the shared primitives; desktop and navigation keep their layout. */
 @media (max-width: 767px),
   (max-width: 1023px) and (max-height: 500px) and (pointer: coarse) {
@@ -153,11 +176,81 @@
   .pf-sheet-handle:active {
     cursor: grabbing;
   }
-  .pf-sheet-handle span {
-    width: 36px;
-    height: 4px;
-    border-radius: 4px;
-    background: oklch(var(--muted-foreground) / 0.35);
+  /* Ручка листа — полоска из двух половинок. Нажали на неё или тянут лист вниз — половинки
+     сгибаются в стрелку вниз (как в приложениях iOS): «лист уйдёт вниз». Дотянули до порога,
+     за которым отпускание закрывает лист, — стрелка темнеет и чуть растёт (на Android ещё и
+     короткий щелчок). Отпустили раньше — снова полоска. Цвета непрозрачные: половинки
+     перекрываются в середине, полупрозрачные дали бы там тёмное пятно. */
+  .pf-sheet-grabber {
+    position: relative;
+    display: block;
+    inline-size: 40px;
+    block-size: 5px;
+  }
+  .pf-sheet-grabber > span {
+    position: absolute;
+    inset-block-start: 0;
+    inline-size: 22.5px;
+    block-size: 5px;
+    border-radius: 999px;
+    background: color-mix(in oklch, oklch(var(--muted-foreground)) 42%, oklch(var(--background)));
+  }
+  .pf-sheet-grabber > span:first-child {
+    inset-inline-start: 0;
+    transform-origin: calc(100% - 2.5px) 50%;
+  }
+  .pf-sheet-grabber > span:last-child {
+    inset-inline-end: 0;
+    transform-origin: 2.5px 50%;
+  }
+  .pf-sheet-handle:active .pf-sheet-grabber,
+  [data-pf-sheet-dragging] .pf-sheet-grabber {
+    translate: 0 2px;
+  }
+  .pf-sheet-handle:active .pf-sheet-grabber > span,
+  [data-pf-sheet-dragging] .pf-sheet-grabber > span {
+    background: color-mix(in oklch, oklch(var(--muted-foreground)) 72%, oklch(var(--background)));
+  }
+  .pf-sheet-handle:active .pf-sheet-grabber > span:first-child,
+  [data-pf-sheet-dragging] .pf-sheet-grabber > span:first-child {
+    transform: rotate(20deg);
+  }
+  .pf-sheet-handle:active .pf-sheet-grabber > span:last-child,
+  [data-pf-sheet-dragging] .pf-sheet-grabber > span:last-child {
+    transform: rotate(-20deg);
+  }
+  [data-pf-sheet-release] .pf-sheet-grabber {
+    translate: 0 3px;
+    scale: 1.12;
+  }
+  [data-pf-sheet-release] .pf-sheet-grabber > span {
+    background: color-mix(in oklch, oklch(var(--foreground)) 80%, oklch(var(--background)));
+  }
+  [data-pf-sheet-release] .pf-sheet-grabber > span:first-child {
+    transform: rotate(26deg);
+  }
+  [data-pf-sheet-release] .pf-sheet-grabber > span:last-child {
+    transform: rotate(-26deg);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pf-sheet-grabber {
+      transition:
+        translate 240ms var(--pf-ease),
+        scale 240ms var(--pf-ease);
+    }
+    .pf-sheet-grabber > span {
+      transition:
+        transform 240ms var(--pf-ease),
+        background-color 200ms var(--pf-ease);
+    }
+    /* Подсказка на первых листах: после выезда полоска один раз «кивает» стрелкой. Без
+       fill-mode forwards: иначе конечный кадр навсегда перекрыл бы состояния нажатия. */
+    [data-pf-grabber-hint][data-state='open'] .pf-sheet-grabber > span:first-child {
+      animation: pf-grabber-nod-start 900ms 520ms var(--pf-ease) backwards;
+    }
+    [data-pf-grabber-hint][data-state='open'] .pf-sheet-grabber > span:last-child {
+      animation: pf-grabber-nod-end 900ms 520ms var(--pf-ease) backwards;
+    }
   }
   .pf-sheet-handle:focus-visible {
     outline: 2px solid oklch(var(--ring));
