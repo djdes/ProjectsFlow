@@ -9,6 +9,17 @@ import { useMobileSheetSurface } from './mobile-sheet';
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+// A visual viewport the tests can shrink, as the on-screen keyboard does on iOS. Installed
+// before any sheet mounts: the sheets' viewport cache binds to it on first use.
+const fakeViewport = Object.assign(new EventTarget(), { height: window.innerHeight, offsetTop: 0 });
+Object.defineProperty(window, 'visualViewport', { configurable: true, value: fakeViewport });
+async function setViewportHeight(height: number): Promise<void> {
+  fakeViewport.height = height;
+  await act(async () => {
+    fakeViewport.dispatchEvent(new Event('resize'));
+  });
+}
+
 test('swipe uses the existing close callback, preserves a rejected close, and cancels cleanly', async () => {
   const host = document.createElement('div');
   document.body.append(host);
@@ -113,6 +124,52 @@ test('a fast swipe that closes the sheet leaves it where the finger let go (no g
     assert.equal(sheet.style.getPropertyValue('--pf-sheet-y'), '220px');
     assert.equal(sheet.hasAttribute('data-pf-sheet-dragging'), true);
   } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});
+
+function SheetHarness(): React.ReactElement {
+  const { ref } = useMobileSheetSurface(true);
+  return React.createElement('div', { ref, 'data-pf-mobile-sheet': 'true', 'data-state': 'open' });
+}
+
+test('opening on an untouched viewport writes nothing; the keyboard sets the variables and closing it clears them', async () => {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  const full = window.innerHeight;
+  await act(async () => root.render(React.createElement(SheetHarness)));
+  const sheet = host.firstElementChild as HTMLElement;
+  try {
+    // The CSS fallbacks (100dvh, 0px) are exact here: no write, so no extra restyle on open.
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-viewport'), '');
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-keyboard'), '');
+    await setViewportHeight(full - 300);
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-viewport'), `${full - 300}px`);
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-keyboard'), '300px');
+    await setViewportHeight(full);
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-viewport'), '');
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-keyboard'), '');
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});
+
+test('a sheet opened while the keyboard is up sits above it from the first frame', async () => {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  const full = window.innerHeight;
+  await setViewportHeight(full - 280);
+  try {
+    await act(async () => root.render(React.createElement(SheetHarness)));
+    const sheet = host.firstElementChild as HTMLElement;
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-viewport'), `${full - 280}px`);
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-keyboard'), '280px');
+  } finally {
+    await setViewportHeight(full);
     await act(async () => root.unmount());
     host.remove();
   }
