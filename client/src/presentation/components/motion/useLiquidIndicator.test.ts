@@ -17,26 +17,16 @@ HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement): DOMR
   return { left: x, top: 0, right: x + w, bottom: h, width: w, height: h, x, y: 0, toJSON: () => ({}) } as DOMRect;
 };
 
-// Hand-driven animation clock.
-let clock = 0;
-let queue: Array<{ id: number; cb: FrameRequestCallback }> = [];
-let nextId = 1;
-globalThis.requestAnimationFrame = (cb: FrameRequestCallback): number => {
-  const id = nextId++;
-  queue.push({ id, cb });
-  return id;
+// The engine plays its moves through the Web Animations API; the fake records them and lets
+// a test finish them (the element already rests on the target under a running move).
+const moves: Array<{ el: Element; onfinish: null | (() => void); cancel: () => void }> = [];
+HTMLElement.prototype.animate = function (this: HTMLElement) {
+  const move = { el: this, onfinish: null as null | (() => void), currentTime: 0, cancel() {} };
+  moves.push(move);
+  return move as unknown as Animation;
 };
-globalThis.cancelAnimationFrame = (id: number): void => {
-  queue = queue.filter((frame) => frame.id !== id);
-};
-Object.defineProperty(performance, 'now', { configurable: true, value: () => clock });
 function settle(): void {
-  for (let i = 0; i < 600 && queue.length; i++) {
-    clock += 16;
-    const run = queue;
-    queue = [];
-    for (const { cb } of run) cb(clock);
-  }
+  for (const move of moves.splice(0)) move.onfinish?.();
 }
 
 function left(el: HTMLElement | null): number {
@@ -69,8 +59,9 @@ test('the indicator lands on the selected tab, then flows to a new selection', a
   assert.equal(left(pill), 0);
   assert.equal(pill?.style.opacity, '1');
 
+  moves.length = 0;
   await act(async () => root.render(React.createElement(Tabs, { value: 2, variant: 'a' })));
-  assert.ok(queue.length > 0, 'a new selection animates');
+  assert.ok(moves.some((move) => move.el === pill), 'a new selection animates');
   settle();
   assert.equal(left(pill), 200);
   assert.equal(Number.parseFloat(pill?.style.width ?? ''), 100);

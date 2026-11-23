@@ -5,7 +5,6 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { haptic } from '@/lib/haptics';
 import { motionReduced } from '@/lib/liquidIndicator';
-import { springEasing } from '@/lib/springEasing';
 
 // Base-classes:
 //   - Отклик на нажатие и переходы живут в `.pf-button` (styles/motion.css): сжатие на
@@ -76,11 +75,11 @@ function labelOf(node: React.ReactNode): string {
 }
 
 /**
- * Кнопка — одна фигура, которая меняет состояние (как в ролике движения): новая подпись
- * проявляется из короткого размытия (.pf-button-label[data-pf-swap], styles/motion.css), а
- * ширина перетекает от прежней к новой на пружине, если подпись стала длиннее или короче.
- * Ширина до смены запоминается при монтировании, после каждой смены и в момент нажатия
- * (подпись обычно меняется от нажатия: «Сохранить» → «Сохраняем…»).
+ * Кнопка — одна фигура, которая меняет состояние: новая подпись проявляется
+ * (.pf-button-label[data-pf-swap], styles/motion.css), а ширина за 200 мс перетекает от прежней
+ * к новой, если подпись стала длиннее или короче. Ширина до смены запоминается в момент
+ * нажатия (подпись обычно меняется от нажатия: «Сохранить» → «Сохраняем…») и после каждой
+ * смены — при монтировании раскладку не читаем, чтобы не тормозить отрисовку списков.
  */
 function useLabelMorph(el: React.RefObject<HTMLButtonElement | null>, label: string): { swapped: boolean; remember: () => void } {
   const width = React.useRef<number | null>(null);
@@ -89,10 +88,7 @@ function useLabelMorph(el: React.RefObject<HTMLButtonElement | null>, label: str
   React.useLayoutEffect(() => {
     const node = el.current;
     if (!node) return;
-    if (shown.current === label) {
-      width.current ??= node.offsetWidth;
-      return;
-    }
+    if (shown.current === label) return;
     shown.current = label;
     setSwapped(true);
     const before = width.current;
@@ -100,7 +96,7 @@ function useLabelMorph(el: React.RefObject<HTMLButtonElement | null>, label: str
     width.current = after;
     if (before == null || Math.abs(after - before) < 1.5 || motionReduced() || typeof node.animate !== 'function') return;
     node.style.overflow = 'hidden';
-    const run = node.animate([{ width: `${before}px` }, { width: `${after}px` }], { duration: 440, easing: springEasing() });
+    const run = node.animate([{ width: `${before}px` }, { width: `${after}px` }], { duration: 200, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
     const done = (): void => {
       node.style.overflow = '';
     };

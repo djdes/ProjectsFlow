@@ -44,6 +44,11 @@ test('a new label blurs in and the width springs from the old label to the new o
   assert.equal(button.querySelector('.pf-button-label')?.hasAttribute('data-pf-swap'), false, 'no swap effect on first render');
   assert.equal(animations.length, 0);
 
+  // The label changes because of a press: the width before the change is taken at pointerdown
+  // (no layout reads on mount).
+  await act(async () => {
+    button.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true }));
+  });
   await view.render(React.createElement(Button, null, 'Входим в аккаунт…'));
   const label = button.querySelector('.pf-button-label')!;
   assert.equal(label.textContent, 'Входим в аккаунт…');

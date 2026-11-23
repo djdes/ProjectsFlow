@@ -288,7 +288,7 @@ export function BulkActionBar({
           // Телефон: в одну строку с переносами панель разъезжалась на четыре ряда и закрывала
           // пол-экрана. Там две строки: «Выбрано N» и крестик сверху, действия — лентой вбок;
           // фон плотный — сквозь полупрозрачный проступал размытый текст карточек.
-          className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-xl border bg-card/95 p-1.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80 max-sm:grid max-sm:w-full max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-y-0.5 max-sm:bg-card max-sm:supports-[backdrop-filter]:bg-card"
+          className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-xl border bg-card/95 p-1.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80 max-sm:grid max-sm:w-full max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-y-0.5 max-sm:bg-card max-sm:backdrop-filter-none max-sm:supports-[backdrop-filter]:bg-card"
         >
         <span className="px-2 text-xs font-medium tabular-nums max-sm:text-sm max-sm:font-semibold">
           {disabled ? <Loader2 className="inline size-3.5 motion-safe:animate-spin" /> : `Выбрано ${count}`}

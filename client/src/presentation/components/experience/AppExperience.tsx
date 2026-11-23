@@ -103,34 +103,27 @@ export function AppExperience({
 
   useEffect(() => {
     if (!main || desktop || !supported || refreshing) return;
-    let start: { x: number; y: number } | null = null;
+    let start: { x: number; y: number; target: Element; checked: boolean } | null = null;
     let pull = 0;
     const cancel = (): void => {
       start = null;
       pull = 0;
       setDistance(0);
     };
+    // No DOM reads on touchstart: every tap passes through here, and the checks below read
+    // scroll positions and computed styles — right after :active changed, that forces a style
+    // and layout flush before the tap is even handled. They run once, on the first move down.
     const down = (event: TouchEvent): void => {
-      if (
-        event.touches.length !== 1 ||
-        document.querySelector(
-          '[role="dialog"][data-state="open"], [role="menu"][data-state="open"]',
-        )
-      ) {
+      if (event.touches.length !== 1 || !(event.target instanceof Element)) {
         cancel();
         return;
       }
-      if (
-        !(event.target instanceof Element) ||
-        !mayStartPull(event.target, main)
-      )
-        return;
       const touch = event.touches[0]!;
-      start = { x: touch.clientX, y: touch.clientY };
+      start = { x: touch.clientX, y: touch.clientY, target: event.target, checked: false };
     };
     const move = (event: TouchEvent): void => {
       if (!start) return;
-      if (event.touches.length !== 1 || main.scrollTop > 1) {
+      if (event.touches.length !== 1) {
         cancel();
         return;
       }
@@ -138,6 +131,21 @@ export function AppExperience({
       const dx = touch.clientX - start.x;
       const dy = touch.clientY - start.y;
       if (dy < -6 || (Math.abs(dx) > 12 && Math.abs(dx) > dy)) {
+        cancel();
+        return;
+      }
+      if (!start.checked) {
+        if (dy <= 0) return;
+        start.checked = true;
+        if (
+          document.querySelector('[role="dialog"][data-state="open"], [role="menu"][data-state="open"]') ||
+          !mayStartPull(start.target, main)
+        ) {
+          cancel();
+          return;
+        }
+      }
+      if (main.scrollTop > 1) {
         cancel();
         return;
       }

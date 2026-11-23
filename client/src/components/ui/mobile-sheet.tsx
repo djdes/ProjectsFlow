@@ -12,6 +12,49 @@ export function useMobileSheet(enabled = true): boolean {
 
 export const MobileSurfaceContext = React.createContext(false);
 
+/**
+ * Visual-viewport geometry for sheets, kept in memory by app-wide listeners. A sheet reads it
+ * from here on mount instead of from the DOM: reading visualViewport / innerHeight right after
+ * React inserts the sheet forces a synchronous layout of the whole page, and writing the
+ * variables then restyles the entire sheet a second time — together about a third of the
+ * main-thread cost of opening a task on a phone.
+ */
+type SheetViewport = { height: number; layoutHeight: number; keyboard: number };
+let sheetViewport: SheetViewport | null = null;
+const sheetViewportListeners = new Set<() => void>();
+
+function measureSheetViewport(): SheetViewport {
+  const viewport = window.visualViewport;
+  const layoutHeight = window.innerHeight;
+  const height = viewport?.height ?? layoutHeight;
+  return { height, layoutHeight, keyboard: Math.max(0, layoutHeight - height - (viewport?.offsetTop ?? 0)) };
+}
+
+function watchSheetViewport(listener: () => void): () => void {
+  if (!sheetViewport) {
+    sheetViewport = measureSheetViewport();
+    const update = (): void => {
+      sheetViewport = measureSheetViewport();
+      for (const notify of sheetViewportListeners) notify();
+    };
+    window.visualViewport?.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+  }
+  sheetViewportListeners.add(listener);
+  return () => {
+    sheetViewportListeners.delete(listener);
+  };
+}
+
+/** Starts the viewport cache while the page is idle, so even the first sheet opens without a forced layout. */
+export function warmSheetViewport(): void {
+  if (typeof window === 'undefined' || sheetViewport) return;
+  const warm = (): void => watchSheetViewport(() => {})();
+  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(warm, { timeout: 2000 });
+  else setTimeout(warm, 300);
+}
+
 /** Keeps Radix in charge of focus, dismissal and draft/confirmation guards. */
 export function useMobileSheetSurface(
   enabled: boolean,
@@ -30,19 +73,24 @@ export function useMobileSheetSurface(
 
   React.useEffect(() => {
     if (!enabled || !node) return;
-    const viewport = window.visualViewport;
+    let written: string | null = null;
     const resize = (): void => {
-      const height = viewport?.height ?? window.innerHeight;
+      const { height, layoutHeight, keyboard } = sheetViewport!;
+      // An untouched viewport (no keyboard, no zoom) is exactly the CSS fallback (100dvh, 0px):
+      // the variables stay unset, and opening the sheet costs no extra restyle.
+      const key = keyboard < 1 && Math.abs(layoutHeight - height) < 1 ? '' : `${height}/${keyboard}`;
+      if (key === written) return;
+      written = key;
+      if (!key) {
+        node.style.removeProperty('--pf-sheet-viewport');
+        node.style.removeProperty('--pf-sheet-keyboard');
+        return;
+      }
       node.style.setProperty('--pf-sheet-viewport', `${height}px`);
-      node.style.setProperty(
-        '--pf-sheet-keyboard',
-        `${Math.max(0, window.innerHeight - height - (viewport?.offsetTop ?? 0))}px`,
-      );
+      node.style.setProperty('--pf-sheet-keyboard', `${keyboard}px`);
     };
+    const unwatchViewport = watchSheetViewport(resize);
     resize();
-    viewport?.addEventListener('resize', resize);
-    viewport?.addEventListener('scroll', resize);
-    window.addEventListener('resize', resize);
     // Some legacy forms scroll the dialog itself rather than an inner body.
     const keepHandleVisible = (): void => {
       closeRef.current?.style.setProperty(
@@ -199,9 +247,7 @@ export function useMobileSheetSurface(
     node.addEventListener('click', click, true);
     return () => {
       stateObserver.disconnect();
-      viewport?.removeEventListener('resize', resize);
-      viewport?.removeEventListener('scroll', resize);
-      window.removeEventListener('resize', resize);
+      unwatchViewport();
       node.removeEventListener('scroll', keepHandleVisible);
       node.removeEventListener('touchstart', touchStart);
       node.removeEventListener('touchmove', touchMove);

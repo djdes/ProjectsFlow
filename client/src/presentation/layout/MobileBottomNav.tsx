@@ -1,6 +1,6 @@
 import { scrollMainToTop } from '@/presentation/components/experience/useAppNavigation';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
-import { useRef } from 'react';
+import { startTransition, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import {
@@ -9,7 +9,6 @@ import {
   AnimatedUser,
 } from '@/presentation/components/nav/AnimatedNavIcons';
 import { useUnreadTasks } from '@/presentation/hooks/UnreadTasksProvider';
-import { wantsViewTransition } from '@/lib/viewTransition';
 import { boxIn } from '@/lib/liquidIndicator';
 import { useLiquidIndicator } from '@/presentation/components/motion/useLiquidIndicator';
 import { cn } from '@/lib/utils';
@@ -22,23 +21,27 @@ export function MobileBottomNav(): React.ReactElement {
   const { animations } = useMotion();
   const { pathname } = useLocation();
   const { count } = useUnreadTasks();
+  // Нажатая вкладка выделяется сразу, ещё до того как новая страница отрисуется: страница
+  // строится в переходе React (startTransition), а плашка уже едет — отклик мгновенный.
+  // Без View Transitions: они замораживали экран снимком, пока вся новая страница рисовалась
+  // одним куском (на телефоне — заметная пауза на каждое нажатие).
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
+  useEffect(() => setPendingPath(null), [pathname]);
+  const shown = pendingPath ?? pathname;
+  const isAi = (path: string): boolean => path === '/ai' || path.startsWith('/ai/');
   const items = [
-    { path: '/', label: 'Входящие', active: pathname === '/', badge: count },
-    { path: '/all-tasks', label: 'Все задачи', active: pathname === '/all-tasks', badge: 0 },
-    {
-      path: '/ai',
-      label: 'ИИ',
-      active: pathname === '/ai' || pathname.startsWith('/ai/'),
-      badge: 0,
-    },
-    {
-      path: '/profile',
-      label: 'Профиль',
-      active: pathname.startsWith('/profile'),
-      badge: 0,
-    },
+    { path: '/', label: 'Входящие', current: pathname === '/', active: shown === '/', badge: count },
+    { path: '/all-tasks', label: 'Все задачи', current: pathname === '/all-tasks', active: shown === '/all-tasks', badge: 0 },
+    { path: '/ai', label: 'ИИ', current: isAi(pathname), active: isAi(shown), badge: 0 },
+    { path: '/profile', label: 'Профиль', current: pathname.startsWith('/profile'), active: shown.startsWith('/profile'), badge: 0 },
   ];
   const activeIndex = items.findIndex((item) => item.active);
+  const go = (path: string): void => {
+    setPendingPath(path);
+    startTransition(() => {
+      void navigate(path);
+    });
+  };
   const innerRef = useRef<HTMLDivElement>(null);
   const indicatorRef = useRef<HTMLSpanElement>(null);
   const gestureRef = useRef<Gesture | null>(null);
@@ -50,7 +53,7 @@ export function MobileBottomNav(): React.ReactElement {
   const engineRef = useLiquidIndicator({
     containerRef: innerRef,
     indicatorRef,
-    activeSelector: '[aria-current="page"]',
+    activeSelector: '[data-pf-nav-active]',
     activeKey: activeIndex,
     paused: () => Boolean(gestureRef.current?.dragged),
   });
@@ -160,7 +163,7 @@ export function MobileBottomNav(): React.ReactElement {
             ),
           );
           restore(index);
-          navigate(items[index]!.path, { viewTransition: wantsViewTransition(items[index]!.path, pathname) });
+          go(items[index]!.path);
         }}
         onPointerCancel={() => {
           suppressClickRef.current = true;
@@ -190,8 +193,9 @@ export function MobileBottomNav(): React.ReactElement {
             type="button"
             data-pf-route={item.path}
             aria-label={item.label}
-            aria-current={item.active ? 'page' : undefined}
-            onClick={() => pathname === item.path ? scrollMainToTop(animations) : navigate(item.path, { viewTransition: wantsViewTransition(item.path, pathname) })}
+            aria-current={item.current ? 'page' : undefined}
+            data-pf-nav-active={item.active || undefined}
+            onClick={() => (pathname === item.path ? scrollMainToTop(animations) : go(item.path))}
             className={cn(
               'relative z-10 flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-2xs min-[360px]:px-2 leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
               item.active
