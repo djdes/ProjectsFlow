@@ -1,8 +1,9 @@
 # ONBOARDING — ProjectsFlow
 
 > Полный пакет для нового разработчика: доступы, git, локальная разработка, деплой.
-> **ВНИМАНИЕ:** файл содержит боевые пароли. Репозиторий обязан оставаться приватным.
-> Если проект уходит «наружу» — вынеси креды в секрет-менеджер и вычисти этот файл из истории git.
+> **Паролей и токенов в репозитории нет и не будет.** Боевые значения хранит владелец:
+> менеджер паролей, локальный `.env.prod` (в `.gitignore`) и GitHub Actions secrets для CI.
+> Нужен доступ — попроси у владельца. Ни в этот файл, ни в коммиты пароли не вписываем.
 
 Проект: лендинг **«История проектов»** на `projectsflow.ru`.
 Стек: Node.js 22 · Express · mysql2 · TypeScript · Vite · MariaDB 10.11 · PM2 · nginx (FastPanel).
@@ -17,7 +18,7 @@
 | --- | --- |
 | Хост | `projectsflow.ru` |
 | Пользователь | `projectsflow` |
-| Пароль | `DWjrfrE8QSLk6opq!` |
+| Пароль | у владельца (в репозитории не храним) |
 | Порт (внутри LAN / с самого сервера) | `22` |
 | Порт (из интернета и для git) | `50222` |
 | Домашняя директория | `/var/www/projectsflow/data` |
@@ -32,8 +33,10 @@ ssh -p 22 projectsflow@projectsflow.ru
 Windows + PuTTY:
 
 ```powershell
-plink -ssh -P 50222 -pw "DWjrfrE8QSLk6opq!" projectsflow@projectsflow.ru
+plink -ssh -P 50222 projectsflow@projectsflow.ru
 ```
+
+Пароль `plink` спросит сам. С ключом в Pageant пароль не нужен вовсе.
 
 > Рекомендация: добавь свой публичный ключ в `~/.ssh/authorized_keys` на сервере
 > и перестань возить пароль в командах.
@@ -45,7 +48,7 @@ plink -ssh -P 50222 -pw "DWjrfrE8QSLk6opq!" projectsflow@projectsflow.ru
 | СУБД | MariaDB 10.11 |
 | База | `projectsflow` |
 | Пользователь | `projectsflow` |
-| Пароль | `DWjrfrE8QSLk6opq!` |
+| Пароль | у владельца (в репозитории не храним; на сервере — в `.env`) |
 | Порт TCP | `3306` |
 | Unix-socket (на сервере) | `/run/mysqld/mysqld.sock` |
 
@@ -266,8 +269,8 @@ sudo env PATH=$PATH:/var/www/projectsflow/data/.nvm/versions/node/v22.22.2/bin \
   Поле `status`: `live` / `archived` / `in-progress` / `hidden` (последний скрывает запись).
 
 ```bash
-# на сервере
-mysql -u projectsflow -p'DWjrfrE8QSLk6opq!' projectsflow
+# на сервере (пароль mysql спросит сам; в командах его не пишем — он останется в истории shell)
+mysql -u projectsflow -p projectsflow
 ```
 
 ---

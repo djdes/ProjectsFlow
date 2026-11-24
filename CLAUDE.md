@@ -151,7 +151,8 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
 | `DB_SOCKET` | — | `/run/mysqld/mysqld.sock` |
 
 Если задан `DB_SOCKET` — код использует unix-сокет, игнорирует `DB_HOST/DB_PORT`.
-Боевые значения — в [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 1.
+Боевые значения в репозитории не храним: они у владельца (менеджер паролей, `.env.prod`,
+GitHub Actions secrets). Какие переменные нужны — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 1.
 
 ## npm-скрипты (из корня)
 
@@ -186,7 +187,7 @@ npm run deploy       # node scripts/deploy.mjs
 
 Хост `projectsflow.ru`, юзер `projectsflow`. Порт `22` изнутри LAN, `50222` из интернета.
 Bare repo: `/var/www/projectsflow/data/git/projectsflow.git`, ветка `main`.
-Полные URL, пароли — [docs/ONBOARDING.md](docs/ONBOARDING.md).
+Полные URL — [docs/ONBOARDING.md](docs/ONBOARDING.md). Пароли — только у владельца, в git их не пишем.
 
 Workflow: `git fetch origin --prune` → актуализация веток и коммитов относительно `origin/main` → фича → ветка от свежего `origin/main` → PR в `main` → зелёные проверки → merge → автодеплой (см. «Деплой»).
 
@@ -278,8 +279,9 @@ MCP и агентский REST не передают задачи воркеру
 4. **Не править nginx-конфиги** — этим занимается админ FastPanel.
 5. **Миграции — append-only.** Не редактируй уже выкаченные `db/0*_*.sql`,
    делай новый файл. MariaDB не понимает `INSERT ... AS new ...` — только `VALUES(col)`.
-6. **`.env` — никогда не коммитим.** Шаблон — `.env.example`. Боевые значения
-   для людей — в `docs/ONBOARDING.md` (репо приватный).
+6. **`.env` и любые пароли/токены — никогда не коммитим.** Шаблон — `.env.example`.
+   Боевые значения хранит владелец (менеджер паролей, `.env.prod`, GitHub Actions secrets);
+   в `docs/ONBOARDING.md` и других файлах репозитория — только имена переменных и плейсхолдеры.
 7. **Кириллица.** Все пользовательские строки — на русском. Технические комментарии,
    код, переменные, типы — на английском.
 8. **Не вводить новые большие зависимости** (Next.js, NextAuth, TanStack Query, MUI,
