@@ -2324,7 +2324,8 @@ html:not(.js) .pf .hero {
 }
 
 .fan {
-  --card-w: clamp(150px, 19vw, 270px);
+  /* Одна формула от телефона до ПК: на 601px крайние карты в 20px от краёв, с 1174px — 270px. */
+  --card-w: min(23vw, 270px);
   --card-h: calc(var(--card-w) * 4 / 3);
   --spread: 15deg;
   /* Ось веера далеко под картами: соседка закрывает меньше, и название каждой видно целиком. */
@@ -2373,15 +2374,18 @@ html:not(.js) .pf .hero {
 
 .pcard__t {
   margin-block-start: calc(var(--card-w) * 0.05);
-  font-size: max(12px, calc(var(--card-w) * 0.1));
+  font-size: max(15px, calc(var(--card-w) * 0.1));
   font-weight: 500;
   line-height: 1.1;
   letter-spacing: -0.02em;
   color: oklch(var(--white));
 }
 
+/* Подпись не мельче 12px и переносится в пределах полоски, которую не закрывает соседка
+   (около 62% ширины карты). */
 .pcard__n {
-  font-size: max(10px, calc(var(--card-w) * 0.062));
+  max-inline-size: calc(var(--card-w) * 0.62);
+  font-size: max(12px, calc(var(--card-w) * 0.062));
   color: oklch(var(--cyan) / 0.85);
 }
 
@@ -2407,24 +2411,6 @@ html:not(.js) .pf .hero {
 
   .pf--motion .fan:not(.is-in) .pcard {
     transform: translateY(28px) rotate(calc(var(--k) * 2deg));
-  }
-}
-
-/* 601–790px: карты по 150px упирались углами в края экрана, а подпись выходила 10px. Здесь карта
-   идёт за шириной окна (крайние встают в 20–26px от краёв), подпись — 12px и переносится в пределах
-   полоски, которую не закрывает соседка (около 62% ширины карты); название не мельче 15px. */
-@media (min-width: 601px) and (max-width: 790px) {
-  .fan {
-    --card-w: 23vw;
-  }
-
-  .pcard__t {
-    font-size: max(15px, calc(var(--card-w) * 0.1));
-  }
-
-  .pcard__n {
-    max-inline-size: calc(var(--card-w) * 0.62);
-    font-size: 12px;
   }
 }
 
@@ -2459,6 +2445,7 @@ html:not(.js) .pf .hero {
   }
 
   .pcard__n {
+    max-inline-size: none;
     font-size: 13px;
     text-align: end;
   }
@@ -2879,7 +2866,7 @@ html:not(.js) .pf .hero {
   margin-block-end: 10px;
   font-size: 13px;
   letter-spacing: 0.02em;
-  color: oklch(var(--white) / 0.42);
+  color: oklch(var(--white) / 0.5);
 }
 
 .foot__col a {
@@ -2909,7 +2896,7 @@ html:not(.js) .pf .hero {
   padding-block: 24px;
   border-block-start: 1px solid oklch(var(--white) / 0.08);
   font-size: 13.5px;
-  color: oklch(var(--white) / 0.42);
+  color: oklch(var(--white) / 0.5);
 }
 
 .foot__word {

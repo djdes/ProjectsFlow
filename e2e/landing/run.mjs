@@ -553,6 +553,8 @@ async function desktopStructure({ page, check }) {
   check('тарифы: названия в дереве доступности как в тексте, не капсом (Бесплатный, Прайм, VIP)', axPlans.length === 3 && axPlans.join('|') === info.plans.map((p) => p.name).join('|'), axPlans.join('|'));
   const contrast = await contrastOnBlack(page, ['.hero__note', '.stage__cap', '.hero__lead']);
   check('мелкий серый текст (примечание под кнопками, подпись под окном доски): контраст ≥ 4.5:1, тусклее подзаголовка', ['.hero__note', '.stage__cap'].every((s) => contrast[s] >= 4.5 && contrast[s] < contrast['.hero__lead']), JSON.stringify(contrast));
+  const footContrast = await contrastOnBlack(page, ['.foot__h', '.foot__bottom']);
+  check('подвал: мелкий серый текст (заголовки колонок, нижняя строка) — контраст ≥ 4.5:1', Object.values(footContrast).every((v) => v >= 4.5), JSON.stringify(footContrast));
   const misc = await page.evaluate(() => ({
     stepTops: [...document.querySelectorAll('.steps > .step')].map((el) => ({ i: el.style.getPropertyValue('--i'), top: getComputedStyle(el).insetBlockStart })),
     drawnCursor: getComputedStyle(document.querySelector('.approve .btn')).cursor,
@@ -1122,7 +1124,7 @@ const CASES = [
   { id: 'print', title: 'ПК 1440: печать и «Сохранить как PDF»', viewport: DESKTOP, run: printPage },
   { id: 'board-desktop', title: 'окно доски: планшет боком, ноутбуки, ПК', viewport: { width: 1024, height: 768 }, reducedMotion: 'reduce', sizes: [[1024, 768], [1180, 820], [1280, 800], [1366, 768], [1440, 900], [1920, 1080]], run: boardSizes },
   { id: 'board-phone', title: 'окно доски: узкие телефоны', viewport: NARROW, reducedMotion: 'reduce', sizes: [[320, 640], [360, 740], [390, 844]], run: boardSizes },
-  { id: 'fan-tablet', title: 'веер «Где работает» на 601–790px (планшеты, телефоны боком)', viewport: { width: 700, height: 900 }, reducedMotion: 'reduce', sizes: [[601, 900], [700, 900], [768, 1024], [790, 900]], run: fanSizes },
+  { id: 'fan-tablet', title: 'веер «Где работает» на 601–1280px (планшеты, телефоны боком, ноутбуки)', viewport: { width: 700, height: 900 }, reducedMotion: 'reduce', sizes: [[601, 900], [700, 900], [768, 1024], [790, 900], [791, 900], [834, 1112], [900, 900], [1000, 800], [1024, 768], [1280, 800]], run: fanSizes },
   { id: 'hero-sizes', title: 'первый экран в окнах ноутбуков и ПК', viewport: { width: 1440, height: 790 }, run: heroSizes },
 ];
 
