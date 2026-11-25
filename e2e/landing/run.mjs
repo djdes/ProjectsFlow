@@ -305,6 +305,105 @@ async function overflowReport(page) {
   });
 }
 
+// Text a person cannot read: transparent (with its ancestors) or blurred. Decorative parts, the
+// illustration in the board window and answers of closed questions do not count.
+async function hiddenText(page) {
+  return page.evaluate(() => {
+    const effective = (el) => {
+      let o = 1;
+      for (let a = el; a; a = a.parentElement) o *= parseFloat(getComputedStyle(a).opacity);
+      return o;
+    };
+    return [...document.querySelectorAll('main h1, main h2, main h3, main p, main li, .statement__text .lw, main .w, main .rb, .foot a, .foot p')]
+      .filter((el) => !el.closest('[aria-hidden="true"], .win, details:not([open]) .faq__a'))
+      .filter((el) => effective(el) < 0.99 || getComputedStyle(el).filter !== 'none')
+      .slice(0, 8)
+      .map((el) => `${el.tagName.toLowerCase()} «${(el.textContent ?? '').trim().slice(0, 28)}» ${effective(el).toFixed(2)} ${getComputedStyle(el).filter}`);
+  });
+}
+
+// Parts of the board window on the first screen that stick out of their card, column or panel.
+// Text clipped on purpose (ellipsis in the LIVE list, crumbs) counts only where it is visible.
+async function boardOverflow(page) {
+  return page.evaluate(() => {
+    const out = [];
+    const shown = (el) => el.getBoundingClientRect().width > 0;
+    const visibleSpan = (el, stop) => {
+      let left = -Infinity;
+      let right = Infinity;
+      for (let a = el; a && a !== stop; a = a.parentElement) {
+        if (getComputedStyle(a).overflowX === 'visible') continue;
+        const r = a.getBoundingClientRect();
+        left = Math.max(left, r.left);
+        right = Math.min(right, r.right);
+      }
+      return [left, right];
+    };
+    const within = (box, el, label) => {
+      const b = box.getBoundingClientRect();
+      const [clipL, clipR] = visibleSpan(el, box);
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      for (const r of [el.getBoundingClientRect(), ...range.getClientRects()]) {
+        const left = Math.max(r.left, clipL);
+        const right = Math.min(r.right, clipR);
+        if (!r.width || right <= left) continue;
+        if (left < b.left - 0.5 || right > b.right + 0.5) {
+          out.push(`${label} «${(el.textContent ?? '').trim().slice(0, 18)}» ${Math.round(left - b.left)}…${Math.round(right - b.right)}`);
+          return;
+        }
+      }
+    };
+    const win = document.querySelector('.hero .win');
+    const cols = [...win.querySelectorAll('.col')];
+    for (const card of win.querySelectorAll('.card')) {
+      within(card.classList.contains('c2') ? cols[1] : cols[0], card, 'карточка шире колонки');
+      for (const el of card.querySelectorAll('*')) within(card, el, 'вылезает из карточки');
+    }
+    win.querySelectorAll('.colh').forEach((head, i) => {
+      within(cols[i], head, 'заголовок шире колонки');
+      for (const el of head.querySelectorAll('*')) within(cols[i], el, 'заголовок шире колонки');
+    });
+    const live = win.querySelector('.live');
+    if (shown(live)) for (const el of live.querySelectorAll('*')) within(live, el, 'вылезает из LIVE');
+    const bar = win.querySelector('.win__bar');
+    for (const el of bar.children) if (shown(el)) within(bar, el, 'вылезает из шапки окна');
+    return [...new Set(out)].slice(0, 8);
+  });
+}
+
+// The first screen: lines of the title (layout positions, immune to the reveal transforms) and
+// where the facts band ends.
+async function heroReport(page) {
+  return page.evaluate(() => {
+    const tops = [...document.querySelectorAll('.hero__title .w')].map((w) => w.offsetTop + w.offsetParent.getBoundingClientRect().top);
+    const lines = tops.sort((a, b) => a - b).filter((t, i, a) => i === 0 || t - a[i - 1] > 4).length;
+    return {
+      lines,
+      font: getComputedStyle(document.querySelector('.hero__title')).fontSize,
+      statsBottom: Math.round(document.querySelector('.hero .stats').getBoundingClientRect().bottom),
+      vh: window.innerHeight,
+    };
+  });
+}
+
+// Gap between «Открыть» and «приложение» in the header button of a signed-in person (null where the
+// short label is shown).
+async function ctaGap(page) {
+  return page.evaluate(() => {
+    const cta = [...document.querySelectorAll('header .nav__cta')].find((a) => a.getBoundingClientRect().width > 0);
+    const more = cta?.querySelector('.nav__more');
+    if (!cta || !more || !more.getBoundingClientRect().width) return null;
+    const first = document.createRange();
+    first.selectNodeContents(cta.firstChild);
+    const text = more.firstChild;
+    const word = document.createRange();
+    word.setStart(text, text.data.search(/\S/));
+    word.setEnd(text, text.data.length);
+    return Math.round((word.getBoundingClientRect().left - first.getBoundingClientRect().right) * 10) / 10;
+  });
+}
+
 // ---------------------------------------------------------------- cases ----
 
 function checkData({ check }) {
@@ -347,8 +446,10 @@ async function desktopStructure({ page, check }) {
         cta: text(p.querySelector('.btn')),
         edge: Boolean(p.querySelector('.edge')),
         badge: text(p.querySelector('.badge')),
-        top: Math.round(p.getBoundingClientRect().top),
-        ctaTop: Math.round([...p.querySelectorAll('.plan__cta .btn')].find((b) => b.getBoundingClientRect().height > 0)?.getBoundingClientRect().top ?? -1),
+        // Layout positions: the cards may still be emerging (staggered translateY), so the row is
+        // read from offsetTop and a button from its offset inside its own card.
+        top: p.offsetTop,
+        ctaTop: Math.round(([...p.querySelectorAll('.plan__cta .btn')].find((b) => b.getBoundingClientRect().height > 0)?.getBoundingClientRect().top ?? NaN) - p.getBoundingClientRect().top),
         trial: text(p.querySelector('.plan__trial')),
         items: p.querySelectorAll('.plan__list li').length,
       })),
@@ -512,6 +613,8 @@ async function authedButtons({ page, check }) {
     const t = texts(z[zone]);
     check(`вошедший: ${label} «Открыть приложение» вместо «Войти» / «Начать бесплатно»`, Boolean(appLink(z[zone])) && /\/$/.test(appLink(z[zone])?.href ?? '') && !t.includes('Войти') && !t.includes('Начать бесплатно'), t.join(' | '));
   }
+  const gap = await ctaGap(page);
+  check('вошедший: в кнопке шапки «Открыть приложение» слова не слиплись', gap === null || gap >= 2, `${gap}px`);
 }
 
 async function reducedMotion({ page, check }) {
@@ -553,18 +656,7 @@ async function noScript({ page, check }) {
   check('без JS: классов движения нет', root.includes('pf') && !root.includes('pf--motion') && !root.includes('pf--static'), root);
   // The CSS-only intro of the first screen (blur → sharp) lasts about two seconds.
   await page.waitForTimeout(2300);
-  const hidden = await page.evaluate(() => {
-    const effective = (el) => {
-      let o = 1;
-      for (let a = el; a; a = a.parentElement) o *= parseFloat(getComputedStyle(a).opacity);
-      return o;
-    };
-    return [...document.querySelectorAll('main h1, main h2, main h3, main p, main li, .statement__text .lw, main .w, main .rb')]
-      .filter((el) => !el.closest('[aria-hidden="true"], .win, details:not([open]) .faq__a'))
-      .filter((el) => effective(el) < 0.99 || getComputedStyle(el).filter !== 'none')
-      .slice(0, 8)
-      .map((el) => `${el.tagName.toLowerCase()} «${(el.textContent ?? '').trim().slice(0, 28)}» ${effective(el).toFixed(2)} ${getComputedStyle(el).filter}`);
-  });
+  const hidden = await hiddenText(page);
   check('без JS: весь текст виден (нет скрытых стартовых состояний)', hidden.length === 0, hidden.join('; '));
   const second = 'details.faq__item:nth-of-type(2)';
   const closedBefore = await page.evaluate((sel) => document.querySelector(sel)?.open === false, second);
@@ -735,6 +827,105 @@ async function freshAnchor({ page, check, c }) {
   check(`открыть ${c.path} (шрифты медленные): раздел встаёт ровно под шапку`, r.y > 0 && Math.abs(r.top - r.margin) <= 3 && r.heading >= r.header - 1, JSON.stringify(r));
 }
 
+// Keyboard focus may land on a block that has not emerged yet: a question at the very bottom of the
+// screen is below the reveal line. It must show up at once, with its focus ring.
+async function focusReveal({ page, check }) {
+  await page.evaluate(() => document.fonts.ready);
+  const last = await page.evaluate(() => document.querySelectorAll('details.faq__item').length - 1);
+  await page.evaluate((i) => {
+    const el = document.querySelectorAll('details.faq__item')[i];
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.95, behavior: 'instant' });
+  }, last);
+  await settle(page);
+  await page.waitForTimeout(500);
+  const hiddenBefore = await page.evaluate((i) => !document.querySelectorAll('details.faq__item')[i].classList.contains('is-in'), last);
+  await page.evaluate((i) => document.querySelectorAll('details.faq__item')[i].querySelector('summary').focus({ preventScroll: true }), last);
+  await page
+    .waitForFunction((i) => {
+      const s = getComputedStyle(document.querySelectorAll('details.faq__item')[i]);
+      return s.opacity === '1' && s.filter === 'none';
+    }, last, { timeout: 3000, polling: 100 })
+    .catch(() => {});
+  const after = await page.evaluate((i) => {
+    const el = document.querySelectorAll('details.faq__item')[i];
+    return { opacity: getComputedStyle(el).opacity, filter: getComputedStyle(el).filter, focused: document.activeElement === el.querySelector('summary') };
+  }, last);
+  check('фокус с клавиатуры на вопросе у нижнего края (ещё не проявился): вопрос и рамка фокуса видны', hiddenBefore && after.focused && after.opacity === '1' && after.filter === 'none', JSON.stringify({ hiddenBefore, ...after }));
+}
+
+// Print and «Save as PDF» get what the screen shows without motion: nothing transparent or blurred,
+// the fan open, and the scroll scenes (first screen, steps, strip, footer) in their resting place.
+async function printPage({ page, check }) {
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(2300);
+  await page.emulateMedia({ media: 'print' });
+  await settle(page);
+  let hidden = await hiddenText(page);
+  check('печать с начала страницы: весь текст виден', hidden.length === 0, hidden.join('; '));
+  const angle = await page.evaluate(() => {
+    const m = new DOMMatrix(getComputedStyle([...document.querySelectorAll('#platforms .pcard')].at(-1)).transform);
+    return Math.round((Math.atan2(m.b, m.a) * 180) / Math.PI);
+  });
+  check('печать: веер платформ раскрыт', angle >= 20, `${angle}°`);
+  await page.emulateMedia({ media: 'screen' });
+  await page.evaluate(() => document.getElementById('pricing').scrollIntoView({ block: 'start', behavior: 'instant' }));
+  await settle(page);
+  await page.waitForTimeout(200);
+  await page.emulateMedia({ media: 'print' });
+  await settle(page);
+  hidden = await hiddenText(page);
+  check('печать из середины страницы: первый экран и подвал не погашены прокруткой', hidden.length === 0, hidden.join('; '));
+  const scenes = await page.evaluate(() => {
+    const vw = document.documentElement.clientWidth;
+    return {
+      steps: [...document.querySelectorAll('.step')].map((s) => getComputedStyle(s, '::after').opacity).filter((o) => o !== '0').length,
+      track: getComputedStyle(document.querySelector('.pin__track')).transform,
+      outside: [...document.querySelectorAll('.pin__track .fc')].filter((c) => {
+        const r = c.getBoundingClientRect();
+        return r.left < -0.5 || r.right > vw + 0.5;
+      }).length,
+    };
+  });
+  check('печать из середины страницы: шаги не затемнены, все карточки «Мелочей» на странице', scenes.steps === 0 && scenes.track === 'none' && scenes.outside === 0, JSON.stringify(scenes));
+  // Sticky and fixed blocks print where they stand in the page, not where the scroll left them.
+  const layout = await page.evaluate(() => {
+    const box = (sel) => document.querySelector(sel).getBoundingClientRect();
+    const steps = [...document.querySelectorAll('.step')].map((s) => s.getBoundingClientRect());
+    return {
+      header: Math.round(box('header.nav').top + window.scrollY),
+      heroOverSheet: Math.round(box('.hero').bottom - box('.statement').top),
+      stepsOverlap: steps.slice(1).filter((r, i) => r.top < steps[i].bottom - 1).length,
+      footOverMain: Math.round(box('main').bottom - box('.foot').top),
+    };
+  });
+  check('печать из середины страницы: шапка один раз сверху, первый экран, шаги и подвал не наезжают друг на друга', layout.header <= 1 && layout.heroOverSheet <= 1 && layout.stepsOverlap === 0 && layout.footOverMain <= 1, JSON.stringify(layout));
+}
+
+// The board window of the first screen at each size of the case: nothing sticks out.
+async function boardSizes({ page, check, c }) {
+  for (const [width, height] of c.sizes) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => document.fonts.ready);
+    await settle(page);
+    const bad = await boardOverflow(page);
+    check(`${width}×${height}: окно доски — всё внутри карточек, колонок и ленты`, bad.length === 0, bad.join(' | '));
+  }
+}
+
+// Laptop and desktop windows: the title takes at most three lines and the facts band is on the first screen.
+const HERO_SIZES = [[1440, 790], [1536, 740], [1366, 768], [1280, 800], [1680, 950], [1920, 950], [1920, 1080], [2560, 1300], [1440, 900]];
+
+async function heroSizes({ page, check }) {
+  for (const [width, height] of HERO_SIZES) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => document.fonts.ready);
+    await scrollToY(page, 0);
+    const r = await heroReport(page);
+    check(`${width}×${height}: заголовок первого экрана не длиннее трёх строк`, r.lines <= 3, JSON.stringify(r));
+    check(`${width}×${height}: полоса фактов целиком на первом экране`, r.statsBottom <= height, JSON.stringify(r));
+  }
+}
+
 async function fromBlog({ page, check }) {
   await page.click('nav[aria-label="Основная навигация"] a[href="/#pricing"]');
   await page.waitForURL(/\/#pricing$/);
@@ -774,6 +965,11 @@ const CASES = [
   { id: 'landscape', title: 'телефон боком 844×340', viewport: { width: 844, height: 340 }, mobile: true, run: landscape },
   { id: 'reduced-phone', title: 'телефон 390: prefers-reduced-motion', viewport: PHONE, reducedMotion: 'reduce', run: reducedPhone },
   { id: 'ios-toolbar', title: 'iPhone 390×664: панель Safari сворачивается', viewport: { width: 390, height: 664 }, run: iosToolbar },
+  { id: 'focus-reveal', title: 'ПК 1440: фокус с клавиатуры на ещё скрытом блоке', viewport: DESKTOP, run: focusReveal },
+  { id: 'print', title: 'ПК 1440: печать и «Сохранить как PDF»', viewport: DESKTOP, run: printPage },
+  { id: 'board-desktop', title: 'окно доски: планшет боком, ноутбуки, ПК', viewport: { width: 1024, height: 768 }, reducedMotion: 'reduce', sizes: [[1024, 768], [1180, 820], [1280, 800], [1366, 768], [1440, 900], [1920, 1080]], run: boardSizes },
+  { id: 'board-phone', title: 'окно доски: узкие телефоны', viewport: NARROW, reducedMotion: 'reduce', sizes: [[320, 640], [360, 740], [390, 844]], run: boardSizes },
+  { id: 'hero-sizes', title: 'первый экран в окнах ноутбуков и ПК', viewport: { width: 1440, height: 790 }, run: heroSizes },
 ];
 
 async function runCase(browser, baseUrl, c) {

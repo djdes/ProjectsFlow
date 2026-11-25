@@ -2,6 +2,7 @@
 // Шапка главной. ПК: логотип | разделы | «Войти» и «Начать бесплатно».
 // Телефон: логотип и белая кнопка, под ними строка разделов (как у fluidvoice).
 // Вошедшему (html[data-auth="authed"], ставит сервер) — «Открыть приложение».
+// Пробел перед «приложение» — &nbsp;: обычный пробел в начале элемента флекс-строки схлопывается.
 import HomeLogo from './HomeLogo.astro';
 
 interface Props {
@@ -26,7 +27,7 @@ const { appBase } = Astro.props;
     <div class="nav__end">
       <a class="nav__login" href={`${appBase}/login`} data-auth-anon>Войти</a>
       <a class="nav__cta" href={`${appBase}/register`} data-auth-anon>Начать бесплатно</a>
-      <a class="nav__cta" href={`${appBase}/`} data-auth-authed aria-label="Открыть приложение">Открыть<span class="nav__more"> приложение</span></a>
+      <a class="nav__cta" href={`${appBase}/`} data-auth-authed aria-label="Открыть приложение">Открыть<span class="nav__more">&nbsp;приложение</span></a>
     </div>
   </div>
 </header>
