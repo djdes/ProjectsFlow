@@ -450,6 +450,52 @@ async function contrastOnBlack(page, selectors) {
   }, selectors);
 }
 
+// The logo in the header, the final call and the footer: a white mark on a dark neutral tile, so it
+// belongs to the black-and-white page (the brand blue stays in the app and the favicon).
+async function logoColors(page) {
+  return page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const rgb = (color) => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = '#000';
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 1, 1);
+      return [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3);
+    };
+    return ['.nav .brand__mark', '.final__mark svg', '.foot .brand__mark'].map((sel) => {
+      const svg = document.querySelector(sel);
+      const tile = svg?.querySelector('rect');
+      const mark = svg?.querySelector('path');
+      return { sel, tile: tile ? rgb(getComputedStyle(tile).fill) : null, mark: mark ? rgb(getComputedStyle(mark).fill) : null };
+    });
+  });
+}
+
+// Grainy glow (as on fluidvoice) behind the product pictures: light and grain in one layer, faded out
+// by a radial mask, behind the content and never in the way of a click.
+const HALO_PLACES = { 'первый экран': '.hero__visual', 'Внутри': '#features', 'Мелочи': '#details', 'Где работает': '#platforms', 'тарифы': '#pricing', 'финал': '#start' };
+
+async function haloReport(page) {
+  return page.evaluate((places) =>
+    Object.entries(places).map(([name, sel]) => {
+      const halo = document.querySelector(`${sel} .halo`);
+      if (!halo) return { name, ok: false, why: 'нет .halo' };
+      const s = getComputedStyle(halo);
+      const r = {
+        name,
+        light: s.backgroundImage.includes('radial-gradient'),
+        grain: s.backgroundImage.includes('url('),
+        fade: (s.maskImage || s.webkitMaskImage || '').includes('radial-gradient'),
+        strength: parseFloat(s.getPropertyValue('--halo-a')),
+        behind: parseInt(s.zIndex, 10) < 0 && s.pointerEvents === 'none',
+      };
+      return { ...r, ok: r.light && r.grain && r.fade && r.strength >= 0.3 && r.behind };
+    }), HALO_PLACES);
+}
+
 // ---------------------------------------------------------------- cases ----
 
 function checkData({ check }) {
@@ -553,6 +599,10 @@ async function desktopStructure({ page, check }) {
   check('тарифы: названия в дереве доступности как в тексте, не капсом (Бесплатный, Прайм, VIP)', axPlans.length === 3 && axPlans.join('|') === info.plans.map((p) => p.name).join('|'), axPlans.join('|'));
   const contrast = await contrastOnBlack(page, ['.hero__note', '.stage__cap', '.hero__lead']);
   check('мелкий серый текст (примечание под кнопками, подпись под окном доски): контраст ≥ 4.5:1, тусклее подзаголовка', ['.hero__note', '.stage__cap'].every((s) => contrast[s] >= 4.5 && contrast[s] < contrast['.hero__lead']), JSON.stringify(contrast));
+  const logo = await logoColors(page);
+  check('логотип в шапке, финале и подвале — белый знак на тёмной нейтральной плитке (под чёрно-белую страницу)', logo.every((l) => l.tile && l.mark && Math.max(...l.tile) - Math.min(...l.tile) <= 12 && Math.max(...l.tile) <= 70 && Math.min(...l.mark) >= 235), JSON.stringify(logo));
+  const halos = await haloReport(page);
+  check('зернистое свечение (свет + зерно, затухает по краям, сила ≥ 0.3) за окном первого экрана, карточками «Внутри», «Мелочами», веером, тарифами и финалом', halos.every((h) => h.ok), JSON.stringify(halos.filter((h) => !h.ok)));
   const footContrast = await contrastOnBlack(page, ['.foot__h', '.foot__bottom']);
   check('подвал: мелкий серый текст (заголовки колонок, нижняя строка) — контраст ≥ 4.5:1', Object.values(footContrast).every((v) => v >= 4.5), JSON.stringify(footContrast));
   const misc = await page.evaluate(() => ({

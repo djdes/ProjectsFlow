@@ -15,76 +15,79 @@ import Words from './Words.astro';
         <h2 id="details-title" class="h2 rw"><Words parts={[{ text: 'Мелочи, сделанные' }, { text: 'как надо.', dim: true }]} /></h2>
       </div>
     </div>
-    <div class="pin__view">
-      <div class="pin__track" tabindex="0" role="region" aria-label="Мелочи: лента листается вбок">
-        {
-          DETAILS.map((item) => (
-            <article class="fc rb">
-              <div class="fc__vis" aria-hidden="true">
-                {item.id === 'team' && (
-                  <div class="mini-col mini-col--center">
-                    <div class="avs">
-                      <span class="av av--1">А</span>
-                      <span class="av av--2">М</span>
-                      <span class="av av--3">К</span>
-                      <span class="av av--add"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></span>
+    <div class="pin__stage">
+      <div class="halo pin__glow" aria-hidden="true"></div>
+      <div class="pin__view">
+        <div class="pin__track" tabindex="0" role="region" aria-label="Мелочи: лента листается вбок">
+          {
+            DETAILS.map((item) => (
+              <article class="fc rb">
+                <div class="fc__vis" aria-hidden="true">
+                  {item.id === 'team' && (
+                    <div class="mini-col mini-col--center">
+                      <div class="avs">
+                        <span class="av av--1">А</span>
+                        <span class="av av--2">М</span>
+                        <span class="av av--3">К</span>
+                        <span class="av av--add"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></span>
+                      </div>
+                      <div class="roles"><span class="tag">Владелец</span><span class="tag">Участник</span></div>
                     </div>
-                    <div class="roles"><span class="tag">Владелец</span><span class="tag">Участник</span></div>
-                  </div>
-                )}
-                {item.id === 'telegram' && (
-                  <div class="tgb">
-                    <b>ProjectsFlow</b>Задача «Оплата по СБП» готова, стенд обновлён.<span class="tgb__time">14:17</span>
-                  </div>
-                )}
-                {item.id === 'commits' && (
-                  <div class="mini-col">
-                    <span class="cm"><code>a3f9c21</code>Каталог: фильтры</span>
-                    <span class="cm"><code>7be04d1</code>Корзина: итог заказа</span>
-                    <span class="cm"><code>c19e8aa</code>СБП: приём оплаты</span>
-                  </div>
-                )}
-                {item.id === 'finance' && (
-                  <div class="bars">
-                    {[34, 52, 44, 68, 82, 100].map((h, i) => (
-                      <i class={i >= 4 ? 'hi' : undefined} style={`block-size: ${h}%`} />
-                    ))}
-                  </div>
-                )}
-                {item.id === 'monitoring' && (
-                  <div class="mini-col">
-                    <svg class="spark" viewBox="0 0 220 64" preserveAspectRatio="none"><path d="M0 40 L20 38 L40 42 L60 30 L80 34 L100 22 L120 28 L140 18 L160 24 L180 14 L200 20 L220 12" /></svg>
-                    <span class="ok-line"><span class="st st--done" />Все серверы в норме</span>
-                  </div>
-                )}
-                {item.id === 'together' && (
-                  <div class="stack3">
-                    <span><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" /><path d="M14 3v5h5" /></svg>Заметки</span>
-                    <span><svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4" /><path d="M11 12l9-9M17 6l3 3M14.5 8.5l2 2" /></svg>Доступы</span>
-                    <span><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M4 4v5h5" /><path d="M4.6 15a8 8 0 1 0 1.9-8.3L4 9" /><path d="M12 8v4l3 2" /></svg>История</span>
-                  </div>
-                )}
-                {item.id === 'public' && (
-                  <span class="linkpill">
-                    <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>
-                    Ссылка на доску<span class="kbd">копировать</span>
-                  </span>
-                )}
-                {item.id === 'search' && (
-                  <div class="search">
-                    <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></svg>
-                    <span>Найти задачу или проект</span>
-                    <span class="kbd">⌘K</span>
-                  </div>
-                )}
-              </div>
-              <div class="fc__txt">
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
-              </div>
-            </article>
-          ))
-        }
+                  )}
+                  {item.id === 'telegram' && (
+                    <div class="tgb">
+                      <b>ProjectsFlow</b>Задача «Оплата по СБП» готова, стенд обновлён.<span class="tgb__time">14:17</span>
+                    </div>
+                  )}
+                  {item.id === 'commits' && (
+                    <div class="mini-col">
+                      <span class="cm"><code>a3f9c21</code>Каталог: фильтры</span>
+                      <span class="cm"><code>7be04d1</code>Корзина: итог заказа</span>
+                      <span class="cm"><code>c19e8aa</code>СБП: приём оплаты</span>
+                    </div>
+                  )}
+                  {item.id === 'finance' && (
+                    <div class="bars">
+                      {[34, 52, 44, 68, 82, 100].map((h, i) => (
+                        <i class={i >= 4 ? 'hi' : undefined} style={`block-size: ${h}%`} />
+                      ))}
+                    </div>
+                  )}
+                  {item.id === 'monitoring' && (
+                    <div class="mini-col">
+                      <svg class="spark" viewBox="0 0 220 64" preserveAspectRatio="none"><path d="M0 40 L20 38 L40 42 L60 30 L80 34 L100 22 L120 28 L140 18 L160 24 L180 14 L200 20 L220 12" /></svg>
+                      <span class="ok-line"><span class="st st--done" />Все серверы в норме</span>
+                    </div>
+                  )}
+                  {item.id === 'together' && (
+                    <div class="stack3">
+                      <span><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" /><path d="M14 3v5h5" /></svg>Заметки</span>
+                      <span><svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4" /><path d="M11 12l9-9M17 6l3 3M14.5 8.5l2 2" /></svg>Доступы</span>
+                      <span><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M4 4v5h5" /><path d="M4.6 15a8 8 0 1 0 1.9-8.3L4 9" /><path d="M12 8v4l3 2" /></svg>История</span>
+                    </div>
+                  )}
+                  {item.id === 'public' && (
+                    <span class="linkpill">
+                      <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>
+                      Ссылка на доску<span class="kbd">копировать</span>
+                    </span>
+                  )}
+                  {item.id === 'search' && (
+                    <div class="search">
+                      <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></svg>
+                      <span>Найти задачу или проект</span>
+                      <span class="kbd">⌘K</span>
+                    </div>
+                  )}
+                </div>
+                <div class="fc__txt">
+                  <h3>{item.title}</h3>
+                  <p>{item.text}</p>
+                </div>
+              </article>
+            ))
+          }
+        </div>
       </div>
     </div>
     <div class="wrap pin__foot"><div class="pin__bar" aria-hidden="true"><i></i></div></div>
