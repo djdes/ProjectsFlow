@@ -2,8 +2,14 @@ import type { Pool, RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import type { ImageGenerationFailure, ImageGenerationFailureQuery, ImageGenerationRepository } from '../../application/image-generation/ImageGenerationRepository.js';
 import { ImageGenerationError, type ImageGeneration } from '../../domain/image-generation/ImageGeneration.js';
 const fields = `id, user_id AS userId, conversation_id AS conversationId, dispatcher_user_id AS dispatcherUserId, prompt, status, claim_token AS claimToken, storage_key AS storageKey, error_message AS errorMessage, created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt`;
+/** Лимиты генераций на аккаунт: одновременно и за скользящие сутки. perDay = 0 — без суточного лимита. */
+export interface ImageGenerationLimits { readonly maxActive: number; readonly perDay: number }
+export const DEFAULT_IMAGE_GENERATION_LIMITS: ImageGenerationLimits = { maxActive: 2, perDay: 10 };
+/** «Остаток» при отключённом суточном лимите — клиенты проверяют remaining > 0. */
+const UNLIMITED_REMAINING = 1000;
+
 export class MysqlImageGenerationRepository implements ImageGenerationRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly limits: ImageGenerationLimits = DEFAULT_IMAGE_GENERATION_LIMITS) {}
   async quota(userId: string) {
     await this.expire();
     const [rows] = await this.pool.query<RowDataPacket[]>(
@@ -11,7 +17,7 @@ export class MysqlImageGenerationRepository implements ImageGenerationRepository
        FROM image_generation_jobs WHERE user_id=? AND created_at >= UTC_TIMESTAMP(3) - INTERVAL 1 DAY ORDER BY created_at`, [userId]);
     return {
       active: rows.filter(row => row.status === 'queued' || row.status === 'running').length,
-      remaining: Math.max(0, 10 - rows.length),
+      remaining: this.limits.perDay > 0 ? Math.max(0, this.limits.perDay - rows.length) : UNLIMITED_REMAINING,
       releaseAfterSeconds: rows.map(row => Number(row.releaseAfterSeconds)),
     };
   }
@@ -21,7 +27,9 @@ export class MysqlImageGenerationRepository implements ImageGenerationRepository
       await connection.beginTransaction();
       await connection.query('SELECT id FROM users WHERE id=? FOR UPDATE', [job.userId]);
       const [rows] = await connection.query<RowDataPacket[]>(`SELECT COUNT(*) AS total, SUM(status IN ('queued','running')) AS active FROM image_generation_jobs WHERE user_id=? AND created_at >= UTC_TIMESTAMP() - INTERVAL 1 DAY`, [job.userId]);
-      if (Number(rows[0]?.active) >= 2 || Number(rows[0]?.total) >= 10) throw new ImageGenerationError(429, 'Лимит: две генерации одновременно и десять за сутки');
+      const { maxActive, perDay } = this.limits;
+      if (maxActive > 0 && Number(rows[0]?.active) >= maxActive) throw new ImageGenerationError(429, `Лимит: не больше ${maxActive} генераций одновременно`);
+      if (perDay > 0 && Number(rows[0]?.total) >= perDay) throw new ImageGenerationError(429, `Лимит: ${perDay} генераций за сутки`);
       await connection.query('INSERT INTO image_generation_jobs (id,user_id,dispatcher_user_id,prompt,conversation_id) VALUES (?,?,?,?,?)', [job.id,job.userId,job.dispatcherUserId,job.prompt,job.conversationId ?? null]);
       await connection.commit();
     } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }

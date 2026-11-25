@@ -18,3 +18,13 @@ test('rolling quota counts failed jobs, includes active slots and computes reset
   rows.length = 0;
   assert.deepEqual(await repo.quota('owner'), { active: 0, remaining: 10, releaseAfterSeconds: [] });
 });
+
+test('perDay = 0 disables the daily cap: remaining stays positive', async () => {
+  const rows = Array.from({ length: 25 }, () => ({ status: 'succeeded', releaseAfterSeconds: '100' }));
+  const repo = new MysqlImageGenerationRepository({ async query(sql: string) {
+    if (sql.startsWith('UPDATE')) return [{ affectedRows: 0 }];
+    return [rows];
+  } } as unknown as Pool, { maxActive: 4, perDay: 0 });
+  const quota = await repo.quota('owner');
+  assert.equal(quota.remaining > 0, true);
+});
