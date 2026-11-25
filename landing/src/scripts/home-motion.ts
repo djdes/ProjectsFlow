@@ -85,7 +85,10 @@ export function initHomeMotion(root: HTMLElement): () => void {
     if (foot) root.classList.toggle('pf--foot-flow', foot.offsetHeight > vh - 24);
     if (reduce || !pin || !pinIn || !track || !view) return;
     pinH = pinIn.offsetHeight;
-    const nextDist = Math.max(0, track.scrollWidth - view.clientWidth);
+    // scrollWidth of the unclipped track leaves out its end padding: add it, so the last card
+    // stops a gutter away from the screen edge instead of flush with it.
+    const endPad = parseFloat(getComputedStyle(track).paddingInlineEnd) || 0;
+    const nextDist = Math.max(0, track.scrollWidth - view.clientWidth + endPad);
     if (nextDist !== pinDist) {
       pinDist = nextDist;
       pin.style.setProperty('--pin-dist', `${pinDist}px`);

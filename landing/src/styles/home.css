@@ -143,7 +143,6 @@ html:has(.pf) .skip-link {
 .pf :focus-visible {
   outline: 2px solid oklch(var(--cyan));
   outline-offset: 3px;
-  border-radius: 10px;
 }
 
 .pf main {
@@ -1769,10 +1768,9 @@ html:not(.js) .pf .hero {
   transform-origin: 50% 0%;
 }
 
-.steps > .step:nth-child(1) { inset-block-start: 112px; }
-.steps > .step:nth-child(2) { inset-block-start: 134px; }
-.steps > .step:nth-child(3) { inset-block-start: 156px; }
-.steps > .step:nth-child(4) { inset-block-start: 178px; }
+.steps > .step {
+  inset-block-start: calc(112px + var(--i, 0) * 22px);
+}
 
 .step::after {
   content: "";
@@ -2044,6 +2042,17 @@ html:not(.js) .pf .hero {
   scroll-snap-type: none;
   transform: translate3d(var(--x, 0px), 0, 0);
   will-change: transform;
+}
+
+/* Без движения лента листается сама: полоса прокрутки видна, пустой полоски прогресса нет. */
+.pf:not(.pf--motion) .pin__foot {
+  display: none;
+}
+
+.pf:not(.pf--motion) .pin__track {
+  padding-block-end: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: oklch(var(--white) / 0.25) transparent;
 }
 
 .pin__bar {
@@ -3030,10 +3039,9 @@ html:not(.js) .pf .hero {
     inset-inline-end: -190px;
   }
 
-  .steps > .step:nth-child(1) { inset-block-start: 112px; }
-  .steps > .step:nth-child(2) { inset-block-start: 124px; }
-  .steps > .step:nth-child(3) { inset-block-start: 136px; }
-  .steps > .step:nth-child(4) { inset-block-start: 148px; }
+  .steps > .step {
+    inset-block-start: calc(112px + var(--i, 0) * 12px);
+  }
 
   .pin__track > .fc {
     grid-template-rows: 140px auto;

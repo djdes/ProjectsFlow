@@ -402,6 +402,19 @@ async function desktopStructure({ page, check }) {
   check('в подвале 3 свежие статьи', info.posts === 3, String(info.posts));
   check('«Где работает»: веер из 5 карточек вместо бегущей строки', info.platformCards === 5 && info.marquee === 0, `${info.platformCards} / marquee ${info.marquee}`);
   check('шрифт Inter Variable загружен', info.font);
+  const misc = await page.evaluate(() => ({
+    stepTops: [...document.querySelectorAll('.steps > .step')].map((el) => ({ i: el.style.getPropertyValue('--i'), top: getComputedStyle(el).insetBlockStart })),
+    drawnCursor: getComputedStyle(document.querySelector('.approve .btn')).cursor,
+  }));
+  check('отступы шагов стопкой из --i (112px + i × 22px)', misc.stepTops.length === 4 && misc.stepTops.every((s, i) => s.i.trim() === String(i) && s.top === `${112 + i * 22}px`), JSON.stringify(misc.stepTops));
+  check('у нарисованной кнопки в шагах нет курсора-руки', misc.drawnCursor !== 'pointer', misc.drawnCursor);
+  let focused = '';
+  for (let n = 0; n < 20; n += 1) {
+    await page.keyboard.press('Tab');
+    focused = await page.evaluate(() => (document.activeElement?.matches('.hero__actions a.btn') ? getComputedStyle(document.activeElement).borderTopLeftRadius : ''));
+    if (focused) break;
+  }
+  check('рамка фокуса с клавиатуры не меняет форму кнопки-пилюли', focused === '999px', focused || 'кнопка не получила фокус');
   const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
   check('светлая тема ОС: у чёрной страницы тёмные полосы прокрутки (color-scheme: dark)', scheme === 'dark', scheme);
 }
@@ -441,6 +454,12 @@ async function desktopMotion({ page, check }) {
   const tx = await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('.pin__track')).transform).m41);
   const pp = await cssNumber(page, '.pin', '--pp');
   check('«Мелочи»: при прокрутке вниз лента едет вбок', tx < -50 && pp > 0.3 && pp < 0.7, `x=${tx} pp=${pp}`);
+  await scrollToY(page, pin.top + pin.height - DESKTOP.height);
+  const lastRight = await page.evaluate(() => {
+    const cards = document.querySelectorAll('.pin__track .fc');
+    return Math.round(cards[cards.length - 1].getBoundingClientRect().right);
+  });
+  check('в конце «Мелочей» последняя карточка не встаёт вплотную к краю', lastRight <= DESKTOP.width - 40, `${lastRight} из ${DESKTOP.width}`);
 
   await scrollToY(page, 0);
   const wordStyle = () => page.evaluate(() => {
@@ -522,6 +541,8 @@ async function reducedMotion({ page, check }) {
     };
   });
   check('reduce: «Мелочи» — обычная горизонтальная прокрутка', pin.transform === 'none' && ['auto', 'scroll'].includes(pin.overflowX) && pin.scrollable, JSON.stringify(pin));
+  const stat = await page.evaluate(() => ({ bar: getComputedStyle(document.querySelector('.pin__foot')).display, tab: document.querySelector('.pin__track').getAttribute('tabindex') }));
+  check('reduce: нет пустой полоски прогресса, ленту можно листать с клавиатуры', stat.bar === 'none' && stat.tab === '0', JSON.stringify(stat));
   await scrollToY(page, 600);
   const hero = await page.evaluate(() => getComputedStyle(document.querySelector('.hero__in')).opacity);
   check('reduce: первый экран не гаснет при прокрутке', hero === '1', hero);
@@ -555,6 +576,8 @@ async function noScript({ page, check }) {
     return track ? ['auto', 'scroll'].includes(getComputedStyle(track).overflowX) && track.scrollWidth > track.clientWidth + 10 : false;
   });
   check('без JS: «Мелочи» листаются вбок', pin);
+  const stat = await page.evaluate(() => ({ bar: getComputedStyle(document.querySelector('.pin__foot')).display, tab: document.querySelector('.pin__track').getAttribute('tabindex') }));
+  check('без JS: нет пустой полоски прогресса, ленту можно листать с клавиатуры', stat.bar === 'none' && stat.tab === '0', JSON.stringify(stat));
 }
 
 async function phone390({ page, check }) {
