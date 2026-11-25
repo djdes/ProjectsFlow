@@ -2624,7 +2624,11 @@ const { app, devProxyUpgrade } = createApp({
   }),
   imageGeneration: new ImageGenerationService({
     conversations: aiConversationService,
-    jobs: new MysqlImageGenerationRepository(pool),
+    // IMAGE_GEN_MAX_ACTIVE — одновременно (по умолчанию 4), IMAGE_GEN_DAILY_LIMIT — за сутки (0 = без лимита, по умолчанию).
+    jobs: new MysqlImageGenerationRepository(pool, {
+      maxActive: Math.max(0, Number(process.env.IMAGE_GEN_MAX_ACTIVE ?? 4) || 0),
+      perDay: Math.max(0, Number(process.env.IMAGE_GEN_DAILY_LIMIT ?? 0) || 0),
+    }),
     storage: attachmentStorage,
     dispatcherUserId: process.env.IMAGE_DISPATCHER_USER_ID ?? '',
     idGen: idGenerator,
