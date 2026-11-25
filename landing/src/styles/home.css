@@ -623,10 +623,10 @@ html:has(.pf) .skip-link {
     order: 3;
     flex: 0 0 100%;
     justify-content: space-between;
-    gap: 0;
+    column-gap: 8px;
     padding-block: 0 8px;
     overflow-x: auto;
-    font-size: 13.5px;
+    font-size: 13px;
     letter-spacing: -0.015em;
     scrollbar-width: none;
   }
@@ -2876,6 +2876,13 @@ html:has(.pf) .skip-link {
 
   .foot__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Уже 390px все пять разделов не помещаются: строка листается, разделы пореже. */
+@media (max-width: 389px) {
+  .nav__links {
+    column-gap: 12px;
   }
 }
 

@@ -194,6 +194,19 @@ async function visibleLinks(page) {
   });
 }
 
+// Gaps between the texts of neighbouring header section links (px).
+async function linkGaps(page) {
+  return page.evaluate(() => {
+    const boxes = [...document.querySelectorAll('.nav__links a')].map((a) => {
+      const range = document.createRange();
+      range.selectNodeContents(a);
+      const rects = [...range.getClientRects()].filter((r) => r.width > 0);
+      return { left: Math.min(...rects.map((r) => r.left)), right: Math.max(...rects.map((r) => r.right)) };
+    });
+    return boxes.slice(1).map((b, i) => Math.round(b.left - boxes[i].right));
+  });
+}
+
 // Horizontal overflow: the document must not scroll sideways, and no element may stick out of
 // the screen unless an intentional clipper/scroller (marquee, the pin strip, the nav row) holds it.
 async function overflowReport(page) {
@@ -435,6 +448,8 @@ async function phone390({ page, check }) {
   });
   check('390: разделы строкой под логотипом', nav.linksTop >= nav.brandBottom - 1, JSON.stringify(nav));
   check('390: все пять разделов помещаются', nav.rights.length === 5 && nav.rights.every((r) => r <= nav.vw + 0.5) && nav.lefts.every((l) => l >= -0.5), JSON.stringify(nav.rights));
+  const gaps = await linkGaps(page);
+  check('390: разделы не слипаются (между ними ≥ 8px)', gaps.every((g) => g >= 8), gaps.join(', '));
 }
 
 async function phone320({ page, check }) {
@@ -455,6 +470,8 @@ async function phone320({ page, check }) {
   });
   check('320: логотип и кнопка в одной строке, шапка в две строки', Math.abs(rows.brandTop + 8 - rows.ctaTop) <= 12 && rows.ctaRight <= 320 && rows.header <= 110, JSON.stringify(rows));
   check('320: строка разделов прокручивается сама и не шире экрана', ['auto', 'scroll'].includes(geo.rowOverflow) && geo.row[0] >= -0.5 && geo.row[1] <= geo.vw + 0.5, JSON.stringify(geo));
+  const gaps = await linkGaps(page);
+  check('320: разделы не слипаются (между ними ≥ 8px)', gaps.every((g) => g >= 8), gaps.join(', '));
 }
 
 async function anchors({ page, check, baseUrl }) {
