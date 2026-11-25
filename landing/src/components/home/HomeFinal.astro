@@ -1,0 +1,24 @@
+---
+// Финальный призыв. Вошедшему — «Открыть приложение» вместо регистрации и входа.
+import { FINAL } from '@/data/home';
+import HomeArrow from './HomeArrow.astro';
+import HomeLogo from './HomeLogo.astro';
+
+interface Props {
+  appBase: string;
+}
+const { appBase } = Astro.props;
+---
+
+<section id="start" class="final rv" aria-labelledby="final-title">
+  <div class="final__glow" aria-hidden="true"></div>
+  <div class="wrap final__in">
+    <span class="final__mark" aria-hidden="true"><HomeLogo /></span>
+    <h2 id="final-title" class="h1 final__title">{FINAL.titleA} <span class="dim">{FINAL.titleB}</span></h2>
+    <div class="actions">
+      <a class="btn btn--solid" href={`${appBase}/register`} data-auth-anon>Начать бесплатно<HomeArrow /></a>
+      <a class="btn btn--line" href={`${appBase}/login`} data-auth-anon>Войти<span class="btn__arrow" aria-hidden="true"><HomeArrow /></span></a>
+      <a class="btn btn--solid" href={`${appBase}/`} data-auth-authed>Открыть приложение<HomeArrow /></a>
+    </div>
+  </div>
+</section>

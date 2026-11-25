@@ -1,0 +1,32 @@
+---
+// Шапка главной. ПК: логотип | разделы | «Войти» и «Начать бесплатно».
+// Телефон: логотип и белая кнопка, под ними строка разделов (как у fluidvoice).
+// Вошедшему (html[data-auth="authed"], ставит сервер) — «Открыть приложение».
+import HomeLogo from './HomeLogo.astro';
+
+interface Props {
+  appBase: string;
+}
+const { appBase } = Astro.props;
+---
+
+<header class="nav">
+  <div class="nav__in">
+    <a class="brand" href="/" aria-label="ProjectsFlow, на главную">
+      <HomeLogo class="brand__mark" />
+      <span>ProjectsFlow</span>
+    </a>
+    <nav class="nav__links" aria-label="Разделы">
+      <a href="#features">Возможности</a>
+      <a href="#how"><span class="nav__long">Как это работает</span><span class="nav__short">Как работает</span></a>
+      <a href="#pricing">Тарифы</a>
+      <a href="#faq">Вопросы</a>
+      <a href="/blog">Журнал</a>
+    </nav>
+    <div class="nav__end">
+      <a class="nav__login" href={`${appBase}/login`} data-auth-anon>Войти</a>
+      <a class="nav__cta" href={`${appBase}/register`} data-auth-anon>Начать бесплатно</a>
+      <a class="nav__cta" href={`${appBase}/`} data-auth-authed aria-label="Открыть приложение">Открыть<span class="nav__more"> приложение</span></a>
+    </div>
+  </div>
+</header>

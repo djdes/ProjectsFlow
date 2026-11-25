@@ -80,7 +80,7 @@ export const PLANS: readonly Plan[] = [
       'всё из Прайма, удвоенный лимит',
       'максимальный приоритет',
     ],
-    cta: 'По запросу',
+    cta: 'Оставить заявку',
     highlight: false,
     requestOnly: true,
     href: '/register?plan=vip',

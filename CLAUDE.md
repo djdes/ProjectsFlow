@@ -91,8 +91,9 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
   из `application/`, регистрируется в `container.tsx`.
 - Дизайн-токены (цвета, скругления) — CSS-переменные в `client/src/styles/globals.css`,
   Tailwind-маппинг в `client/tailwind.config.ts`. Дизайн-система приложения «C4 плотный» (светлая —
-  Notion, тёмная — C3): `docs/superpowers/specs/2026-10-10-redesign-c4-design.md`. Лендинг и блог —
-  Hallmark · Wayfind (`landing/DESIGN.md`); C4 там только у живой доски и окон продукта.
+  Notion, тёмная — C3): `docs/superpowers/specs/2026-10-10-redesign-c4-design.md`. Главная лендинга —
+  чёрная система (`landing/DESIGN.md`: тексты в `landing/src/data/home.ts`, смоук `npm run test:landing`),
+  журнал (`/blog`) — прежнее оформление.
   Цвет = смысл статуса (`approval`/`manual`/`done`/`primary`/`destructive`), тона проектов и людей —
   `lib/tone.ts` + `.pf-tone-*`/`.pf-tag`; палитру Tailwind (`violet-500`…) для смыслов не используем.
   Рамки — одна линия `border-border` без `/NN`; в комментариях и чате рамок нет (заливка); ESLint
@@ -151,7 +152,8 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
 | `DB_SOCKET` | — | `/run/mysqld/mysqld.sock` |
 
 Если задан `DB_SOCKET` — код использует unix-сокет, игнорирует `DB_HOST/DB_PORT`.
-Боевые значения — в [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 1.
+Боевые значения в репозитории не храним: они у владельца (менеджер паролей, `.env.prod`,
+GitHub Actions secrets). Какие переменные нужны — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 1.
 
 ## npm-скрипты (из корня)
 
@@ -173,12 +175,14 @@ npm run deploy       # node scripts/deploy.mjs
 > Автономный канбан-воркер (`ralph-worker`) без лишних вопросов сам создаёт ветку задачи, пушит её, открывает PR, дожидается отсутствия конфликтов (`mergeable == true`) и зелёных CI-проверок (`checks.yml`), после чего **автоматически мержит PR в `main`** и возвращает локальный checkout на свежий `main`. В интерактивных сессиях merge делается после зелёных проверок по согласию владельца.
 
 - **PR в `main`** → `.github/workflows/checks.yml`: typecheck, lint, тесты клиента, серверные и
-  MCP-тесты, сборка клиента/лендинга/сервера, смоук-тесты интерфейса (`e2e/smoke`). Выкладки нет.
+  MCP-тесты, сборка клиента/лендинга/сервера, смоук-тесты интерфейса (`e2e/smoke`) и главной
+  (`e2e/landing`). Выкладки нет.
 - **Merge в `main`** → `.github/workflows/deploy.yml`: те же проверки ещё раз (переиспользует
   `checks.yml`), и только при зелёном результате — сборка, выкладка на сервер, миграции,
   `pm2 startOrReload`. Красная проверка останавливает выкладку, прод остаётся на прошлой версии.
 - Перед открытием PR прогоняй проверки локально: `npm run typecheck`, `npm run lint`,
-  `npm run test:server`, `npm run build:client && npm run test:smoke`.
+  `npm run test:server`, `npm run build:client && npm run test:smoke`, при правке лендинга —
+  `npm run build:landing && npm run test:landing`.
 - Ручная выкладка (`npm run deploy`, «Run workflow» в Actions) — только в аварийной ситуации и
   только по явному указанию владельца. Подробности — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4.
 
@@ -186,7 +190,7 @@ npm run deploy       # node scripts/deploy.mjs
 
 Хост `projectsflow.ru`, юзер `projectsflow`. Порт `22` изнутри LAN, `50222` из интернета.
 Bare repo: `/var/www/projectsflow/data/git/projectsflow.git`, ветка `main`.
-Полные URL, пароли — [docs/ONBOARDING.md](docs/ONBOARDING.md).
+Полные URL — [docs/ONBOARDING.md](docs/ONBOARDING.md). Пароли — только у владельца, в git их не пишем.
 
 Workflow: `git fetch origin --prune` → актуализация веток и коммитов относительно `origin/main` → фича → ветка от свежего `origin/main` → PR в `main` → зелёные проверки → merge → автодеплой (см. «Деплой»).
 
@@ -278,8 +282,9 @@ MCP и агентский REST не передают задачи воркеру
 4. **Не править nginx-конфиги** — этим занимается админ FastPanel.
 5. **Миграции — append-only.** Не редактируй уже выкаченные `db/0*_*.sql`,
    делай новый файл. MariaDB не понимает `INSERT ... AS new ...` — только `VALUES(col)`.
-6. **`.env` — никогда не коммитим.** Шаблон — `.env.example`. Боевые значения
-   для людей — в `docs/ONBOARDING.md` (репо приватный).
+6. **`.env` и любые пароли/токены — никогда не коммитим.** Шаблон — `.env.example`.
+   Боевые значения хранит владелец (менеджер паролей, `.env.prod`, GitHub Actions secrets);
+   в `docs/ONBOARDING.md` и других файлах репозитория — только имена переменных и плейсхолдеры.
 7. **Кириллица.** Все пользовательские строки — на русском. Технические комментарии,
    код, переменные, типы — на английском.
 8. **Не вводить новые большие зависимости** (Next.js, NextAuth, TanStack Query, MUI,

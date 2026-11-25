@@ -85,5 +85,13 @@ jobs:
       - name: Build landing
         run: npm run build:landing
 
+      # Смоук главной (e2e/landing): собранный landing/dist в браузере — тексты из data/*, кнопки
+      # гостя и вошедшего, движение при прокрутке, reduced motion, без JS, 320/390 px, якоря.
+      # Без браузера шаг пропускается с предупреждением, как и смоук клиента.
+      - name: Landing smoke tests
+        run: npm run test:landing
+        env:
+          SMOKE_ALLOW_SKIP: '1'
+
       - name: Build server
         run: npm run build:server

@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { FAQ } from '@/data/faq';
 import { PLANS, formatRub } from '@/data/pricing';
-import { STACK_LAYERS } from '@/data/showcaseData';
+import { BIG_FEATURES, DETAILS, GUARANTEES, PLATFORMS, STATEMENT, STEPS } from '@/data/home';
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/data/site';
 import { readingMinutes } from '@/lib/blog';
 
@@ -21,11 +21,17 @@ export const GET: APIRoute = async () => {
     `- Журнал: ${SITE_URL}/blog/`,
     `- Справочники для ИИ: ${SITE_URL}/llms.txt | ${SITE_URL}/llms-full.txt`,
     '',
-    '## Архитектура и возможности платформы',
+    STATEMENT,
     '',
-    ...STACK_LAYERS.map(
-      (l) => `- **${l.shortName} (${l.headline} ${l.accentHeadline})**: ${l.description}`,
-    ),
+    '## Как это работает',
+    '',
+    ...STEPS.map((s, i) => `${i + 1}. **${s.title}.** ${s.text}`),
+    '',
+    '## Возможности',
+    '',
+    ...[...BIG_FEATURES, ...DETAILS].map((f) => `- **${f.title}.** ${f.text}`),
+    '',
+    `Где работает: ${PLATFORMS.map((p) => p.name).join(', ')}.`,
     '',
     '## Тарифы',
     '',
@@ -38,6 +44,10 @@ export const GET: APIRoute = async () => {
           : `${formatRub(p.priceRub)} ₽ ${p.priceNote}${p.requestOnly ? ' (по запросу)' : ''}`;
       return `| ${p.name} | ${price} | ${p.tagline} | ${p.features.join('; ')} |`;
     }),
+    '',
+    '## Гарантии',
+    '',
+    ...GUARANTEES.map((g) => `- **${g.title}.** ${g.text}`),
     '',
   ];
 
