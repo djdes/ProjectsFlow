@@ -13,7 +13,7 @@
 //   .pin --pp, .pin__track --x (px), .pin --pin-dist (px)   pinned sideways strip
 //   .foot --r          footer opens from under the page
 //   .rw / .rb .is-in   headings emerge from blur word by word, blocks as a whole, once they enter
-//                      the screen (IntersectionObserver; CSS transitions do the rest)
+//                      the screen (IntersectionObserver; CSS transitions do the rest) or get focus
 //   .fan .is-in        the platform cards fan out once the fan enters the screen
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -71,6 +71,18 @@ export function initHomeMotion(root: HTMLElement): () => void {
       toReveal.forEach((el) => revealer?.observe(el));
     }
   }
+  // Keyboard focus can land on a block that has not emerged yet (a question at the very bottom of
+  // the screen, below the reveal line): it shows up at once, without its stagger delay.
+  const revealSelector = '.rw, .rb, .fan';
+  const onFocusIn = (event: FocusEvent): void => {
+    if (!revealer || !(event.target instanceof Element)) return;
+    for (let el = event.target.closest<HTMLElement>(revealSelector); el; el = el.parentElement?.closest<HTMLElement>(revealSelector) ?? null) {
+      if (el.classList.contains('is-in')) continue;
+      el.style.setProperty('--d', '0ms');
+      el.classList.add('is-in');
+      revealer.unobserve(el);
+    }
+  };
 
   let heroTop = 0;
   let pinH = 0;
@@ -188,6 +200,7 @@ export function initHomeMotion(root: HTMLElement): () => void {
   };
 
   window.addEventListener('resize', onResize);
+  root.addEventListener('focusin', onFocusIn);
   for (const type of personEvents) window.addEventListener(type, onPersonMove, { passive: true });
   if (!reduce) {
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -215,6 +228,7 @@ export function initHomeMotion(root: HTMLElement): () => void {
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('load', onLoad);
+    root.removeEventListener('focusin', onFocusIn);
     for (const type of personEvents) window.removeEventListener(type, onPersonMove);
     hero?.removeEventListener('pointermove', onPointerMove);
     observer?.disconnect();
