@@ -355,6 +355,7 @@ async function desktopStructure({ page, check }) {
       offers: ld.find((x) => x['@type'] === 'SoftwareApplication')?.offers?.length ?? 0,
       themeColor: q('meta[name="theme-color"]')?.getAttribute('content') ?? '',
       words: document.querySelectorAll('.statement__text .lw').length,
+      wordTokens: (q('.statement__text')?.textContent ?? '').trim().split(/\s+/).filter(Boolean).length,
       facts: document.querySelectorAll('.hero .stats .stat').length,
       statsBottom: q('.hero .stats')?.getBoundingClientRect().bottom ?? Infinity,
       split: (() => {
@@ -385,7 +386,7 @@ async function desktopStructure({ page, check }) {
   check('первый экран: текст слева, окно доски справа', info.split && info.split.visualLeft >= info.split.textRight - 1, JSON.stringify(info.split));
   check('полоса из 4 фактов внизу первого экрана', info.facts === 4 && info.statsBottom <= 901, `${info.facts} ${info.statsBottom}`);
   check('кнопки-пилюли с круглой стрелкой (первый экран, шаги, финал)', info.btnIcons.every((n) => n >= 1), info.btnIcons.join(','));
-  check('фраза из 22 слов, 4 факта, 4 шага, 8 мелочей, 4 гарантии', info.words === 22 && info.facts === 4 && info.steps === 4 && info.details === 8 && info.guarantees === 4, JSON.stringify(info));
+  check('фраза по словам (столько же .lw, сколько слов), 4 факта, 4 шага, 8 мелочей, 4 гарантии', info.words > 0 && info.words === info.wordTokens && info.facts === 4 && info.steps === 4 && info.details === 8 && info.guarantees === 4, JSON.stringify(info));
   check('в подвале 3 свежие статьи', info.posts === 3, String(info.posts));
   check('шрифт Inter Variable загружен', info.font);
   const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
@@ -393,8 +394,8 @@ async function desktopStructure({ page, check }) {
 }
 
 async function desktopMotion({ page, check }) {
-  const root = await page.evaluate(() => document.querySelector('.pf')?.className ?? '');
-  check('Chromium: текст проявляет CSS (animation-timeline), без .pf--tjs', root.includes('pf--motion') && !root.includes('pf--tjs'), root);
+  const headWords = await page.evaluate(() => document.querySelectorAll('#features .h2 .w').length);
+  check('заголовки размечены по словам (.w)', headWords >= 3, String(headWords));
 
   await scrollToY(page, 0);
   const h0 = await cssNumber(page, '.hero', '--h');
@@ -429,18 +430,22 @@ async function desktopMotion({ page, check }) {
   check('«Мелочи»: при прокрутке вниз лента едет вбок', tx < -50 && pp > 0.3 && pp < 0.7, `x=${tx} pp=${pp}`);
 
   await scrollToY(page, 0);
-  const before = await page.evaluate(() => {
-    const s = getComputedStyle(document.querySelector('#faq .h2'));
+  const wordStyle = () => page.evaluate(() => {
+    const w = document.querySelector('#faq .h2 .w');
+    if (!w) return null;
+    const s = getComputedStyle(w);
     return { opacity: parseFloat(s.opacity), filter: s.filter };
   });
+  const before = await wordStyle();
   await page.evaluate(() => document.querySelector('#faq .h2').scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.waitForTimeout(1500);
+  const after = await wordStyle();
+  check('слова заголовка проступают из размытия, когда он въезжает в экран', before && before.opacity < 0.1 && before.filter.includes('blur') && after.opacity > 0.99 && after.filter === 'none', `${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+  await page.evaluate(() => document.querySelector('.statement__text').scrollIntoView({ block: 'center', behavior: 'instant' }));
   await settle(page);
-  await page.waitForTimeout(80);
-  const after = await page.evaluate(() => {
-    const s = getComputedStyle(document.querySelector('#faq .h2'));
-    return { opacity: parseFloat(s.opacity), filter: s.filter };
-  });
-  check('текст раздела проступает из размытия при въезде в экран', before.opacity < 0.6 && before.filter.includes('blur') && after.opacity > 0.99 && /none|blur\(0px\)/.test(after.filter), `${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+  await page.waitForTimeout(700);
+  const lit = await page.evaluate(() => ({ on: document.querySelectorAll('.statement__text .lw.on').length, all: document.querySelectorAll('.statement__text .lw').length }));
+  check('слова главной фразы загораются по прокрутке (.on)', lit.on > 0 && lit.on <= lit.all, JSON.stringify(lit));
 
   await scrollToY(page, await page.evaluate(() => document.documentElement.scrollHeight));
   const r = await cssNumber(page, '.foot', '--r');
@@ -481,6 +486,10 @@ async function reducedMotion({ page, check }) {
     return { opacity: s.opacity, filter: s.filter, word: w.opacity };
   });
   check('reduce: текст не размыт и не прозрачен', txt.opacity === '1' && txt.filter === 'none' && txt.word === '1', JSON.stringify(txt));
+  const hiddenBits = await page.evaluate(() => [...document.querySelectorAll('main .w, main .rb, .statement__text .lw')]
+    .filter((el) => getComputedStyle(el).opacity !== '1' || getComputedStyle(el).filter !== 'none').length);
+  const totalBits = await page.evaluate(() => document.querySelectorAll('main .w, main .rb').length);
+  check('reduce: все слова и блоки видны сразу', totalBits > 0 && hiddenBits === 0, `${hiddenBits} из ${totalBits}`);
   const pin = await page.evaluate(() => {
     const track = document.querySelector('.pin__track');
     return {
@@ -506,7 +515,7 @@ async function noScript({ page, check }) {
       for (let a = el; a; a = a.parentElement) o *= parseFloat(getComputedStyle(a).opacity);
       return o;
     };
-    return [...document.querySelectorAll('main h1, main h2, main h3, main p, main li, .statement__text .lw')]
+    return [...document.querySelectorAll('main h1, main h2, main h3, main p, main li, .statement__text .lw, main .w, main .rb')]
       .filter((el) => !el.closest('[aria-hidden="true"], .win, details:not([open]) .faq__a'))
       .filter((el) => effective(el) < 0.99 || getComputedStyle(el).filter !== 'none')
       .slice(0, 8)

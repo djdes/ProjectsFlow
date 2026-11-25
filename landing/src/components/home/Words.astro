@@ -1,0 +1,51 @@
+---
+// Заголовок по словам для проявления «слово за словом из размытия» (как у fluidvoice). Каждое слово —
+// <span class="w" style="--i:N">, N идёт сквозь все части; часть с dim — вторая, серая половина
+// заголовка. Проявление включает класс .is-in на заголовке (.rw), который ставит scripts/home-motion.ts.
+// Без JS и при reduced motion слова видны сразу (стили скрытия только под .pf--motion).
+interface Part {
+  text: string;
+  dim?: boolean;
+}
+
+interface Props {
+  parts: readonly Part[];
+  /** Номер первого слова: продолжить счёт после другого Words в том же заголовке. */
+  start?: number;
+}
+
+const { parts, start = 0 } = Astro.props;
+let index = start;
+const groups = parts.map((part) => ({
+  dim: Boolean(part.dim),
+  words: part.text
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => ({ word, i: index++ })),
+}));
+---
+
+{
+  groups.map((group, g) => (
+    <>
+      {g > 0 ? ' ' : ''}
+      {group.dim ? (
+        <span class="dim">
+          {group.words.map((x, k) => (
+            <>
+              {k > 0 ? ' ' : ''}
+              <span class="w" style={`--i:${x.i}`}>{x.word}</span>
+            </>
+          ))}
+        </span>
+      ) : (
+        group.words.map((x, k) => (
+          <>
+            {k > 0 ? ' ' : ''}
+            <span class="w" style={`--i:${x.i}`}>{x.word}</span>
+          </>
+        ))
+      )}
+    </>
+  ))
+}

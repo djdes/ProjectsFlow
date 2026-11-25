@@ -3,6 +3,7 @@
 import { FINAL } from '@/data/home';
 import HomeArrow from './HomeArrow.astro';
 import HomeLogo from './HomeLogo.astro';
+import Words from './Words.astro';
 
 interface Props {
   appBase: string;
@@ -13,9 +14,9 @@ const { appBase } = Astro.props;
 <section id="start" class="final rv" aria-labelledby="final-title">
   <div class="final__glow" aria-hidden="true"></div>
   <div class="wrap final__in">
-    <span class="final__mark" aria-hidden="true"><HomeLogo /></span>
-    <h2 id="final-title" class="h1 final__title">{FINAL.titleA} <span class="dim">{FINAL.titleB}</span></h2>
-    <div class="actions">
+    <span class="final__mark rb" aria-hidden="true"><HomeLogo /></span>
+    <h2 id="final-title" class="h1 final__title rw"><Words parts={[{ text: FINAL.titleA }, { text: FINAL.titleB, dim: true }]} /></h2>
+    <div class="actions rb" style="--d:300ms">
       <a class="btn btn--solid" href={`${appBase}/register`} data-auth-anon>Начать бесплатно<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
       <a class="btn btn--line" href={`${appBase}/login`} data-auth-anon>Войти<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
       <a class="btn btn--solid" href={`${appBase}/`} data-auth-authed>Открыть приложение<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>

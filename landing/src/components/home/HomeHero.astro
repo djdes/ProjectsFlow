@@ -4,6 +4,7 @@
 // лист с главной фразой наезжает на него. Доска — иллюстрация, это сказано в подписи под окном.
 import { FACTS, HERO } from '@/data/home';
 import HomeArrow from './HomeArrow.astro';
+import Words from './Words.astro';
 
 interface Props {
   appBase: string;
@@ -22,7 +23,7 @@ const { appBase } = Astro.props;
           <span class="announce__text"><strong>{HERO.badgeStrong}</strong> {HERO.badgeRest}</span>
           <span class="announce__arrow" aria-hidden="true"><HomeArrow /></span>
         </a>
-        <h1 id="hero-title" class="h1 hero__title"><span class="h1__a">{HERO.titleA}</span> <span class="h1__b">{HERO.titleB}</span></h1>
+        <h1 id="hero-title" class="h1 hero__title rw"><span class="h1__a"><Words parts={[{ text: HERO.titleA }]} /></span> <span class="h1__b"><Words parts={[{ text: HERO.titleB }]} start={HERO.titleA.split(' ').length} /></span></h1>
         <p class="lead hero__lead">{HERO.lead}</p>
         <div class="actions hero__actions">
           <a class="btn btn--solid" href={`${appBase}/register`} data-auth-anon>Начать бесплатно<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>

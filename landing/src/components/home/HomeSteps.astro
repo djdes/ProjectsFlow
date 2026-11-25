@@ -2,6 +2,7 @@
 // «Как это работает»: заголовок слева стоит, четыре шага ложатся стопкой (--c у .step).
 import { STEPS } from '@/data/home';
 import HomeArrow from './HomeArrow.astro';
+import Words from './Words.astro';
 
 interface Props {
   appBase: string;
@@ -14,25 +15,25 @@ const check = 'M5 12.5l4.2 4.2L19 7';
   <div class="wrap how__grid">
     <div class="how__side">
       <div class="how__sticky">
-        <p class="eyebrow">Как это работает</p>
-        <h2 id="how-title" class="h2">От идеи до готового <span class="dim">за четыре шага.</span></h2>
-        <p class="sub">
+        <p class="eyebrow rb">Как это работает</p>
+        <h2 id="how-title" class="h2 rw"><Words parts={[{ text: 'От идеи до готового' }, { text: 'за четыре шага.', dim: true }]} /></h2>
+        <p class="sub rb" style="--d:120ms">
           Без настройки серверов и возни с ключами. Ты ставишь задачи и принимаешь работу, остальное делает платформа.
         </p>
-        <a class="btn btn--solid" href={`${appBase}/register`} data-auth-anon>Попробовать бесплатно<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
-        <a class="btn btn--solid" href={`${appBase}/`} data-auth-authed>Открыть приложение<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
+        <a class="btn btn--solid rb" style="--d:200ms" href={`${appBase}/register`} data-auth-anon>Попробовать бесплатно<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
+        <a class="btn btn--solid rb" style="--d:200ms" href={`${appBase}/`} data-auth-authed>Открыть приложение<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
       </div>
     </div>
     <ol class="steps">
       {
         STEPS.map((step, i) => (
           <li class="step">
-            <div class="step__txt">
+            <div class="step__txt rb">
               <span class="step__n">{String(i + 1).padStart(2, '0')}</span>
               <h3 class="h3">{step.title}</h3>
               <p>{step.text}</p>
             </div>
-            <div class="step__vis" aria-hidden="true">
+            <div class="step__vis rb" style="--d:120ms" aria-hidden="true">
               {step.id === 'idea' && (
                 <>
                   <div class="prompt">

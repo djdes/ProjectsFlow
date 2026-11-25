@@ -3,6 +3,7 @@
 // Без движения (reduce, нет JS) — обычная горизонтальная прокрутка ленты. Над лентой бежит
 // строка платформ; её вторая половина — копия для бесшовного цикла, скрыта от чтения с экрана.
 import { DETAILS, PLATFORMS, type PlatformId } from '@/data/home';
+import Words from './Words.astro';
 
 const platformIcon: Record<PlatformId, string> = {
   browser:
@@ -20,8 +21,8 @@ const loop = [...PLATFORMS.map((p) => ({ ...p, copy: false })), ...PLATFORMS.map
   <div class="pin__in">
     <div class="wrap pin__head">
       <div class="sec-head">
-        <p class="eyebrow">Каждая мелочь</p>
-        <h2 id="details-title" class="h2">Мелочи, сделанные <span class="dim">как надо.</span></h2>
+        <p class="eyebrow rb">Каждая мелочь</p>
+        <h2 id="details-title" class="h2 rw"><Words parts={[{ text: 'Мелочи, сделанные' }, { text: 'как надо.', dim: true }]} /></h2>
       </div>
     </div>
     <div class="marquee">
@@ -41,7 +42,7 @@ const loop = [...PLATFORMS.map((p) => ({ ...p, copy: false })), ...PLATFORMS.map
       <div class="pin__track">
         {
           DETAILS.map((item) => (
-            <article class="fc">
+            <article class="fc rb">
               <div class="fc__vis" aria-hidden="true">
                 {item.id === 'team' && (
                   <div class="mini-col mini-col--center">

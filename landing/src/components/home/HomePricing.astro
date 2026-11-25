@@ -3,6 +3,7 @@
 // медленная цветная обводка, бейдж и ссылка на пробный час.
 import { GUARANTEES } from '@/data/home';
 import { PLANS, formatRub } from '@/data/pricing';
+import Words from './Words.astro';
 
 interface Props {
   appBase: string;
@@ -22,14 +23,14 @@ const guaranteeIcon: Record<(typeof GUARANTEES)[number]['id'], string> = {
 <section id="pricing" class="section rv" aria-labelledby="pricing-title">
   <div class="wrap">
     <div class="sec-head sec-head--center">
-      <p class="eyebrow">Тарифы</p>
-      <h2 id="pricing-title" class="h2">Простые тарифы. <span class="dim">Старт бесплатно.</span></h2>
-      <p class="sub">Цены в рублях. Платный тариф не подошёл, вернём деньги.</p>
+      <p class="eyebrow rb">Тарифы</p>
+      <h2 id="pricing-title" class="h2 rw"><Words parts={[{ text: 'Простые тарифы.' }, { text: 'Старт бесплатно.', dim: true }]} /></h2>
+      <p class="sub rb" style="--d:120ms">Цены в рублях. Платный тариф не подошёл, вернём деньги.</p>
     </div>
     <div class="plans">
       {
-        PLANS.map((plan) => (
-          <article class:list={['plan', { 'plan--hi': plan.highlight }]}>
+        PLANS.map((plan, i) => (
+          <article class:list={['plan', 'rb', { 'plan--hi': plan.highlight }]} style={`--d:${i * 120}ms`}>
             {plan.highlight && <span class="edge edge--slow" aria-hidden="true" />}
             <div class="plan__top">
               <h3 class="plan__name">{plan.name}</h3>
@@ -63,8 +64,8 @@ const guaranteeIcon: Record<(typeof GUARANTEES)[number]['id'], string> = {
     </div>
     <ul class="guar" aria-label="Гарантии">
       {
-        GUARANTEES.map((g) => (
-          <li>
+        GUARANTEES.map((g, i) => (
+          <li class="rb" style={`--d:${i * 80}ms`}>
             <span class="guar__ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" set:html={guaranteeIcon[g.id]} /></span>
             <div>
               <p class="guar__h">{g.title}</p>

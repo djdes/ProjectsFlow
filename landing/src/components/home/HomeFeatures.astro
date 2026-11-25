@@ -1,18 +1,19 @@
 ---
 // «Больше, чем доска»: две большие карточки — LIVE-лента и Автопилот.
 import { BIG_FEATURES } from '@/data/home';
+import Words from './Words.astro';
 ---
 
 <section id="features" class="section rv" aria-labelledby="features-title">
   <div class="wrap">
     <div class="sec-head">
-      <p class="eyebrow">Внутри</p>
-      <h2 id="features-title" class="h2">Больше, чем доска <span class="dim">с задачами.</span></h2>
+      <p class="eyebrow rb">Внутри</p>
+      <h2 id="features-title" class="h2 rw"><Words parts={[{ text: 'Больше, чем доска' }, { text: 'с задачами.', dim: true }]} /></h2>
     </div>
     <div class="duo">
       {
-        BIG_FEATURES.map((feature) => (
-          <article class="big">
+        BIG_FEATURES.map((feature, i) => (
+          <article class="big rb" style={`--d:${i * 120}ms`}>
             <div class="big__vis" aria-hidden="true">
               {feature.id === 'live' && (
                 <div class="thread">

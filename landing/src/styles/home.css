@@ -251,29 +251,45 @@ html:has(.pf) .skip-link {
   padding-block: clamp(80px, 9vw, 140px);
 }
 
-/* текст в разделах проступает из размытия, пока въезжает в экран (как на fluidvoice) */
-@keyframes textIn {
-  from {
-    opacity: 0.15;
-    filter: blur(4px);
-    transform: translateY(18px);
+/* Проявление из размытия (как у fluidvoice). Заголовки (.rw) — по словам (.w, задержка по --i),
+   блоки (.rb) — целиком (задержка --d). Класс .is-in ставит IntersectionObserver из
+   scripts/home-motion.ts, когда элемент въезжает в экран; дальше — переход, без покадровой работы.
+   Без JS и при reduced motion ничего не скрыто. */
+@media (prefers-reduced-motion: no-preference) {
+  .pf--motion .rw .w {
+    display: inline-block;
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(0.28em);
+    transition:
+      opacity 0.8s var(--soft-ease),
+      filter 0.8s var(--soft-ease),
+      transform 0.8s var(--soft-ease);
+    transition-delay: calc(var(--i, 0) * 55ms);
   }
-}
 
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .pf--motion .rv :is(h2, h3, p, .plan__list li):not(.statement__text, [aria-hidden="true"] *, .win *) {
-      animation: textIn linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 80%;
-    }
+  .pf--motion .rw.is-in .w {
+    opacity: 1;
+    filter: none;
+    transform: none;
   }
-}
 
-.pf--tjs .rv :is(h2, h3, p, .plan__list li):not(.statement__text, [aria-hidden="true"] *, .win *) {
-  opacity: calc(0.15 + var(--t, 1) * 0.85);
-  filter: blur(calc((1 - var(--t, 1)) * 4px));
-  transform: translate3d(0, calc((1 - var(--t, 1)) * 18px), 0);
+  .pf--motion .rb {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(16px);
+    transition:
+      opacity 0.9s var(--soft-ease),
+      filter 0.9s var(--soft-ease),
+      transform 0.9s var(--soft-ease);
+    transition-delay: var(--d, 0ms);
+  }
+
+  .pf--motion .rb.is-in {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
 }
 
 /* ---------- кнопки: пилюли с круглой стрелкой (как у fluidvoice) ---------- */
@@ -812,14 +828,6 @@ html:not(.js) .pf .hero {
 @media (prefers-reduced-motion: no-preference) {
   .announce {
     animation: softIn 1s var(--soft-ease) backwards;
-  }
-
-  .h1__a {
-    animation: softIn 1.2s var(--soft-ease) 0.15s backwards;
-  }
-
-  .h1__b {
-    animation: softIn 1.2s var(--soft-ease) 0.45s backwards;
   }
 
   .hero__lead {
@@ -1452,28 +1460,16 @@ html:not(.js) .pf .hero {
   color: oklch(var(--white));
 }
 
-.pf--motion .lw:nth-child(1) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.0417) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(2) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.0833) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(3) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.125) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(4) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.1667) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(5) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.2083) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(6) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.25) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(7) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.2917) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(8) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.3333) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(9) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.375) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(10) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.4167) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(11) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.4583) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(12) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.5) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(13) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.5417) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(14) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.5833) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(15) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.625) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(16) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.6667) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(17) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.7083) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(18) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.75) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(19) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.7917) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(20) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.8333) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(21) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.875) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(22) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.9167) * 16 + 0.14), 1); }
+.pf--motion .lw {
+  opacity: 0.14;
+  filter: blur(5px);
+  transition: opacity 0.45s var(--soft-ease), filter 0.45s var(--soft-ease);
+}
+
+.pf--motion .lw.on {
+  opacity: 1;
+  filter: none;
+}
 
 /* ---------- больше, чем доска ---------- */
 
