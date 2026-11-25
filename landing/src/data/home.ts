@@ -19,6 +19,8 @@ export const HERO = {
   titleB: 'Получи готовый продукт.',
   lead: 'Платформа для тех, кто строит с AI. Описываешь задачу словами, воркеры делают её в твоём проекте, а ты смотришь вживую и принимаешь результат.',
   note: 'Бесплатный тариф навсегда. Карта не нужна.',
+  noteMore: 'Работает в браузере, на iPhone и в Telegram.',
+  noteMoreLink: 'Где ещё',
 } as const;
 
 /** Главная фраза: на странице слова загораются по одному. */
@@ -79,12 +81,13 @@ export const DETAILS: readonly (TitledText & { readonly id: DetailId })[] = [
 
 export type PlatformId = 'browser' | 'iphone' | 'telegram' | 'mcp' | 'github';
 
-export const PLATFORMS: readonly { readonly id: PlatformId; readonly name: string }[] = [
-  { id: 'browser', name: 'Браузер' },
-  { id: 'iphone', name: 'iPhone как приложение' },
-  { id: 'telegram', name: 'Telegram' },
-  { id: 'mcp', name: 'Claude Code через MCP' },
-  { id: 'github', name: 'GitHub' },
+/** `name` — полное название (для /index.md), `title` и `note` — карточка веера «Где работает». */
+export const PLATFORMS: readonly { readonly id: PlatformId; readonly name: string; readonly title: string; readonly note: string }[] = [
+  { id: 'browser', name: 'Браузер', title: 'Браузер', note: 'любой компьютер' },
+  { id: 'iphone', name: 'iPhone как приложение', title: 'iPhone', note: 'как приложение' },
+  { id: 'telegram', name: 'Telegram', title: 'Telegram', note: 'сводки и ответы' },
+  { id: 'mcp', name: 'Claude Code через MCP', title: 'Claude Code', note: 'через MCP' },
+  { id: 'github', name: 'GitHub', title: 'GitHub', note: 'коммиты у задач' },
 ];
 
 export const GUARANTEES: readonly (TitledText & { readonly id: 'trial' | 'refund' | 'help' | 'nolockin' })[] = [

@@ -14,6 +14,7 @@
 //   .foot --r          footer opens from under the page
 //   .rw / .rb .is-in   headings emerge from blur word by word, blocks as a whole, once they enter
 //                      the screen (IntersectionObserver; CSS transitions do the rest)
+//   .fan .is-in        the platform cards fan out once the fan enters the screen
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -53,7 +54,7 @@ export function initHomeMotion(root: HTMLElement): () => void {
   let litCount = -1;
   let revealer: IntersectionObserver | null = null;
   if (!reduce) {
-    const toReveal = all('.rw, .rb');
+    const toReveal = all('.rw, .rb, .fan');
     if (typeof IntersectionObserver === 'undefined') {
       toReveal.forEach((el) => el.classList.add('is-in'));
     } else {

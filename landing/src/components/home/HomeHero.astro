@@ -30,7 +30,7 @@ const { appBase } = Astro.props;
           <a class="btn btn--solid" href={`${appBase}/`} data-auth-authed>Открыть приложение<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
           <a class="btn btn--line" href="#how">Как это работает<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
         </div>
-        <p class="note hero__note">{HERO.note}</p>
+        <p class="note hero__note">{HERO.note}<br />{HERO.noteMore} <a href="#platforms">{HERO.noteMoreLink}</a></p>
       </div>
 
       <div class="hero__visual">

@@ -367,6 +367,8 @@ async function desktopStructure({ page, check }) {
       steps: document.querySelectorAll('.step').length,
       details: document.querySelectorAll('.pin__track .fc').length,
       guarantees: document.querySelectorAll('.guar li').length,
+      platformCards: document.querySelectorAll('#platforms .fan .pcard').length,
+      marquee: document.querySelectorAll('.marquee').length,
       posts: document.querySelectorAll('.foot a[href^="/blog/"]').length,
       font: document.fonts.check('500 32px "Inter Variable"'),
     };
@@ -388,6 +390,7 @@ async function desktopStructure({ page, check }) {
   check('кнопки-пилюли с круглой стрелкой (первый экран, шаги, финал)', info.btnIcons.every((n) => n >= 1), info.btnIcons.join(','));
   check('фраза по словам (столько же .lw, сколько слов), 4 факта, 4 шага, 8 мелочей, 4 гарантии', info.words > 0 && info.words === info.wordTokens && info.facts === 4 && info.steps === 4 && info.details === 8 && info.guarantees === 4, JSON.stringify(info));
   check('в подвале 3 свежие статьи', info.posts === 3, String(info.posts));
+  check('«Где работает»: веер из 5 карточек вместо бегущей строки', info.platformCards === 5 && info.marquee === 0, `${info.platformCards} / marquee ${info.marquee}`);
   check('шрифт Inter Variable загружен', info.font);
   const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
   check('светлая тема ОС: у чёрной страницы тёмные полосы прокрутки (color-scheme: dark)', scheme === 'dark', scheme);
@@ -446,6 +449,14 @@ async function desktopMotion({ page, check }) {
   await page.waitForTimeout(700);
   const lit = await page.evaluate(() => ({ on: document.querySelectorAll('.statement__text .lw.on').length, all: document.querySelectorAll('.statement__text .lw').length }));
   check('слова главной фразы загораются по прокрутке (.on)', lit.on > 0 && lit.on <= lit.all, JSON.stringify(lit));
+
+  await page.evaluate(() => document.querySelector('#platforms .fan').scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.waitForTimeout(1600);
+  const angles = await page.evaluate(() => [...document.querySelectorAll('#platforms .pcard')].map((c) => {
+    const m = new DOMMatrix(getComputedStyle(c).transform);
+    return Math.round((Math.atan2(m.b, m.a) * 180) / Math.PI);
+  }));
+  check('веер раскрывается, когда въезжает в экран (крайние карточки повёрнуты ≥ 15°)', angles.length === 5 && Math.abs(angles[0]) >= 15 && Math.abs(angles[4]) >= 15 && angles[0] < 0 && angles[4] > 0, angles.join(', '));
 
   await scrollToY(page, await page.evaluate(() => document.documentElement.scrollHeight));
   const r = await cssNumber(page, '.foot', '--r');
@@ -646,19 +657,16 @@ async function landscape(ctx) {
 
 async function reducedPhone({ page, check }) {
   const r = await page.evaluate(() => {
-    const marquee = document.querySelector('.marquee');
-    const box = marquee.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
-    return {
-      mask: getComputedStyle(marquee).maskImage,
-      items: [...document.querySelectorAll('.marquee__row > li:not([aria-hidden="true"])')].map((li) => {
-        const b = li.getBoundingClientRect();
-        return { name: (li.textContent ?? '').trim().slice(0, 24), ok: b.left >= Math.max(0, box.left) - 0.5 && b.right <= Math.min(vw, box.right) + 0.5 };
-      }),
-    };
+    return [...document.querySelectorAll('#platforms .pcard')].map((c) => {
+      const b = c.getBoundingClientRect();
+      const m = new DOMMatrix(getComputedStyle(c).transform);
+      return { name: (c.querySelector('.pcard__t')?.textContent ?? '').trim(), inside: b.left >= -0.5 && b.right <= vw + 0.5, angle: Math.round((Math.atan2(m.b, m.a) * 180) / Math.PI) };
+    });
   });
-  const clipped = r.items.filter((x) => !x.ok).map((x) => x.name);
-  check('reduce, 390: все пять платформ видны целиком (строка переносится, без затухания по краям)', r.items.length === 5 && clipped.length === 0 && r.mask === 'none', `${r.mask} ${clipped.join(' | ')}`);
+  const outside = r.filter((x) => !x.inside).map((x) => x.name);
+  const tops = await page.evaluate(() => [...document.querySelectorAll('#platforms .pcard')].map((c) => Math.round(c.getBoundingClientRect().top)));
+  check('reduce, 390: колода раскрыта сразу (карты лесенкой), все пять в пределах экрана', r.length === 5 && outside.length === 0 && tops.every((t, i) => i === 0 || t - tops[i - 1] >= 40), `${outside.join(' | ')} tops ${tops.join(',')}`);
 }
 
 async function iosToolbar({ page, check }) {
