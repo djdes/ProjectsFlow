@@ -190,7 +190,7 @@ async function visibleLinks(page) {
       [...document.querySelectorAll(`${sel} a`)]
         .filter(isVisible)
         .map((a) => ({ text: (a.textContent ?? '').replace(/\s+/g, ' ').trim(), href: a.getAttribute('href') }));
-    return { header: zone('header.nav'), hero: zone('.hero__actions'), final: zone('.final') };
+    return { header: zone('header.nav'), hero: zone('.hero__actions'), final: zone('.final'), plans: zone('#pricing .plans') };
   });
 }
 
@@ -346,6 +346,9 @@ async function desktopStructure({ page, check }) {
         price: text(p.querySelector('.plan__num')),
         cta: text(p.querySelector('.btn')),
         edge: Boolean(p.querySelector('.edge')),
+        badge: text(p.querySelector('.badge')),
+        top: Math.round(p.getBoundingClientRect().top),
+        ctaTop: Math.round([...p.querySelectorAll('.plan__cta .btn')].find((b) => b.getBoundingClientRect().height > 0)?.getBoundingClientRect().top ?? -1),
         trial: text(p.querySelector('.plan__trial')),
         items: p.querySelectorAll('.plan__list li').length,
       })),
@@ -378,7 +381,14 @@ async function desktopStructure({ page, check }) {
   check('разделы шапки: #features #how #pricing #faq /blog', info.navHrefs.join(' ') === '#features #how #pricing #faq /blog', info.navHrefs.join(' '));
   check('три тарифа из pricing.ts', info.plans.map((p) => p.name).join('|') === 'Бесплатный|Прайм|VIP', info.plans.map((p) => p.name).join('|'));
   check('цены 0 ₽ / 1 900 ₽ / 3 900 ₽', info.plans.map((p) => p.price).join('|') === '0 ₽|1 900 ₽|3 900 ₽', info.plans.map((p) => p.price).join('|'));
-  check('у «Прайма» цветная обводка и пробный час', info.plans[1]?.edge && info.plans[1]?.trial === 'Попробовать 1 час бесплатно', JSON.stringify(info.plans[1]));
+  check('у «Прайма» бейдж «Популярный» и пробный час', info.plans[1]?.badge === 'Популярный' && info.plans[1]?.trial === 'Попробовать 1 час бесплатно', JSON.stringify(info.plans[1]));
+  const card = await page.evaluate(() => {
+    const plans = document.querySelector('#pricing .plans');
+    const line = plans ? getComputedStyle(plans, '::before') : null;
+    return { line: line ? line.backgroundImage : '', edges: plans ? plans.querySelectorAll('.edge').length : -1 };
+  });
+  check('кнопки трёх тарифов на одной высоте', new Set(info.plans.map((p) => p.ctaTop)).size === 1, info.plans.map((p) => p.ctaTop).join(','));
+  check('тарифы одной карточкой: три колонки в ряд, радужная линия сверху, без крутящейся обводки', info.plans.length === 3 && new Set(info.plans.map((p) => p.top)).size === 1 && card.line.includes('linear-gradient') && card.edges === 0, JSON.stringify({ tops: info.plans.map((p) => p.top), ...card }));
   check('VIP: кнопка «Оставить заявку»', info.plans[2]?.cta === 'Оставить заявку', info.plans[2]?.cta);
   check('по 4 пункта в каждом тарифе', info.plans.length === 3 && info.plans.every((p) => p.items === 4));
   check('7 вопросов <details>, открыт только первый', info.faq.length === 7 && info.faq[0] && info.faq.slice(1).every((o) => !o), JSON.stringify(info.faq));
@@ -477,6 +487,8 @@ async function authedButtons({ page, check }) {
   const z = await visibleLinks(page);
   const texts = (list) => list.map((l) => l.text);
   const appLink = (list) => list.find((l) => l.text === 'Открыть приложение');
+  const planTexts = texts(z.plans);
+  check('вошедший: в тарифах «Открыть приложение» вместо регистрации', planTexts.filter((t) => t === 'Открыть приложение').length === 3 && !planTexts.some((t) => ['Начать бесплатно', 'Перейти на Прайм', 'Оставить заявку', 'Попробовать 1 час бесплатно'].includes(t)), planTexts.join(' | '));
   for (const [zone, label] of [['header', 'в шапке'], ['hero', 'на первом экране'], ['final', 'в финале']]) {
     const t = texts(z[zone]);
     check(`вошедший: ${label} «Открыть приложение» вместо «Войти» / «Начать бесплатно»`, Boolean(appLink(z[zone])) && /\/$/.test(appLink(z[zone])?.href ?? '') && !t.includes('Войти') && !t.includes('Начать бесплатно'), t.join(' | '));
@@ -564,6 +576,8 @@ async function phone390({ page, check }) {
     const s = [...document.querySelectorAll('.hero .stats .stat')].map((e) => Math.round(e.getBoundingClientRect().top));
     return { textBottom: t ? Math.round(t.bottom) : null, visualTop: v ? Math.round(v.top) : null, stats: s };
   });
+  const planTops = await page.evaluate(() => [...document.querySelectorAll('#pricing .plan')].map((p) => Math.round(p.getBoundingClientRect().top)));
+  check('390: тарифы друг под другом', planTops.length === 3 && planTops[1] > planTops[0] && planTops[2] > planTops[1], planTops.join(','));
   check('390: окно доски под текстом, факты в две колонки', lay.textBottom !== null && lay.visualTop >= lay.textBottom - 1 && lay.stats.length === 4 && lay.stats[0] === lay.stats[1] && lay.stats[2] > lay.stats[0], JSON.stringify(lay));
 }
 

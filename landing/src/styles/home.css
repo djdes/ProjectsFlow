@@ -424,11 +424,6 @@ html:has(.pf) .skip-link {
   .edge::after {
     animation: edgeSpin 6s linear infinite;
   }
-
-  .edge--slow,
-  .edge--slow::after {
-    animation-duration: 10s;
-  }
 }
 
 @keyframes edgeSpin {
@@ -2443,34 +2438,44 @@ html:not(.js) .pf .hero {
   }
 }
 
-/* ---------- тарифы ---------- */
+/* ---------- тарифы: одна карточка на три колонки (как у fluidvoice) ---------- */
 
 .plans {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-block-start: 48px;
+  overflow: hidden;
+  border-radius: 32px;
+  background: oklch(8.5% 0.003 265);
+  box-shadow: inset 0 0 0 1px oklch(var(--white) / 0.09);
+}
+
+/* радужная линия по верхнему краю карточки */
+.plans::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 0;
+  inset-inline: 6%;
+  block-size: 1px;
+  background: linear-gradient(90deg, oklch(var(--amber) / 0), oklch(var(--amber)) 18%, oklch(var(--pink)) 42%, oklch(var(--violet)) 62%, oklch(var(--cyan)) 82%, oklch(var(--cyan) / 0));
 }
 
 .plan {
   position: relative;
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 18px;
-  padding: clamp(24px, 2.6vw, 32px);
-  border-radius: 24px;
-  background: oklch(var(--bg-1));
-  box-shadow: inset 0 0 0 1px oklch(var(--white) / 0.08);
+  padding: clamp(28px, 3vw, 44px);
+}
+
+.plan + .plan {
+  border-inline-start: 1px solid oklch(var(--white) / 0.08);
 }
 
 .plan--hi {
-  isolation: isolate;
-  background: oklch(12.5% 0.004 265);
-  box-shadow: 0 30px 80px -40px oklch(var(--violet) / 0.45);
-}
-
-.plan--hi .edge::after {
-  opacity: 0.45;
+  background: radial-gradient(90% 45% at 50% 0%, oklch(var(--violet) / 0.09), oklch(var(--violet) / 0) 72%);
 }
 
 .plan__top {
@@ -2478,12 +2483,15 @@ html:not(.js) .pf .hero {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-block-size: 28px;
 }
 
 .plan__name {
-  font-size: 20px;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: oklch(var(--white) / 0.6);
 }
 
 .badge {
@@ -2501,25 +2509,19 @@ html:not(.js) .pf .hero {
   color: oklch(var(--white) / 0.7);
 }
 
-.plan__tag {
-  margin-block-start: -10px;
-  font-size: 15px;
-  color: oklch(var(--white) / 0.5);
-}
-
 .plan__price {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding-block: 6px;
 }
 
 .plan__num {
-  font-size: clamp(38px, 3.4vw, 48px);
+  font-size: clamp(44px, 4.4vw, 64px);
   font-weight: 500;
   line-height: 1;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
+  color: oklch(var(--white));
 }
 
 .plan__per {
@@ -2527,12 +2529,39 @@ html:not(.js) .pf .hero {
   color: oklch(var(--white) / 0.5);
 }
 
+.plan__tag {
+  font-size: 16px;
+  color: oklch(var(--white) / 0.56);
+}
+
+.plan__list {
+  display: grid;
+  margin-block-start: 6px;
+  border-block-start: 1px solid oklch(var(--white) / 0.08);
+}
+
+.plan__list li {
+  padding-block: 15px;
+  border-block-end: 1px solid oklch(var(--white) / 0.08);
+  font-size: 15px;
+  line-height: 1.45;
+  color: oklch(var(--white) / 0.82);
+}
+
+.plan__cta {
+  display: grid;
+  /* второй ряд — под ссылку на пробный час: кнопки всех тарифов на одной высоте */
+  grid-template-rows: auto 32px;
+  justify-items: start;
+  gap: 12px;
+  margin-block-start: auto;
+  padding-block-start: 18px;
+}
+
 .plan__trial {
-  justify-self: center;
   display: inline-flex;
   align-items: center;
   min-block-size: 32px;
-  margin-block-start: -8px;
   font-size: 14px;
 }
 
@@ -2544,28 +2573,16 @@ html:not(.js) .pf .hero {
   text-decoration-color: oklch(var(--white) / 0.3);
 }
 
-.plan__list {
-  display: grid;
-  gap: 12px;
-  padding-block-start: 20px;
-  border-block-start: 1px solid oklch(var(--white) / 0.08);
-}
+@media (max-width: 960px) {
+  .plans {
+    grid-template-columns: minmax(0, 1fr);
+    border-radius: 26px;
+  }
 
-.plan__list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: 15px;
-  color: oklch(var(--white) / 0.72);
-}
-
-.plan__list .ico {
-  margin-block-start: 3px;
-  color: oklch(var(--white) / 0.5);
-}
-
-.plan--hi .plan__list .ico {
-  color: oklch(var(--cyan));
+  .plan + .plan {
+    border-inline-start: 0;
+    border-block-start: 1px solid oklch(var(--white) / 0.08);
+  }
 }
 
 .guar {
