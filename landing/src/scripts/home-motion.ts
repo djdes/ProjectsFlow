@@ -1,14 +1,17 @@
-// Scroll-linked motion of the main page (styles in landing/src/styles/home.css, system in
-// landing/DESIGN.md). The script only writes CSS custom properties; CSS turns them into
-// transform/opacity. Under prefers-reduced-motion: reduce nothing is wired: the root gets
-// .pf--static and the page stays still. Without JavaScript the page is static as well.
+// Scroll-linked motion and layout fixes of the main page (styles in landing/src/styles/home.css,
+// system in landing/DESIGN.md). The script only writes CSS custom properties and classes; CSS turns
+// them into transform/opacity. Without JavaScript the page is static and fully readable.
 //
-// Properties written (all 0…1 unless noted):
+// Always (also under prefers-reduced-motion: reduce, root class .pf--static):
+//   .hero --hero-top (px)  a first screen taller than the window scrolls to its bottom, then stays
+//   .pf--foot-flow         a footer taller than the window flows with the page
+//   anchor settling        after fonts and the pinned strip change the layout, /#section is re-aligned
+// Motion only (root class .pf--motion), all 0…1 unless noted:
 //   .hero --h          first screen recedes under the board window
 //   .win --w           the window straightens out of its tilt
 //   .statement__text --wp   words of the statement light up one by one
 //   .step --c          a step card is covered by the next one (stacking)
-//   .pin --pp, .pin__track --x (px), .pin --pin-h / --pin-dist (px)   pinned sideways strip
+//   .pin --pp, .pin__track --x (px), .pin --pin-dist (px)   pinned sideways strip
 //   .foot --r          footer opens from under the page
 //   text --t           text reveal, only where CSS animation-timeline is unsupported
 
@@ -23,11 +26,7 @@ export function initHomeMotion(root: HTMLElement): () => void {
   const all = (selector: string): HTMLElement[] => Array.from(root.querySelectorAll<HTMLElement>(selector));
 
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduce) {
-    root.classList.add('pf--static');
-    return () => root.classList.remove('pf--static');
-  }
-  root.classList.add('pf--motion');
+  root.classList.add(reduce ? 'pf--static' : 'pf--motion');
 
   const hero = one('.hero');
   const light = one('.hero__light');
@@ -35,36 +34,53 @@ export function initHomeMotion(root: HTMLElement): () => void {
   const words = one('.statement__text');
   const steps = all('.step');
   const pin = one('.pin');
+  const pinIn = one('.pin__in');
   const view = one('.pin__view');
   const track = one('.pin__track');
   const main = one('main');
   const foot = one('.foot');
 
+  // Height of the small viewport (100svh). Unlike innerHeight it stays put when the iOS Safari
+  // toolbar collapses, so layout decisions do not make the page jump.
+  const probe = document.createElement('div');
+  probe.setAttribute('aria-hidden', 'true');
+  probe.style.cssText =
+    'position:fixed;inset-block-start:0;inline-size:0;block-size:100vh;block-size:100svh;visibility:hidden;pointer-events:none';
+  root.append(probe);
+  const stableHeight = (): number => probe.offsetHeight || window.innerHeight;
+
   // Text reveal: CSS scroll-driven animation where supported, otherwise --t from here.
   const cssScroll = typeof CSS !== 'undefined' && CSS.supports('animation-timeline: view()');
   let texts: HTMLElement[] = [];
-  if (!cssScroll) {
+  if (!reduce && !cssScroll) {
     root.classList.add('pf--tjs');
     texts = all('.rv h2, .rv h3, .rv p, .rv .plan__list li').filter(
       (el) => !el.closest('[aria-hidden="true"], .win, .statement__text'),
     );
   }
 
+  let heroTop = 0;
   let pinH = 0;
   let pinDist = 0;
 
-  function measure(): void {
-    if (!pin || !track || !view) return;
-    const nextH = Math.max(560, Math.min(window.innerHeight, 920));
+  function layout(): void {
+    const vh = stableHeight();
+    if (hero) {
+      heroTop = Math.min(0, vh - hero.offsetHeight);
+      hero.style.setProperty('--hero-top', `${heroTop}px`);
+    }
+    if (foot) root.classList.toggle('pf--foot-flow', foot.offsetHeight > vh - 24);
+    if (reduce || !pin || !pinIn || !track || !view) return;
+    pinH = pinIn.offsetHeight;
     const nextDist = Math.max(0, track.scrollWidth - view.clientWidth);
-    if (nextH === pinH && nextDist === pinDist) return;
-    pinH = nextH;
-    pinDist = nextDist;
-    pin.style.setProperty('--pin-h', `${pinH}px`);
-    pin.style.setProperty('--pin-dist', `${pinDist}px`);
+    if (nextDist !== pinDist) {
+      pinDist = nextDist;
+      pin.style.setProperty('--pin-dist', `${pinDist}px`);
+    }
   }
 
   function update(): void {
+    if (reduce) return;
     const vh = window.innerHeight;
     // Read every rect first, then write: no layout between writes.
     const y = -root.getBoundingClientRect().top;
@@ -76,7 +92,8 @@ export function initHomeMotion(root: HTMLElement): () => void {
     const mainBottom = main?.getBoundingClientRect().bottom ?? 0;
     const textRects = texts.map((el) => el.getBoundingClientRect());
 
-    put(hero, '--h', clamp01(y / (vh * 0.85)));
+    // The first screen starts to recede once it is stuck (a tall one scrolls -heroTop px first).
+    put(hero, '--h', clamp01((y + heroTop) / (vh * 0.85)));
     put(win, '--w', clamp01((vh - winTop) / (vh * 0.78)));
     if (wordsRect) put(words, '--wp', clamp01((vh * 0.9 - wordsRect.top) / (vh * 0.55 + wordsRect.height * 0.6)));
     steps.forEach((el, i) => {
@@ -102,8 +119,32 @@ export function initHomeMotion(root: HTMLElement): () => void {
     });
   };
   const onResize = (): void => {
-    measure();
+    layout();
     onScroll();
+  };
+
+  // Arrival by anchor (/#pricing from the journal): the browser jumps before fonts load and the
+  // pinned strip gets its height, which moves the sections below. Re-align until the person scrolls.
+  let personMoved = false;
+  const onPersonMove = (): void => {
+    personMoved = true;
+  };
+  const personEvents = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+  const reanchor = (): void => {
+    if (personMoved || window.location.hash.length < 2) return;
+    let id = window.location.hash.slice(1);
+    try {
+      id = decodeURIComponent(id);
+    } catch {
+      /* keep the raw id */
+    }
+    document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: 'instant' });
+  };
+  // Smooth scrolling (CSS) only for in-page jumps after load, never for the arrival itself.
+  const onLoad = (): void => {
+    layout();
+    reanchor();
+    document.documentElement.classList.add('pf-smooth');
   };
 
   // Soft light follows the mouse over the first screen (touch screens keep it centred).
@@ -127,19 +168,26 @@ export function initHomeMotion(root: HTMLElement): () => void {
     });
   };
 
-  window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onResize);
-  hero?.addEventListener('pointermove', onPointerMove);
+  for (const type of personEvents) window.addEventListener(type, onPersonMove, { passive: true });
+  if (!reduce) {
+    window.addEventListener('scroll', onScroll, { passive: true });
+    hero?.addEventListener('pointermove', onPointerMove);
+  }
   const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResize);
   observer?.observe(root);
 
-  centerLight();
-  measure();
+  if (!reduce) centerLight();
+  layout();
   update();
+  reanchor();
+  if (document.readyState === 'complete') onLoad();
+  else window.addEventListener('load', onLoad, { once: true });
   void document.fonts?.ready.then(() => {
-    centerLight();
-    measure();
+    if (!reduce) centerLight();
+    layout();
     update();
+    reanchor();
   });
 
   return () => {
@@ -147,8 +195,12 @@ export function initHomeMotion(root: HTMLElement): () => void {
     cancelAnimationFrame(lightFrame);
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
+    window.removeEventListener('load', onLoad);
+    for (const type of personEvents) window.removeEventListener(type, onPersonMove);
     hero?.removeEventListener('pointermove', onPointerMove);
     observer?.disconnect();
-    root.classList.remove('pf--motion', 'pf--tjs');
+    probe.remove();
+    document.documentElement.classList.remove('pf-smooth');
+    root.classList.remove('pf--motion', 'pf--static', 'pf--tjs', 'pf--foot-flow');
   };
 }

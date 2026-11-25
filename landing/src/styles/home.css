@@ -55,12 +55,21 @@ html:has(.pf) body {
   background: oklch(0% 0 0);
 }
 
+/* tokens.css блога ставит :root { color-scheme: light } — на чёрной странице полосы прокрутки
+   и поля были бы светлыми при светлой теме ОС. */
+html:has(.pf) {
+  color-scheme: dark;
+}
+
 html:has(.pf) .skip-link {
   font-family: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Плавная прокрутка — только для переходов по якорям после загрузки (класс .pf-smooth ставит
+   scripts/home-motion.ts). Открывая /#раздел, браузер прыгает к нему сразу: плавный проезд через
+   все сцены промахивался, пока догружались шрифты. */
 @media (prefers-reduced-motion: no-preference) {
-  html:has(.pf) {
+  html.pf-smooth {
     scroll-behavior: smooth;
   }
 }
@@ -652,16 +661,23 @@ html:has(.pf) .skip-link {
 
 .hero {
   position: sticky;
-  inset-block-start: 0;
+  /* Выше окна (низкий ноутбук, iPhone SE, телефон боком) первый экран сначала прокручивается до
+     своего низа и только потом встаёт: --hero-top считает scripts/home-motion.ts. */
+  inset-block-start: var(--hero-top, 0px);
   z-index: 0;
   isolation: isolate;
   overflow: clip;
   display: grid;
   align-content: start;
-  block-size: var(--hero-h);
-  padding-block-start: clamp(120px, 16vh, 168px);
+  min-block-size: var(--hero-h);
+  /* Окно доски наезжает только на пустой низ первого экрана, не на кнопки. */
+  padding-block: clamp(100px, 16vh, 168px) calc(var(--hero-h) * var(--peek) + 32px);
   background: oklch(var(--bg));
   text-align: center;
+}
+
+html:not(.js) .pf .hero {
+  position: relative;
 }
 
 .hero__in {
@@ -726,6 +742,7 @@ html:has(.pf) .skip-link {
   display: grid;
   justify-items: center;
   gap: 2px;
+  font-size: clamp(40px, min(6vw, 11vh), 84px);
 }
 
 .h1__a,
@@ -1932,8 +1949,15 @@ html:has(.pf) .skip-link {
 /* ---------- мелочи: закреплённая лента едет вбок ---------- */
 
 .pin {
+  --pin-h: max(560px, min(100vh, 920px));
   position: relative;
   background: oklch(var(--bg));
+}
+
+@supports (height: 100svh) {
+  .pin {
+    --pin-h: max(560px, min(100svh, 920px));
+  }
 }
 
 .pin__in {
@@ -1946,14 +1970,14 @@ html:has(.pf) .skip-link {
 }
 
 .pf--motion .pin {
-  block-size: calc(var(--pin-h, 900px) + var(--pin-dist, 0px));
+  block-size: calc(var(--pin-h) + var(--pin-dist, 0px));
 }
 
 .pf--motion .pin__in {
   position: sticky;
   inset-block-start: 0;
   justify-content: flex-start;
-  block-size: var(--pin-h, 900px);
+  block-size: var(--pin-h);
   padding-block: clamp(110px, 14vh, 140px) 40px;
 }
 
@@ -1978,6 +2002,25 @@ html:has(.pf) .skip-link {
 @keyframes marquee {
   to {
     transform: translateX(calc(-50% - 5px));
+  }
+}
+
+/* Без движения строка платформ не бежит, поэтому переносится, а копии для цикла скрыты. */
+@media (prefers-reduced-motion: reduce) {
+  .marquee {
+    padding-inline: var(--gutter);
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .marquee__row {
+    flex-wrap: wrap;
+    justify-content: center;
+    inline-size: auto;
+  }
+
+  .marquee__row > [aria-hidden="true"] {
+    display: none;
   }
 }
 
@@ -2619,6 +2662,28 @@ html:has(.pf) .skip-link {
   opacity: calc(0.25 + var(--r, 1) * 0.75);
 }
 
+/* Подвал выше окна (телефоны, низкие окна) идёт вместе со страницей: закреплённый под ней, он
+   прятал бы свой верх. .pf--foot-flow ставит скрипт, если подвал не помещается и на ПК. */
+@media (max-width: 900px), (max-height: 760px) {
+  .foot {
+    position: relative;
+  }
+
+  .pf--motion .foot__inner {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.pf--foot-flow .foot {
+  position: relative;
+}
+
+.pf--foot-flow.pf--motion .foot__inner {
+  transform: none;
+  opacity: 1;
+}
+
 .foot__grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
@@ -2918,5 +2983,25 @@ html:has(.pf) .skip-link {
     inline-size: 28px;
     block-size: 28px;
     margin-inline-start: 2px;
+  }
+}
+
+/* Ниже 560px (телефон боком) закреплённая лента «Мелочи» выше экрана: листается вбок как обычно. */
+@media (max-height: 559px) {
+  .pf--motion .pin {
+    block-size: auto;
+  }
+
+  .pf--motion .pin__in {
+    position: relative;
+    block-size: auto;
+    padding-block: clamp(80px, 8vw, 120px);
+  }
+
+  .pf--motion .pin__track {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    transform: none;
+    will-change: auto;
   }
 }
