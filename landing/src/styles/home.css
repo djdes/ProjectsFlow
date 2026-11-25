@@ -229,9 +229,11 @@ html:has(.pf) .skip-link {
   text-wrap: pretty;
 }
 
+/* Мелкий серый текст — белый 50%: 5.3:1 на чёрном (AA для мелкого — 4.5:1, а 42% давали 3.9:1),
+   всё ещё тусклее подзаголовка (56%). */
 .note {
   font-size: 13.5px;
-  color: oklch(var(--white) / 0.42);
+  color: oklch(var(--white) / 0.5);
 }
 
 .sec-head {
@@ -260,7 +262,9 @@ html:has(.pf) .skip-link {
     display: inline-block;
     opacity: 0;
     filter: blur(10px);
-    transform: translateY(0.28em);
+    /* не больше 14px: у крупных заголовков (финал, 72px) 0.28em дало бы 20px, а лендинг не
+       сдвигает появляющееся больше чем на 16px */
+    transform: translateY(min(0.28em, 14px));
     transition:
       opacity 0.8s var(--soft-ease),
       filter 0.8s var(--soft-ease),
@@ -289,6 +293,19 @@ html:has(.pf) .skip-link {
     opacity: 1;
     filter: none;
     transform: none;
+  }
+
+  /* Кнопка, которая проявляется (.btn.rb в шагах): transition у .btn--solid и .btn--line
+     специфичнее, он перебивал проявление, и кнопка выскакивала рядом с проявляющимся текстом.
+     Здесь оба набора: переходы кнопки и проявление с его длительностью и задержкой --d. */
+  .pf--motion .btn.rb,
+  .pf--motion .btn.rb:hover {
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      opacity 0.9s var(--soft-ease) var(--d, 0ms),
+      filter 0.9s var(--soft-ease) var(--d, 0ms),
+      transform 0.9s var(--soft-ease) var(--d, 0ms);
   }
 }
 
@@ -380,12 +397,6 @@ html:has(.pf) .skip-link {
   min-block-size: 38px;
   padding: 8px 14px;
   font-size: 14px;
-}
-
-.btn--block,
-.pf a.btn--block {
-  inline-size: 100%;
-  justify-content: space-between;
 }
 
 .actions {
@@ -1122,16 +1133,6 @@ html:not(.js) .pf .hero {
   color: oklch(var(--amber));
 }
 
-.chip--done {
-  background: oklch(var(--green) / 0.13);
-  color: oklch(var(--green));
-}
-
-.chip--todo {
-  background: oklch(var(--white) / 0.06);
-  color: oklch(var(--white) / 0.55);
-}
-
 .bar {
   block-size: 3px;
   overflow: hidden;
@@ -1408,11 +1409,12 @@ html:not(.js) .pf .hero {
   color: oklch(var(--white) / 0.45);
 }
 
+/* как .note: белый 50%, контраст с чёрным 5.3:1 */
 .stage__cap {
   margin-block-start: 18px;
   text-align: center;
   font-size: 13px;
-  color: oklch(var(--white) / 0.42);
+  color: oklch(var(--white) / 0.5);
 }
 
 /* ---------- главная фраза: въезжает листом поверх первого экрана ---------- */
@@ -2322,7 +2324,8 @@ html:not(.js) .pf .hero {
 }
 
 .fan {
-  --card-w: clamp(150px, 19vw, 270px);
+  /* Одна формула от телефона до ПК: на 601px крайние карты в 20px от краёв, с 1174px — 270px. */
+  --card-w: min(23vw, 270px);
   --card-h: calc(var(--card-w) * 4 / 3);
   --spread: 15deg;
   /* Ось веера далеко под картами: соседка закрывает меньше, и название каждой видно целиком. */
@@ -2371,15 +2374,18 @@ html:not(.js) .pf .hero {
 
 .pcard__t {
   margin-block-start: calc(var(--card-w) * 0.05);
-  font-size: max(12px, calc(var(--card-w) * 0.1));
+  font-size: max(15px, calc(var(--card-w) * 0.1));
   font-weight: 500;
   line-height: 1.1;
   letter-spacing: -0.02em;
   color: oklch(var(--white));
 }
 
+/* Подпись не мельче 12px и переносится в пределах полоски, которую не закрывает соседка
+   (около 62% ширины карты). */
 .pcard__n {
-  font-size: max(10px, calc(var(--card-w) * 0.062));
+  max-inline-size: calc(var(--card-w) * 0.62);
+  font-size: max(12px, calc(var(--card-w) * 0.062));
   color: oklch(var(--cyan) / 0.85);
 }
 
@@ -2395,7 +2401,8 @@ html:not(.js) .pf .hero {
   translate: -50% -50%;
 }
 
-/* Сложенный веер до въезда в экран; раскрывается переходом, крайние карточки последними. */
+/* Сложенный веер до въезда в экран; раскрывается переходом от краёв к середине: крайние карточки
+   (k = ±2) без задержки, соседние через 60 мс, центральная последней, через 80 мс. */
 @media screen and (prefers-reduced-motion: no-preference) {
   .pf--motion .pcard {
     transition: transform 1.1s var(--ease-out);
@@ -2438,6 +2445,7 @@ html:not(.js) .pf .hero {
   }
 
   .pcard__n {
+    max-inline-size: none;
     font-size: 13px;
     text-align: end;
   }
@@ -2502,11 +2510,18 @@ html:not(.js) .pf .hero {
   min-block-size: 28px;
 }
 
+/* Название — прописными, но не через text-transform: uppercase: Chrome отдаёт читалке
+   преобразованный текст, и короткое «ПРАЙМ» звучит по буквам. Капитель (all-small-caps) остаётся
+   текстом «Прайм». Своей капители у Inter нет, браузер уменьшает прописные (Chrome и Safari — до
+   70%), поэтому кегль 13px / 0.7: буквы того же размера, что прежние 13px капсом. Нижний отступ
+   возвращает буквы на середину строки (у крупного кегля базовая линия ниже). */
 .plan__name {
-  font-size: 13px;
+  padding-block-end: 4px;
+  font-size: calc(13px / 0.7);
   font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-variant-caps: all-small-caps;
+  line-height: 20px;
+  letter-spacing: calc(13px * 0.12);
   color: oklch(var(--white) / 0.6);
 }
 
@@ -2851,7 +2866,7 @@ html:not(.js) .pf .hero {
   margin-block-end: 10px;
   font-size: 13px;
   letter-spacing: 0.02em;
-  color: oklch(var(--white) / 0.42);
+  color: oklch(var(--white) / 0.5);
 }
 
 .foot__col a {
@@ -2881,7 +2896,7 @@ html:not(.js) .pf .hero {
   padding-block: 24px;
   border-block-start: 1px solid oklch(var(--white) / 0.08);
   font-size: 13.5px;
-  color: oklch(var(--white) / 0.42);
+  color: oklch(var(--white) / 0.5);
 }
 
 .foot__word {
@@ -3186,7 +3201,8 @@ html:not(.js) .pf .hero {
   }
 }
 
-/* Ниже 560px (телефон боком) закреплённая лента «Мелочи» выше экрана: листается вбок как обычно. */
+/* Ниже 560px (телефон боком) закреплённая лента «Мелочи» выше экрана: листается вбок как обычно —
+   как без движения, с тонкой полосой прокрутки и без полоски прогресса (она стояла бы полной). */
 @media (max-height: 559px) {
   .pf--motion .pin {
     block-size: auto;
@@ -3200,9 +3216,16 @@ html:not(.js) .pf .hero {
 
   .pf--motion .pin__track {
     overflow-x: auto;
+    padding-block-end: 12px;
     scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    scrollbar-color: oklch(var(--white) / 0.25) transparent;
     transform: none;
     will-change: auto;
+  }
+
+  .pf--motion .pin__foot {
+    display: none;
   }
 }
 

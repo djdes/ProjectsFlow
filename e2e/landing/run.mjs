@@ -279,7 +279,8 @@ async function linkGaps(page) {
 }
 
 // Horizontal overflow: the document must not scroll sideways, and no element may stick out of
-// the screen unless an intentional clipper/scroller (marquee, the pin strip, the nav row) holds it.
+// the screen unless an intentional clipper/scroller (the pin strip, the nav row, a section that
+// clips its decoration) holds it.
 async function overflowReport(page) {
   return page.evaluate(() => {
     const vw = document.documentElement.clientWidth;
@@ -404,6 +405,51 @@ async function ctaGap(page) {
   });
 }
 
+// Accessible names of the elements matched by `selector` as Chrome hands them to screen readers
+// (its accessibility tree over CDP). Playwright's getByRole works names out of the DOM text itself
+// and does not see text-transform, so it cannot tell «Прайм» from «ПРАЙМ».
+async function axNames(page, selector) {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const { root } = await cdp.send('DOM.getDocument', { depth: 0 });
+    const { nodeIds } = await cdp.send('DOM.querySelectorAll', { nodeId: root.nodeId, selector });
+    const names = [];
+    for (const nodeId of nodeIds) {
+      const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false });
+      names.push(nodes[0]?.name?.value ?? '');
+    }
+    return names;
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+// Contrast ratio (WCAG) of each element's text colour laid over the black page: the browser resolves
+// the colour (OKLCH with alpha), a 1×1 canvas blends it over black.
+async function contrastOnBlack(page, selectors) {
+  return page.evaluate((list) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const channel = (v) => {
+      const c = v / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    return Object.fromEntries(
+      list.map((sel) => {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 1, 1);
+        ctx.fillStyle = getComputedStyle(document.querySelector(sel)).color;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        const lum = 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+        return [sel, Math.round(((lum + 0.05) / 0.05) * 100) / 100];
+      }),
+    );
+  }, selectors);
+}
+
 // ---------------------------------------------------------------- cases ----
 
 function checkData({ check }) {
@@ -503,6 +549,12 @@ async function desktopStructure({ page, check }) {
   check('в подвале 3 свежие статьи', info.posts === 3, String(info.posts));
   check('«Где работает»: веер из 5 карточек вместо бегущей строки', info.platformCards === 5 && info.marquee === 0, `${info.platformCards} / marquee ${info.marquee}`);
   check('шрифт Inter Variable загружен', info.font);
+  const axPlans = await axNames(page, '#pricing .plan__name');
+  check('тарифы: названия в дереве доступности как в тексте, не капсом (Бесплатный, Прайм, VIP)', axPlans.length === 3 && axPlans.join('|') === info.plans.map((p) => p.name).join('|'), axPlans.join('|'));
+  const contrast = await contrastOnBlack(page, ['.hero__note', '.stage__cap', '.hero__lead']);
+  check('мелкий серый текст (примечание под кнопками, подпись под окном доски): контраст ≥ 4.5:1, тусклее подзаголовка', ['.hero__note', '.stage__cap'].every((s) => contrast[s] >= 4.5 && contrast[s] < contrast['.hero__lead']), JSON.stringify(contrast));
+  const footContrast = await contrastOnBlack(page, ['.foot__h', '.foot__bottom']);
+  check('подвал: мелкий серый текст (заголовки колонок, нижняя строка) — контраст ≥ 4.5:1', Object.values(footContrast).every((v) => v >= 4.5), JSON.stringify(footContrast));
   const misc = await page.evaluate(() => ({
     stepTops: [...document.querySelectorAll('.steps > .step')].map((el) => ({ i: el.style.getPropertyValue('--i'), top: getComputedStyle(el).insetBlockStart })),
     drawnCursor: getComputedStyle(document.querySelector('.approve .btn')).cursor,
@@ -523,6 +575,52 @@ async function desktopStructure({ page, check }) {
 async function desktopMotion({ page, check }) {
   const headWords = await page.evaluate(() => document.querySelectorAll('#features .h2 .w').length);
   check('заголовки размечены по словам (.w)', headWords >= 3, String(headWords));
+
+  // Every block that emerges (.rb) transitions opacity, filter and transform. A button that emerges
+  // (.btn.rb: the CTA in the steps) brings its own transition, which used to win the cascade, so the
+  // button popped in while the text next to it emerged.
+  const reveal = await page.evaluate(() => {
+    const list = (v) => v.split(',').map((s) => s.trim());
+    const timing = (el, prop) => {
+      const s = getComputedStyle(el);
+      const i = list(s.transitionProperty).indexOf(prop);
+      return i < 0 ? null : { duration: list(s.transitionDuration)[i], delay: list(s.transitionDelay)[i] };
+    };
+    const cta = document.querySelector('.how__sticky a.btn.rb');
+    return {
+      missing: [...document.querySelectorAll('.rb')]
+        .filter((el) => !['opacity', 'filter', 'transform'].every((p) => timing(el, p)))
+        .map((el) => `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}`),
+      cta: { background: timing(cta, 'background-color'), opacity: timing(cta, 'opacity'), d: cta.style.getPropertyValue('--d') },
+      text: timing(document.querySelector('.how__sticky .sub.rb'), 'opacity'),
+    };
+  });
+  check('проявление: у каждого блока .rb переходы opacity, filter и transform (кнопка в шагах тоже)', reveal.missing.length === 0, reveal.missing.join(', '));
+  check(
+    'кнопка в шагах: свой переход фона на месте, проявляется как текст рядом, с задержкой --d',
+    Boolean(reveal.cta.background && reveal.cta.opacity && reveal.text) && reveal.cta.opacity.duration === reveal.text.duration && Math.round(parseFloat(reveal.cta.opacity.delay) * 1000) === parseFloat(reveal.cta.d),
+    JSON.stringify(reveal),
+  );
+
+  // Words of the titles below the fold wait in their hidden state; the shift they emerge from stays
+  // within 16px (DESIGN.md), the 72px final title included. Running transitions are finished first.
+  const shift = await page.evaluate(() =>
+    [...document.querySelectorAll('.rw:not(.is-in) .w')].reduce(
+      (most, w) => {
+        for (const a of w.getAnimations()) {
+          try {
+            a.finish();
+          } catch {
+            /* an endless animation cannot finish: not the case for words */
+          }
+        }
+        const y = new DOMMatrix(getComputedStyle(w).transform).m42;
+        return y > most.y ? { y: Math.round(y * 100) / 100, title: w.closest('.rw').id, font: getComputedStyle(w).fontSize } : most;
+      },
+      { y: 0 },
+    ),
+  );
+  check('слова заголовков выходят из размытия со сдвигом не больше 16px (крупный финальный заголовок тоже)', shift.y > 0 && shift.y <= 16, JSON.stringify(shift));
 
   await scrollToY(page, 0);
   const h0 = await cssNumber(page, '.hero', '--h');
@@ -781,6 +879,12 @@ async function landscape(ctx) {
     return { position: getComputedStyle(document.querySelector('.pin__in')).position, overflowX: getComputedStyle(track).overflowX, scrollable: track.scrollWidth > track.clientWidth + 10 };
   });
   check(`${sizeLabel(c)}: «Мелочи» не закрепляются выше экрана, лента листается вбок`, strip.position !== 'sticky' && ['auto', 'scroll'].includes(strip.overflowX) && strip.scrollable, JSON.stringify(strip));
+  // Not pinned, the strip has nothing to report progress of: no bar (it stood full), a thin scrollbar.
+  const bar = await page.evaluate(() => ({
+    progress: getComputedStyle(document.querySelector('.pin__foot')).display,
+    scrollbar: getComputedStyle(document.querySelector('.pin__track')).scrollbarWidth,
+  }));
+  check(`${sizeLabel(c)}: у ленты «Мелочей» тонкая полоса прокрутки, полоски прогресса нет`, bar.progress === 'none' && bar.scrollbar === 'thin', JSON.stringify(bar));
   await shortFooter(ctx);
 }
 
@@ -912,6 +1016,57 @@ async function boardSizes({ page, check, c }) {
   }
 }
 
+// «Где работает» between the phone deck and laptops (601–790px): the open fan keeps clear of the
+// screen edges, its notes are readable, and no card hides the title or note of the card under it.
+async function fanSizes({ page, check, c }) {
+  for (const [width, height] of c.sizes) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(() => document.querySelector('#platforms .fan').scrollIntoView({ block: 'center', behavior: 'instant' }));
+    await settle(page);
+    const r = await page.evaluate(() => {
+      const vw = document.documentElement.clientWidth;
+      const cards = [...document.querySelectorAll('#platforms .pcard')];
+      // Letters whose centre (their box turns with the card) lies under another card.
+      const covered = (el) => {
+        const own = el.closest('.pcard');
+        const out = [];
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+          for (let i = 0; i < text.data.length; i += 1) {
+            if (/\s/.test(text.data[i])) continue;
+            const range = document.createRange();
+            range.setStart(text, i);
+            range.setEnd(text, i + 1);
+            const b = range.getBoundingClientRect();
+            const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('.pcard');
+            if (top && top !== own) out.push(text.data[i]);
+          }
+        }
+        return out.join('');
+      };
+      return {
+        vw,
+        edges: cards.map((card) => {
+          const b = card.getBoundingClientRect();
+          return `${Math.round(b.left)}…${Math.round(b.right)}`;
+        }),
+        outside: cards.filter((card) => {
+          const b = card.getBoundingClientRect();
+          return b.left < 8 || b.right > vw - 8;
+        }).length,
+        notes: [...new Set(cards.map((card) => getComputedStyle(card.querySelector('.pcard__n')).fontSize))],
+        covered: cards
+          .map((card) => [covered(card.querySelector('.pcard__t')), covered(card.querySelector('.pcard__n'))].filter(Boolean).join(' '))
+          .filter(Boolean),
+      };
+    });
+    check(`${width}×${height}: веер «Где работает» не ближе 8px к краям экрана`, r.outside === 0, `${r.vw}px: ${r.edges.join(', ')}`);
+    check(`${width}×${height}: подписи карточек веера не мельче 12px`, r.notes.every((f) => parseFloat(f) >= 12), r.notes.join(', '));
+    check(`${width}×${height}: названия и подписи карточек веера не закрыты соседней карточкой`, r.covered.length === 0, r.covered.join(' | '));
+  }
+}
+
 // Laptop and desktop windows: the title takes at most three lines and the facts band is on the first screen.
 const HERO_SIZES = [[1440, 790], [1536, 740], [1366, 768], [1280, 800], [1680, 950], [1920, 950], [1920, 1080], [2560, 1300], [1440, 900]];
 
@@ -969,6 +1124,7 @@ const CASES = [
   { id: 'print', title: 'ПК 1440: печать и «Сохранить как PDF»', viewport: DESKTOP, run: printPage },
   { id: 'board-desktop', title: 'окно доски: планшет боком, ноутбуки, ПК', viewport: { width: 1024, height: 768 }, reducedMotion: 'reduce', sizes: [[1024, 768], [1180, 820], [1280, 800], [1366, 768], [1440, 900], [1920, 1080]], run: boardSizes },
   { id: 'board-phone', title: 'окно доски: узкие телефоны', viewport: NARROW, reducedMotion: 'reduce', sizes: [[320, 640], [360, 740], [390, 844]], run: boardSizes },
+  { id: 'fan-tablet', title: 'веер «Где работает» на 601–1280px (планшеты, телефоны боком, ноутбуки)', viewport: { width: 700, height: 900 }, reducedMotion: 'reduce', sizes: [[601, 900], [700, 900], [768, 1024], [790, 900], [791, 900], [834, 1112], [900, 900], [1000, 800], [1024, 768], [1280, 800]], run: fanSizes },
   { id: 'hero-sizes', title: 'первый экран в окнах ноутбуков и ПК', viewport: { width: 1440, height: 790 }, run: heroSizes },
 ];
 

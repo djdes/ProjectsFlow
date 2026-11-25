@@ -7,10 +7,8 @@
    Цвета — тройки OKLCH (`--x: L% C H`, в коде `oklch(var(--x))`), производные — color-mix.
    В комментариях — исходный HEX из спецификации
    docs/superpowers/specs/2026-10-10-redesign-c4-design.md.
-   С редизайна по Hallmark (Wayfind) страница лендинга живёт на токенах из hallmark/tokens.css,
-   а эти — материал продукта: живая доска и окна приложения. Имена, которые совпадают со
-   шкалой страницы (размеры текста, трекинг, кривые, тень карточки), объявлены только внутри
-   .pf-product, остальное — на :root, как раньше.
+   Этими токенами живёт журнал (/blog: классы Tailwind на BaseLayout, маппинг в tailwind.config.mjs).
+   У главной своя чёрная система с токенами на .pf (styles/home.css, landing/DESIGN.md).
    ============================================================================= */
 :root {
   color-scheme: light;
@@ -168,34 +166,6 @@
     --shadow-float: 0 12px 32px oklch(0% 0 none / 0.5);
     --shadow-menu: 0 0 0 1px oklch(31.05% 0.015 274.41), 0 12px 32px oklch(0% 0 none / 0.5);
     --shadow-frame: 0 0 0 1px oklch(31.05% 0.015 274.41), 0 24px 56px -20px oklch(0% 0 none / 0.6);
-  }
-}
-
-/* =============================================================================
-   Область продукта (.pf-product): живая доска в hero, окна приложения, карточка в руке.
-   Здесь — шрифт и шкала приложения; снаружи их перекрывает шкала страницы Hallmark.
-   ============================================================================= */
-.pf-product {
-  --text-xs: 0.75rem;      /* 12 */
-  --text-sm: 0.875rem;     /* 14 */
-  --text-md: 0.9375rem;    /* 15 */
-  --text-lead: 1.0625rem;  /* 17 */
-  --tracking-display: -0.025em;
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --shadow-card: 0 0 0 1px oklch(16.84% 0 none / 0.08), 0 1px 3px oklch(16.84% 0 none / 0.06);
-
-  font-family: var(--font-sans);
-  font-stretch: normal;
-  font-size: var(--text-base);
-  line-height: var(--leading-body);
-  font-variant-numeric: normal;
-  color: oklch(var(--foreground));
-  letter-spacing: normal;
-}
-@media (prefers-color-scheme: dark) {
-  .pf-product {
-    --shadow-card: 0 0 0 1px oklch(31.05% 0.015 274.41);
   }
 }
 
