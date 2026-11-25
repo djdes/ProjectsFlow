@@ -91,8 +91,9 @@ HTTP-репозиториях. Запрет на импорт `@/infrastructure/
   из `application/`, регистрируется в `container.tsx`.
 - Дизайн-токены (цвета, скругления) — CSS-переменные в `client/src/styles/globals.css`,
   Tailwind-маппинг в `client/tailwind.config.ts`. Дизайн-система приложения «C4 плотный» (светлая —
-  Notion, тёмная — C3): `docs/superpowers/specs/2026-10-10-redesign-c4-design.md`. Лендинг и блог —
-  Hallmark · Wayfind (`landing/DESIGN.md`); C4 там только у живой доски и окон продукта.
+  Notion, тёмная — C3): `docs/superpowers/specs/2026-10-10-redesign-c4-design.md`. Главная лендинга —
+  чёрная система (`landing/DESIGN.md`: тексты в `landing/src/data/home.ts`, смоук `npm run test:landing`),
+  журнал (`/blog`) — прежнее оформление.
   Цвет = смысл статуса (`approval`/`manual`/`done`/`primary`/`destructive`), тона проектов и людей —
   `lib/tone.ts` + `.pf-tone-*`/`.pf-tag`; палитру Tailwind (`violet-500`…) для смыслов не используем.
   Рамки — одна линия `border-border` без `/NN`; в комментариях и чате рамок нет (заливка); ESLint
@@ -174,12 +175,14 @@ npm run deploy       # node scripts/deploy.mjs
 > Автономный канбан-воркер (`ralph-worker`) без лишних вопросов сам создаёт ветку задачи, пушит её, открывает PR, дожидается отсутствия конфликтов (`mergeable == true`) и зелёных CI-проверок (`checks.yml`), после чего **автоматически мержит PR в `main`** и возвращает локальный checkout на свежий `main`. В интерактивных сессиях merge делается после зелёных проверок по согласию владельца.
 
 - **PR в `main`** → `.github/workflows/checks.yml`: typecheck, lint, тесты клиента, серверные и
-  MCP-тесты, сборка клиента/лендинга/сервера, смоук-тесты интерфейса (`e2e/smoke`). Выкладки нет.
+  MCP-тесты, сборка клиента/лендинга/сервера, смоук-тесты интерфейса (`e2e/smoke`) и главной
+  (`e2e/landing`). Выкладки нет.
 - **Merge в `main`** → `.github/workflows/deploy.yml`: те же проверки ещё раз (переиспользует
   `checks.yml`), и только при зелёном результате — сборка, выкладка на сервер, миграции,
   `pm2 startOrReload`. Красная проверка останавливает выкладку, прод остаётся на прошлой версии.
 - Перед открытием PR прогоняй проверки локально: `npm run typecheck`, `npm run lint`,
-  `npm run test:server`, `npm run build:client && npm run test:smoke`.
+  `npm run test:server`, `npm run build:client && npm run test:smoke`, при правке лендинга —
+  `npm run build:landing && npm run test:landing`.
 - Ручная выкладка (`npm run deploy`, «Run workflow» в Actions) — только в аварийной ситуации и
   только по явному указанию владельца. Подробности — [docs/ONBOARDING.md](docs/ONBOARDING.md), раздел 4.
 
