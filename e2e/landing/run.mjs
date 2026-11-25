@@ -319,6 +319,9 @@ function checkData({ check }) {
       d.isDirectory() ? grep(join(dir, d.name)) : /\.(ts|tsx|astro|mjs)$/.test(d.name) && readFileSync(join(dir, d.name), 'utf8').includes('STACK_LAYERS'),
     );
   check('старая витрина удалена (showcase/*, showcaseData.ts, STACK_LAYERS)', !existsSync(join(SRC, 'components', 'showcase')) && !existsSync(join(SRC, 'data', 'showcaseData.ts')) && !grep(SRC));
+  const astroDir = join(DIST, '_astro');
+  const reactBundles = existsSync(astroDir) ? readdirSync(astroDir).filter((f) => /^client\..*\.js$/.test(f)) : [];
+  check('в сборке нет React-бандла (старой витрины нет целиком)', reactBundles.length === 0, reactBundles.join(', '));
 }
 
 async function desktopStructure({ page, check }) {
