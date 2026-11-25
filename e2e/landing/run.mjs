@@ -380,11 +380,11 @@ async function reducedMotion({ page, check }) {
   });
   check('reduce: текст не размыт и не прозрачен', txt.opacity === '1' && txt.filter === 'none' && txt.word === '1', JSON.stringify(txt));
   const pin = await page.evaluate(() => {
-    const view = document.querySelector('.pin__view');
+    const track = document.querySelector('.pin__track');
     return {
-      transform: getComputedStyle(document.querySelector('.pin__track')).transform,
-      overflowX: getComputedStyle(view).overflowX,
-      scrollable: view.scrollWidth > view.clientWidth + 10,
+      transform: getComputedStyle(track).transform,
+      overflowX: getComputedStyle(track).overflowX,
+      scrollable: track.scrollWidth > track.clientWidth + 10,
     };
   });
   check('reduce: «Мелочи» — обычная горизонтальная прокрутка', pin.transform === 'none' && ['auto', 'scroll'].includes(pin.overflowX) && pin.scrollable, JSON.stringify(pin));
@@ -396,6 +396,8 @@ async function reducedMotion({ page, check }) {
 async function noScript({ page, check }) {
   const root = await page.evaluate(() => document.querySelector('.pf')?.className ?? '');
   check('без JS: классов движения нет', root.includes('pf') && !root.includes('pf--motion') && !root.includes('pf--static'), root);
+  // The CSS-only intro of the first screen (blur → sharp) lasts about two seconds.
+  await page.waitForTimeout(2300);
   const hidden = await page.evaluate(() => {
     const effective = (el) => {
       let o = 1;
@@ -415,8 +417,8 @@ async function noScript({ page, check }) {
   const openAfter = await page.evaluate((sel) => document.querySelector(sel)?.open === true, second);
   check('без JS: вопрос раскрывается по клику', closedBefore && openAfter);
   const pin = await page.evaluate(() => {
-    const view = document.querySelector('.pin__view');
-    return view ? ['auto', 'scroll'].includes(getComputedStyle(view).overflowX) && view.scrollWidth > view.clientWidth + 10 : false;
+    const track = document.querySelector('.pin__track');
+    return track ? ['auto', 'scroll'].includes(getComputedStyle(track).overflowX) && track.scrollWidth > track.clientWidth + 10 : false;
   });
   check('без JS: «Мелочи» листаются вбок', pin);
 }
