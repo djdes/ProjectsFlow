@@ -8,12 +8,13 @@
 //   anchor settling        after fonts and the pinned strip change the layout, /#section is re-aligned
 // Motion only (root class .pf--motion), all 0…1 unless noted:
 //   .hero --h          first screen recedes under the board window
-//   .win --w           the window straightens out of its tilt
-//   .statement__text --wp   words of the statement light up one by one
+//   .statement__text .lw.on words of the statement light up from blur one by one
 //   .step --c          a step card is covered by the next one (stacking)
 //   .pin --pp, .pin__track --x (px), .pin --pin-dist (px)   pinned sideways strip
 //   .foot --r          footer opens from under the page
-//   text --t           text reveal, only where CSS animation-timeline is unsupported
+//   .rw / .rb .is-in   headings emerge from blur word by word, blocks as a whole, once they enter
+//                      the screen (IntersectionObserver; CSS transitions do the rest)
+//   .fan .is-in        the platform cards fan out once the fan enters the screen
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -30,7 +31,6 @@ export function initHomeMotion(root: HTMLElement): () => void {
 
   const hero = one('.hero');
   const light = one('.hero__light');
-  const win = one('.win');
   const words = one('.statement__text');
   const steps = all('.step');
   const pin = one('.pin');
@@ -49,14 +49,27 @@ export function initHomeMotion(root: HTMLElement): () => void {
   root.append(probe);
   const stableHeight = (): number => probe.offsetHeight || window.innerHeight;
 
-  // Text reveal: CSS scroll-driven animation where supported, otherwise --t from here.
-  const cssScroll = typeof CSS !== 'undefined' && CSS.supports('animation-timeline: view()');
-  let texts: HTMLElement[] = [];
-  if (!reduce && !cssScroll) {
-    root.classList.add('pf--tjs');
-    texts = all('.rv h2, .rv h3, .rv p, .rv .plan__list li').filter(
-      (el) => !el.closest('[aria-hidden="true"], .win, .statement__text'),
-    );
+  // Words and blocks emerge from blur once they enter the screen: .is-in, then CSS transitions.
+  const statementWords = all('.statement__text .lw');
+  let litCount = -1;
+  let revealer: IntersectionObserver | null = null;
+  if (!reduce) {
+    const toReveal = all('.rw, .rb, .fan');
+    if (typeof IntersectionObserver === 'undefined') {
+      toReveal.forEach((el) => el.classList.add('is-in'));
+    } else {
+      revealer = new IntersectionObserver(
+        (entries, observer) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            entry.target.classList.add('is-in');
+            observer.unobserve(entry.target);
+          }
+        },
+        { threshold: 0.15, rootMargin: '0px 0px -8% 0px' },
+      );
+      toReveal.forEach((el) => revealer?.observe(el));
+    }
   }
 
   let heroTop = 0;
@@ -72,7 +85,10 @@ export function initHomeMotion(root: HTMLElement): () => void {
     if (foot) root.classList.toggle('pf--foot-flow', foot.offsetHeight > vh - 24);
     if (reduce || !pin || !pinIn || !track || !view) return;
     pinH = pinIn.offsetHeight;
-    const nextDist = Math.max(0, track.scrollWidth - view.clientWidth);
+    // scrollWidth of the unclipped track leaves out its end padding: add it, so the last card
+    // stops a gutter away from the screen edge instead of flush with it.
+    const endPad = parseFloat(getComputedStyle(track).paddingInlineEnd) || 0;
+    const nextDist = Math.max(0, track.scrollWidth - view.clientWidth + endPad);
     if (nextDist !== pinDist) {
       pinDist = nextDist;
       pin.style.setProperty('--pin-dist', `${pinDist}px`);
@@ -84,18 +100,22 @@ export function initHomeMotion(root: HTMLElement): () => void {
     const vh = window.innerHeight;
     // Read every rect first, then write: no layout between writes.
     const y = -root.getBoundingClientRect().top;
-    const winTop = win?.getBoundingClientRect().top ?? 0;
     const wordsRect = words?.getBoundingClientRect();
     const stepRects = steps.map((el) => el.getBoundingClientRect());
     const pinRect = pin?.getBoundingClientRect();
     const footH = foot?.getBoundingClientRect().height ?? 0;
     const mainBottom = main?.getBoundingClientRect().bottom ?? 0;
-    const textRects = texts.map((el) => el.getBoundingClientRect());
 
     // The first screen starts to recede once it is stuck (a tall one scrolls -heroTop px first).
     put(hero, '--h', clamp01((y + heroTop) / (vh * 0.85)));
-    put(win, '--w', clamp01((vh - winTop) / (vh * 0.78)));
-    if (wordsRect) put(words, '--wp', clamp01((vh * 0.9 - wordsRect.top) / (vh * 0.55 + wordsRect.height * 0.6)));
+    if (wordsRect && statementWords.length) {
+      const wp = clamp01((vh * 0.9 - wordsRect.top) / (vh * 0.55 + wordsRect.height * 0.6));
+      const count = Math.round(wp * (statementWords.length + 1));
+      if (count !== litCount) {
+        litCount = count;
+        statementWords.forEach((el, i) => el.classList.toggle('on', i < count));
+      }
+    }
     steps.forEach((el, i) => {
       const cur = stepRects[i];
       const next = stepRects[i + 1];
@@ -107,7 +127,6 @@ export function initHomeMotion(root: HTMLElement): () => void {
       put(pin, '--pp', pp);
     }
     if (foot && main) put(foot, '--r', clamp01((vh - mainBottom) / Math.max(1, Math.min(footH, vh))));
-    texts.forEach((el, i) => put(el, '--t', clamp01((vh - textRects[i].top) / Math.max(1, textRects[i].height * 0.8))));
   }
 
   let frame = 0;
@@ -199,8 +218,9 @@ export function initHomeMotion(root: HTMLElement): () => void {
     for (const type of personEvents) window.removeEventListener(type, onPersonMove);
     hero?.removeEventListener('pointermove', onPointerMove);
     observer?.disconnect();
+    revealer?.disconnect();
     probe.remove();
     document.documentElement.classList.remove('pf-smooth');
-    root.classList.remove('pf--motion', 'pf--static', 'pf--tjs', 'pf--foot-flow');
+    root.classList.remove('pf--motion', 'pf--static', 'pf--foot-flow');
   };
 }

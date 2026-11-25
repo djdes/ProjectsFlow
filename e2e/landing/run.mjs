@@ -190,7 +190,7 @@ async function visibleLinks(page) {
       [...document.querySelectorAll(`${sel} a`)]
         .filter(isVisible)
         .map((a) => ({ text: (a.textContent ?? '').replace(/\s+/g, ' ').trim(), href: a.getAttribute('href') }));
-    return { header: zone('header.nav'), hero: zone('.hero__actions'), final: zone('.final') };
+    return { header: zone('header.nav'), hero: zone('.hero__actions'), final: zone('.final'), plans: zone('#pricing .plans') };
   });
 }
 
@@ -319,6 +319,9 @@ function checkData({ check }) {
       d.isDirectory() ? grep(join(dir, d.name)) : /\.(ts|tsx|astro|mjs)$/.test(d.name) && readFileSync(join(dir, d.name), 'utf8').includes('STACK_LAYERS'),
     );
   check('старая витрина удалена (showcase/*, showcaseData.ts, STACK_LAYERS)', !existsSync(join(SRC, 'components', 'showcase')) && !existsSync(join(SRC, 'data', 'showcaseData.ts')) && !grep(SRC));
+  const astroDir = join(DIST, '_astro');
+  const reactBundles = existsSync(astroDir) ? readdirSync(astroDir).filter((f) => /^client\..*\.js$/.test(f)) : [];
+  check('в сборке нет React-бандла (старой витрины нет целиком)', reactBundles.length === 0, reactBundles.join(', '));
 }
 
 async function desktopStructure({ page, check }) {
@@ -343,6 +346,9 @@ async function desktopStructure({ page, check }) {
         price: text(p.querySelector('.plan__num')),
         cta: text(p.querySelector('.btn')),
         edge: Boolean(p.querySelector('.edge')),
+        badge: text(p.querySelector('.badge')),
+        top: Math.round(p.getBoundingClientRect().top),
+        ctaTop: Math.round([...p.querySelectorAll('.plan__cta .btn')].find((b) => b.getBoundingClientRect().height > 0)?.getBoundingClientRect().top ?? -1),
         trial: text(p.querySelector('.plan__trial')),
         items: p.querySelectorAll('.plan__list li').length,
       })),
@@ -352,10 +358,20 @@ async function desktopStructure({ page, check }) {
       offers: ld.find((x) => x['@type'] === 'SoftwareApplication')?.offers?.length ?? 0,
       themeColor: q('meta[name="theme-color"]')?.getAttribute('content') ?? '',
       words: document.querySelectorAll('.statement__text .lw').length,
-      facts: document.querySelectorAll('.fact').length,
+      wordTokens: (q('.statement__text')?.textContent ?? '').trim().split(/\s+/).filter(Boolean).length,
+      facts: document.querySelectorAll('.hero .stats .stat').length,
+      statsBottom: q('.hero .stats')?.getBoundingClientRect().bottom ?? Infinity,
+      split: (() => {
+        const t = q('.hero__text')?.getBoundingClientRect();
+        const v = q('.hero__visual')?.getBoundingClientRect();
+        return t && v ? { textRight: Math.round(t.right), visualLeft: Math.round(v.left), visualTop: Math.round(v.top), textTop: Math.round(t.top) } : null;
+      })(),
+      btnIcons: ['.hero__actions', '.how__sticky', '.final .actions'].map((sel) => document.querySelectorAll(`${sel} a.btn .btn__ic`).length),
       steps: document.querySelectorAll('.step').length,
       details: document.querySelectorAll('.pin__track .fc').length,
       guarantees: document.querySelectorAll('.guar li').length,
+      platformCards: document.querySelectorAll('#platforms .fan .pcard').length,
+      marquee: document.querySelectorAll('.marquee').length,
       posts: document.querySelectorAll('.foot a[href^="/blog/"]').length,
       font: document.fonts.check('500 32px "Inter Variable"'),
     };
@@ -365,29 +381,55 @@ async function desktopStructure({ page, check }) {
   check('разделы шапки: #features #how #pricing #faq /blog', info.navHrefs.join(' ') === '#features #how #pricing #faq /blog', info.navHrefs.join(' '));
   check('три тарифа из pricing.ts', info.plans.map((p) => p.name).join('|') === 'Бесплатный|Прайм|VIP', info.plans.map((p) => p.name).join('|'));
   check('цены 0 ₽ / 1 900 ₽ / 3 900 ₽', info.plans.map((p) => p.price).join('|') === '0 ₽|1 900 ₽|3 900 ₽', info.plans.map((p) => p.price).join('|'));
-  check('у «Прайма» цветная обводка и пробный час', info.plans[1]?.edge && info.plans[1]?.trial === 'Попробовать 1 час бесплатно', JSON.stringify(info.plans[1]));
+  check('у «Прайма» бейдж «Популярный» и пробный час', info.plans[1]?.badge === 'Популярный' && info.plans[1]?.trial === 'Попробовать 1 час бесплатно', JSON.stringify(info.plans[1]));
+  const card = await page.evaluate(() => {
+    const plans = document.querySelector('#pricing .plans');
+    const line = plans ? getComputedStyle(plans, '::before') : null;
+    return { line: line ? line.backgroundImage : '', edges: plans ? plans.querySelectorAll('.edge').length : -1 };
+  });
+  check('кнопки трёх тарифов на одной высоте', new Set(info.plans.map((p) => p.ctaTop)).size === 1, info.plans.map((p) => p.ctaTop).join(','));
+  check('тарифы одной карточкой: три колонки в ряд, радужная линия сверху, без крутящейся обводки', info.plans.length === 3 && new Set(info.plans.map((p) => p.top)).size === 1 && card.line.includes('linear-gradient') && card.edges === 0, JSON.stringify({ tops: info.plans.map((p) => p.top), ...card }));
   check('VIP: кнопка «Оставить заявку»', info.plans[2]?.cta === 'Оставить заявку', info.plans[2]?.cta);
   check('по 4 пункта в каждом тарифе', info.plans.length === 3 && info.plans.every((p) => p.items === 4));
   check('7 вопросов <details>, открыт только первый', info.faq.length === 7 && info.faq[0] && info.faq.slice(1).every((o) => !o), JSON.stringify(info.faq));
   check('JSON-LD: Organization, WebSite, SoftwareApplication, FAQPage', ['Organization', 'WebSite', 'SoftwareApplication', 'FAQPage'].every((t) => info.ldTypes.includes(t)), info.ldTypes.join(','));
   check('JSON-LD: 7 вопросов и 3 предложения', info.faqLd === 7 && info.offers === 3, `${info.faqLd}/${info.offers}`);
   check('theme-color #000000', info.themeColor === '#000000', info.themeColor);
-  check('фраза из 22 слов, 4 факта, 4 шага, 8 мелочей, 4 гарантии', info.words === 22 && info.facts === 4 && info.steps === 4 && info.details === 8 && info.guarantees === 4, JSON.stringify(info));
+  check('первый экран: текст слева, окно доски справа', info.split && info.split.visualLeft >= info.split.textRight - 1, JSON.stringify(info.split));
+  check('полоса из 4 фактов внизу первого экрана', info.facts === 4 && info.statsBottom <= 901, `${info.facts} ${info.statsBottom}`);
+  check('кнопки-пилюли с круглой стрелкой (первый экран, шаги, финал)', info.btnIcons.every((n) => n >= 1), info.btnIcons.join(','));
+  check('фраза по словам (столько же .lw, сколько слов), 4 факта, 4 шага, 8 мелочей, 4 гарантии', info.words > 0 && info.words === info.wordTokens && info.facts === 4 && info.steps === 4 && info.details === 8 && info.guarantees === 4, JSON.stringify(info));
   check('в подвале 3 свежие статьи', info.posts === 3, String(info.posts));
+  check('«Где работает»: веер из 5 карточек вместо бегущей строки', info.platformCards === 5 && info.marquee === 0, `${info.platformCards} / marquee ${info.marquee}`);
   check('шрифт Inter Variable загружен', info.font);
+  const misc = await page.evaluate(() => ({
+    stepTops: [...document.querySelectorAll('.steps > .step')].map((el) => ({ i: el.style.getPropertyValue('--i'), top: getComputedStyle(el).insetBlockStart })),
+    drawnCursor: getComputedStyle(document.querySelector('.approve .btn')).cursor,
+  }));
+  check('отступы шагов стопкой из --i (112px + i × 22px)', misc.stepTops.length === 4 && misc.stepTops.every((s, i) => s.i.trim() === String(i) && s.top === `${112 + i * 22}px`), JSON.stringify(misc.stepTops));
+  check('у нарисованной кнопки в шагах нет курсора-руки', misc.drawnCursor !== 'pointer', misc.drawnCursor);
+  let focused = '';
+  for (let n = 0; n < 20; n += 1) {
+    await page.keyboard.press('Tab');
+    focused = await page.evaluate(() => (document.activeElement?.matches('.hero__actions a.btn') ? getComputedStyle(document.activeElement).borderTopLeftRadius : ''));
+    if (focused) break;
+  }
+  check('рамка фокуса с клавиатуры не меняет форму кнопки-пилюли', focused === '999px', focused || 'кнопка не получила фокус');
   const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
   check('светлая тема ОС: у чёрной страницы тёмные полосы прокрутки (color-scheme: dark)', scheme === 'dark', scheme);
 }
 
 async function desktopMotion({ page, check }) {
-  const root = await page.evaluate(() => document.querySelector('.pf')?.className ?? '');
-  check('Chromium: текст проявляет CSS (animation-timeline), без .pf--tjs', root.includes('pf--motion') && !root.includes('pf--tjs'), root);
+  const headWords = await page.evaluate(() => document.querySelectorAll('#features .h2 .w').length);
+  check('заголовки размечены по словам (.w)', headWords >= 3, String(headWords));
 
   await scrollToY(page, 0);
   const h0 = await cssNumber(page, '.hero', '--h');
-  await scrollToY(page, DESKTOP.height * 0.85 + 10);
+  // A first screen taller than the window scrolls -heroTop px before it sticks and starts to recede.
+  const heroTop = (await cssNumber(page, '.hero', '--hero-top')) || 0;
+  await scrollToY(page, -heroTop + DESKTOP.height * 0.85 + 10);
   const h1 = await cssNumber(page, '.hero', '--h');
-  check('первый экран: --h от 0 до 1 за 85% высоты', h0 === 0 && h1 >= 0.99, `${h0} → ${h1}`);
+  check('первый экран: --h от 0 до 1 за 85% высоты после того, как экран встал', h0 === 0 && h1 >= 0.99, `${h0} → ${h1} (hero-top ${heroTop})`);
 
   const how = await page.evaluate(() => {
     const el = document.querySelector('#how');
@@ -412,20 +454,38 @@ async function desktopMotion({ page, check }) {
   const tx = await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('.pin__track')).transform).m41);
   const pp = await cssNumber(page, '.pin', '--pp');
   check('«Мелочи»: при прокрутке вниз лента едет вбок', tx < -50 && pp > 0.3 && pp < 0.7, `x=${tx} pp=${pp}`);
+  await scrollToY(page, pin.top + pin.height - DESKTOP.height);
+  const lastRight = await page.evaluate(() => {
+    const cards = document.querySelectorAll('.pin__track .fc');
+    return Math.round(cards[cards.length - 1].getBoundingClientRect().right);
+  });
+  check('в конце «Мелочей» последняя карточка не встаёт вплотную к краю', lastRight <= DESKTOP.width - 40, `${lastRight} из ${DESKTOP.width}`);
 
   await scrollToY(page, 0);
-  const before = await page.evaluate(() => {
-    const s = getComputedStyle(document.querySelector('#faq .h2'));
+  const wordStyle = () => page.evaluate(() => {
+    const w = document.querySelector('#faq .h2 .w');
+    if (!w) return null;
+    const s = getComputedStyle(w);
     return { opacity: parseFloat(s.opacity), filter: s.filter };
   });
+  const before = await wordStyle();
   await page.evaluate(() => document.querySelector('#faq .h2').scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.waitForTimeout(1500);
+  const after = await wordStyle();
+  check('слова заголовка проступают из размытия, когда он въезжает в экран', before && before.opacity < 0.1 && before.filter.includes('blur') && after.opacity > 0.99 && after.filter === 'none', `${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+  await page.evaluate(() => document.querySelector('.statement__text').scrollIntoView({ block: 'center', behavior: 'instant' }));
   await settle(page);
-  await page.waitForTimeout(80);
-  const after = await page.evaluate(() => {
-    const s = getComputedStyle(document.querySelector('#faq .h2'));
-    return { opacity: parseFloat(s.opacity), filter: s.filter };
-  });
-  check('текст раздела проступает из размытия при въезде в экран', before.opacity < 0.6 && before.filter.includes('blur') && after.opacity > 0.99 && /none|blur\(0px\)/.test(after.filter), `${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+  await page.waitForTimeout(700);
+  const lit = await page.evaluate(() => ({ on: document.querySelectorAll('.statement__text .lw.on').length, all: document.querySelectorAll('.statement__text .lw').length }));
+  check('слова главной фразы загораются по прокрутке (.on)', lit.on > 0 && lit.on <= lit.all, JSON.stringify(lit));
+
+  await page.evaluate(() => document.querySelector('#platforms .fan').scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.waitForTimeout(1600);
+  const angles = await page.evaluate(() => [...document.querySelectorAll('#platforms .pcard')].map((c) => {
+    const m = new DOMMatrix(getComputedStyle(c).transform);
+    return Math.round((Math.atan2(m.b, m.a) * 180) / Math.PI);
+  }));
+  check('веер раскрывается, когда въезжает в экран (крайние карточки повёрнуты ≥ 15°)', angles.length === 5 && Math.abs(angles[0]) >= 15 && Math.abs(angles[4]) >= 15 && angles[0] < 0 && angles[4] > 0, angles.join(', '));
 
   await scrollToY(page, await page.evaluate(() => document.documentElement.scrollHeight));
   const r = await cssNumber(page, '.foot', '--r');
@@ -446,6 +506,8 @@ async function authedButtons({ page, check }) {
   const z = await visibleLinks(page);
   const texts = (list) => list.map((l) => l.text);
   const appLink = (list) => list.find((l) => l.text === 'Открыть приложение');
+  const planTexts = texts(z.plans);
+  check('вошедший: в тарифах «Открыть приложение» вместо регистрации', planTexts.filter((t) => t === 'Открыть приложение').length === 3 && !planTexts.some((t) => ['Начать бесплатно', 'Перейти на Прайм', 'Оставить заявку', 'Попробовать 1 час бесплатно'].includes(t)), planTexts.join(' | '));
   for (const [zone, label] of [['header', 'в шапке'], ['hero', 'на первом экране'], ['final', 'в финале']]) {
     const t = texts(z[zone]);
     check(`вошедший: ${label} «Открыть приложение» вместо «Войти» / «Начать бесплатно»`, Boolean(appLink(z[zone])) && /\/$/.test(appLink(z[zone])?.href ?? '') && !t.includes('Войти') && !t.includes('Начать бесплатно'), t.join(' | '));
@@ -466,6 +528,10 @@ async function reducedMotion({ page, check }) {
     return { opacity: s.opacity, filter: s.filter, word: w.opacity };
   });
   check('reduce: текст не размыт и не прозрачен', txt.opacity === '1' && txt.filter === 'none' && txt.word === '1', JSON.stringify(txt));
+  const hiddenBits = await page.evaluate(() => [...document.querySelectorAll('main .w, main .rb, .statement__text .lw')]
+    .filter((el) => getComputedStyle(el).opacity !== '1' || getComputedStyle(el).filter !== 'none').length);
+  const totalBits = await page.evaluate(() => document.querySelectorAll('main .w, main .rb').length);
+  check('reduce: все слова и блоки видны сразу', totalBits > 0 && hiddenBits === 0, `${hiddenBits} из ${totalBits}`);
   const pin = await page.evaluate(() => {
     const track = document.querySelector('.pin__track');
     return {
@@ -475,6 +541,8 @@ async function reducedMotion({ page, check }) {
     };
   });
   check('reduce: «Мелочи» — обычная горизонтальная прокрутка', pin.transform === 'none' && ['auto', 'scroll'].includes(pin.overflowX) && pin.scrollable, JSON.stringify(pin));
+  const stat = await page.evaluate(() => ({ bar: getComputedStyle(document.querySelector('.pin__foot')).display, tab: document.querySelector('.pin__track').getAttribute('tabindex') }));
+  check('reduce: нет пустой полоски прогресса, ленту можно листать с клавиатуры', stat.bar === 'none' && stat.tab === '0', JSON.stringify(stat));
   await scrollToY(page, 600);
   const hero = await page.evaluate(() => getComputedStyle(document.querySelector('.hero__in')).opacity);
   check('reduce: первый экран не гаснет при прокрутке', hero === '1', hero);
@@ -491,7 +559,7 @@ async function noScript({ page, check }) {
       for (let a = el; a; a = a.parentElement) o *= parseFloat(getComputedStyle(a).opacity);
       return o;
     };
-    return [...document.querySelectorAll('main h1, main h2, main h3, main p, main li, .statement__text .lw')]
+    return [...document.querySelectorAll('main h1, main h2, main h3, main p, main li, .statement__text .lw, main .w, main .rb')]
       .filter((el) => !el.closest('[aria-hidden="true"], .win, details:not([open]) .faq__a'))
       .filter((el) => effective(el) < 0.99 || getComputedStyle(el).filter !== 'none')
       .slice(0, 8)
@@ -508,6 +576,8 @@ async function noScript({ page, check }) {
     return track ? ['auto', 'scroll'].includes(getComputedStyle(track).overflowX) && track.scrollWidth > track.clientWidth + 10 : false;
   });
   check('без JS: «Мелочи» листаются вбок', pin);
+  const stat = await page.evaluate(() => ({ bar: getComputedStyle(document.querySelector('.pin__foot')).display, tab: document.querySelector('.pin__track').getAttribute('tabindex') }));
+  check('без JS: нет пустой полоски прогресса, ленту можно листать с клавиатуры', stat.bar === 'none' && stat.tab === '0', JSON.stringify(stat));
 }
 
 async function phone390({ page, check }) {
@@ -523,6 +593,15 @@ async function phone390({ page, check }) {
   check('390: все пять разделов помещаются', nav.rights.length === 5 && nav.rights.every((r) => r <= nav.vw + 0.5) && nav.lefts.every((l) => l >= -0.5), JSON.stringify(nav.rights));
   const gaps = await linkGaps(page);
   check('390: разделы не слипаются (между ними ≥ 8px)', gaps.every((g) => g >= 8), gaps.join(', '));
+  const lay = await page.evaluate(() => {
+    const t = document.querySelector('.hero__text')?.getBoundingClientRect();
+    const v = document.querySelector('.hero__visual')?.getBoundingClientRect();
+    const s = [...document.querySelectorAll('.hero .stats .stat')].map((e) => Math.round(e.getBoundingClientRect().top));
+    return { textBottom: t ? Math.round(t.bottom) : null, visualTop: v ? Math.round(v.top) : null, stats: s };
+  });
+  const planTops = await page.evaluate(() => [...document.querySelectorAll('#pricing .plan')].map((p) => Math.round(p.getBoundingClientRect().top)));
+  check('390: тарифы друг под другом', planTops.length === 3 && planTops[1] > planTops[0] && planTops[2] > planTops[1], planTops.join(','));
+  check('390: окно доски под текстом, факты в две колонки', lay.textBottom !== null && lay.visualTop >= lay.textBottom - 1 && lay.stats.length === 4 && lay.stats[0] === lay.stats[1] && lay.stats[2] > lay.stats[0], JSON.stringify(lay));
 }
 
 async function phone320({ page, check }) {
@@ -615,19 +694,16 @@ async function landscape(ctx) {
 
 async function reducedPhone({ page, check }) {
   const r = await page.evaluate(() => {
-    const marquee = document.querySelector('.marquee');
-    const box = marquee.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
-    return {
-      mask: getComputedStyle(marquee).maskImage,
-      items: [...document.querySelectorAll('.marquee__row > li:not([aria-hidden="true"])')].map((li) => {
-        const b = li.getBoundingClientRect();
-        return { name: (li.textContent ?? '').trim().slice(0, 24), ok: b.left >= Math.max(0, box.left) - 0.5 && b.right <= Math.min(vw, box.right) + 0.5 };
-      }),
-    };
+    return [...document.querySelectorAll('#platforms .pcard')].map((c) => {
+      const b = c.getBoundingClientRect();
+      const m = new DOMMatrix(getComputedStyle(c).transform);
+      return { name: (c.querySelector('.pcard__t')?.textContent ?? '').trim(), inside: b.left >= -0.5 && b.right <= vw + 0.5, angle: Math.round((Math.atan2(m.b, m.a) * 180) / Math.PI) };
+    });
   });
-  const clipped = r.items.filter((x) => !x.ok).map((x) => x.name);
-  check('reduce, 390: все пять платформ видны целиком (строка переносится, без затухания по краям)', r.items.length === 5 && clipped.length === 0 && r.mask === 'none', `${r.mask} ${clipped.join(' | ')}`);
+  const outside = r.filter((x) => !x.inside).map((x) => x.name);
+  const tops = await page.evaluate(() => [...document.querySelectorAll('#platforms .pcard')].map((c) => Math.round(c.getBoundingClientRect().top)));
+  check('reduce, 390: колода раскрыта сразу (карты лесенкой), все пять в пределах экрана', r.length === 5 && outside.length === 0 && tops.every((t, i) => i === 0 || t - tops[i - 1] >= 40), `${outside.join(' | ')} tops ${tops.join(',')}`);
 }
 
 async function iosToolbar({ page, check }) {

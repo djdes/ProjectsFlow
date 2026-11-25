@@ -1,8 +1,10 @@
 ---
-// Первый экран (закреплён, гаснет при прокрутке) и окно доски, которое наезжает на него.
-// Доска — иллюстрация: задачи и время придуманы, это сказано в подписи под окном.
-import { HERO } from '@/data/home';
+// Первый экран (как у fluidvoice): слева пилюля, заголовок, подзаголовок, кнопки и примечание,
+// справа окно доски на зернистом свечении, внизу экрана полоса из четырёх фактов. Экран закреплён:
+// лист с главной фразой наезжает на него. Доска — иллюстрация, это сказано в подписи под окном.
+import { FACTS, HERO } from '@/data/home';
 import HomeArrow from './HomeArrow.astro';
+import Words from './Words.astro';
 
 interface Props {
   appBase: string;
@@ -13,109 +15,111 @@ const { appBase } = Astro.props;
 <section class="hero" aria-labelledby="hero-title">
   <div class="hero__sky" aria-hidden="true"></div>
   <div class="hero__light" aria-hidden="true"></div>
-  <div class="hero__horizon" aria-hidden="true"></div>
   <div class="wrap hero__in">
-    <a class="announce" href="#pricing">
-      <span class="edge" aria-hidden="true"></span>
-      <span class="announce__text"><strong>{HERO.badgeStrong}</strong> {HERO.badgeRest}</span>
-      <span class="announce__arrow" aria-hidden="true"><HomeArrow /></span>
-    </a>
-    <h1 id="hero-title" class="h1 hero__title"><span class="h1__a">{HERO.titleA}</span> <span class="h1__b">{HERO.titleB}</span></h1>
-    <p class="lead hero__lead">{HERO.lead}</p>
-    <div class="actions hero__actions">
-      <a class="btn btn--solid" href={`${appBase}/register`} data-auth-anon>Начать бесплатно<HomeArrow /></a>
-      <a class="btn btn--solid" href={`${appBase}/`} data-auth-authed>Открыть приложение<HomeArrow /></a>
-      <a class="btn btn--line" href="#how">Как это работает<span class="btn__arrow" aria-hidden="true"><HomeArrow /></span></a>
-    </div>
-    <p class="note hero__note">{HERO.note}</p>
-  </div>
-</section>
-
-<section id="product" class="stage" aria-label="Пример доски проекта">
-  <div class="stage__glow" aria-hidden="true"></div>
-  <div class="wrap">
-    <figure
-      class="win"
-      role="img"
-      aria-label="Доска проекта «Магазин в Telegram»: воркер делает задачу, проверки проходят, и задача переходит на утверждение. Справа LIVE-лента его действий."
-    >
-      <div class="win__bar">
-        <span class="win__dots"><i></i><i></i><i></i></span>
-        <span class="win__crumbs"><span class="win__proj">Магазин в Telegram</span><span>/</span><span>Доска</span></span>
-        <span class="win__live"><span class="dot dot--live dot--sm"></span>2 воркера в работе</span>
+    <div class="hero__grid">
+      <div class="hero__text">
+        <a class="announce" href="#pricing">
+          <span class="edge" aria-hidden="true"></span>
+          <span class="announce__text"><strong>{HERO.badgeStrong}</strong> {HERO.badgeRest}</span>
+          <span class="announce__arrow" aria-hidden="true"><HomeArrow /></span>
+        </a>
+        <h1 id="hero-title" class="h1 hero__title rw"><span class="h1__a"><Words parts={[{ text: HERO.titleA }]} /></span> <span class="h1__b"><Words parts={[{ text: HERO.titleB }]} start={HERO.titleA.split(' ').length} /></span></h1>
+        <p class="lead hero__lead">{HERO.lead}</p>
+        <div class="actions hero__actions">
+          <a class="btn btn--solid" href={`${appBase}/register`} data-auth-anon>Начать бесплатно<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
+          <a class="btn btn--solid" href={`${appBase}/`} data-auth-authed>Открыть приложение<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
+          <a class="btn btn--line" href="#how">Как это работает<span class="btn__ic" aria-hidden="true"><HomeArrow /></span></a>
+        </div>
+        <p class="note hero__note">{HERO.note}<br />{HERO.noteMore} <a href="#platforms">{HERO.noteMoreLink}</a></p>
       </div>
-      <div class="win__body">
-        <div class="board">
-          <div class="col c1"></div>
-          <div class="col col--active c2"></div>
-          <div class="col c3"></div>
-          <div class="col c4"></div>
 
-          <div class="colh c1 r1"><span class="st"></span>Бэклог<span class="colh__n">3</span></div>
-          <div class="colh c2 r1"><span class="st st--ai"></span>AI делает<span class="colh__n">2</span></div>
-          <div class="colh c3 r1"><span class="st st--ok"></span>На утверждении<span class="colh__n">1</span></div>
-          <div class="colh c4 r1"><span class="st st--done"></span>Готово<span class="colh__n">2</span></div>
-
-          <div class="card c1 r2"><p class="card__t">Роли доступа для менеджеров</p><div class="card__m"><span class="chip chip--todo">Бэклог</span></div></div>
-          <div class="card c1 r3"><p class="card__t">Тексты для витрины</p><div class="card__m"><span class="chip chip--todo">Бэклог</span></div></div>
-          <div class="card c1 r4"><p class="card__t">Уведомления о заказах</p><div class="card__m"><span class="chip chip--todo">Бэклог</span></div></div>
-
-          <div class="card c2 r2">
-            <p class="card__t">Каталог, корзина и база заказов</p>
-            <div class="card__m"><span class="chip chip--ai">AI делает</span><span class="card__time">18 мин</span></div>
-            <div class="bar bar--loop"><i></i></div>
+      <div class="hero__visual">
+        <div class="hero__glow" aria-hidden="true"></div>
+        <figure
+          class="win"
+          role="img"
+          aria-label="Доска проекта «Магазин в Telegram»: воркер делает задачу, проверки проходят, и задача переходит на утверждение. Справа LIVE-лента его действий."
+        >
+          <div class="win__bar">
+            <span class="win__dots"><i></i><i></i><i></i></span>
+            <span class="win__crumbs"><span class="win__proj">Магазин в Telegram</span><span>/</span><span>Доска</span></span>
+            <span class="win__live"><span class="dot dot--live dot--sm"></span>2 воркера в работе</span>
           </div>
-          <div class="slot c3 r3"></div>
-          <div class="card card--move c2 r3">
-            <p class="card__t">Оплата по СБП в рублях</p>
-            <div class="card__m">
-              <span class="swap"><span class="chip chip--ai swap__a">AI делает</span><span class="chip chip--ok swap__b">На утверждении</span></span>
-              <span class="card__time">LIVE</span>
+          <div class="win__body">
+            <div class="board">
+              <div class="col col--active c1"></div>
+              <div class="col c2"></div>
+
+              <div class="colh c1 r1"><span class="st st--ai"></span>AI делает<span class="colh__n">2</span></div>
+              <div class="colh c2 r1"><span class="st st--ok"></span>На утверждении<span class="colh__n">1</span></div>
+
+              <div class="card c1 r2">
+                <p class="card__t">Каталог, корзина и база заказов</p>
+                <div class="card__m"><span class="chip chip--ai">AI делает</span><span class="card__time">18 мин</span></div>
+                <div class="bar bar--loop"><i></i></div>
+              </div>
+              <div class="slot c2 r3"></div>
+              <div class="card card--move c1 r3">
+                <p class="card__t">Оплата по СБП в рублях</p>
+                <div class="card__m">
+                  <span class="swap"><span class="chip chip--ai swap__a">AI делает</span><span class="chip chip--ok swap__b">На утверждении</span></span>
+                  <span class="card__time">LIVE</span>
+                </div>
+                <div class="bar bar--move"><i></i></div>
+              </div>
+              <div class="card c2 r2"><p class="card__t">4 автопроверки и живой стенд</p><div class="card__m"><span class="chip chip--ok">Ждёт тебя</span><span class="card__time">2 мин</span></div></div>
             </div>
-            <div class="bar bar--move"><i></i></div>
+
+            <div class="live">
+              <div class="live__h"><span class="dot dot--live dot--sm"></span><span>LIVE</span><span class="live__task">Оплата по СБП в рублях</span></div>
+              <ol class="live__list">
+                <li class="ev">
+                  <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="2.8"></circle></svg></span>
+                  <span class="ev__t">Читаю задачу и обсуждение</span><span class="ev__time">14:02</span>
+                </li>
+                <li class="ev">
+                  <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="6" cy="5.5" r="2"></circle><circle cx="6" cy="18.5" r="2"></circle><circle cx="18" cy="8" r="2"></circle><path d="M6 7.5v9M18 10c0 4.5-6 4-11 7"></path></svg></span>
+                  <span class="ev__t">Ветка feat/sbp-payments</span><span class="ev__time">14:03</span>
+                </li>
+                <li class="ev">
+                  <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"></path><path d="M13.5 6.5l4 4"></path></svg></span>
+                  <span class="ev__t">Правлю checkout.ts и ещё 3 файла</span><span class="ev__time">14:07</span>
+                </li>
+                <li class="ev ev--ok">
+                  <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>
+                  <span class="ev__t">Типы, тесты и сборка зелёные</span><span class="ev__time">14:15</span>
+                </li>
+                <li class="ev">
+                  <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="7" rx="2"></rect><rect x="3.5" y="13" width="17" height="7" rx="2"></rect><path d="M7.5 7.5h.01M7.5 16.5h.01"></path></svg></span>
+                  <span class="ev__t">Поднял живой стенд</span><span class="ev__time">14:16</span>
+                </li>
+                <li class="ev ev--last">
+                  <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"></path></svg></span>
+                  <span class="ev__t">Передал тебе на утверждение</span><span class="ev__time">14:17</span>
+                </li>
+              </ol>
+              <div class="live__foot">
+                <span>Написать в задачу…</span>
+                <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M21 4L3 11l6.5 2.5L12 20l3-5.5L21 4z"></path><path d="M9.5 13.5L21 4"></path></svg>
+              </div>
+            </div>
           </div>
-
-          <div class="card c3 r2"><p class="card__t">4 автопроверки и живой стенд</p><div class="card__m"><span class="chip chip--ok">Ждёт тебя</span><span class="card__time">2 мин</span></div></div>
-
-          <div class="card c4 r2"><p class="card__t">Схема артикулов, партий и ролей</p><div class="card__m"><span class="chip chip--done">Готово</span></div></div>
-          <div class="card c4 r3"><p class="card__t">Витрина Telegram WebApp</p><div class="card__m"><span class="chip chip--done">Готово</span></div></div>
-        </div>
-
-        <div class="live">
-          <div class="live__h"><span class="dot dot--live dot--sm"></span><span>LIVE</span><span class="live__task">Оплата по СБП в рублях</span></div>
-          <ol class="live__list">
-            <li class="ev">
-              <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="2.8"></circle></svg></span>
-              <span class="ev__t">Читаю задачу и обсуждение</span><span class="ev__time">14:02</span>
-            </li>
-            <li class="ev">
-              <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="6" cy="5.5" r="2"></circle><circle cx="6" cy="18.5" r="2"></circle><circle cx="18" cy="8" r="2"></circle><path d="M6 7.5v9M18 10c0 4.5-6 4-11 7"></path></svg></span>
-              <span class="ev__t">Ветка feat/sbp-payments</span><span class="ev__time">14:03</span>
-            </li>
-            <li class="ev">
-              <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"></path><path d="M13.5 6.5l4 4"></path></svg></span>
-              <span class="ev__t">Правлю checkout.ts и ещё 3 файла</span><span class="ev__time">14:07</span>
-            </li>
-            <li class="ev ev--ok">
-              <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>
-              <span class="ev__t">Типы, тесты и сборка зелёные</span><span class="ev__time">14:15</span>
-            </li>
-            <li class="ev">
-              <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="7" rx="2"></rect><rect x="3.5" y="13" width="17" height="7" rx="2"></rect><path d="M7.5 7.5h.01M7.5 16.5h.01"></path></svg></span>
-              <span class="ev__t">Поднял живой стенд</span><span class="ev__time">14:16</span>
-            </li>
-            <li class="ev ev--last">
-              <span class="ev__ic"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M7 17L17 7M9 7h8v8"></path></svg></span>
-              <span class="ev__t">Передал тебе на утверждение</span><span class="ev__time">14:17</span>
-            </li>
-          </ol>
-          <div class="live__foot">
-            <span>Написать в задачу…</span>
-            <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M21 4L3 11l6.5 2.5L12 20l3-5.5L21 4z"></path><path d="M9.5 13.5L21 4"></path></svg>
-          </div>
-        </div>
+        </figure>
+        <p class="stage__cap">Пример проекта: задачи и время на доске для иллюстрации.</p>
       </div>
-    </figure>
-    <p class="stage__cap">Пример проекта: задачи и время на доске для иллюстрации.</p>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="wrap stats__in">
+      {
+        FACTS.map((fact) => (
+          <div class="stat">
+            <p class="stat__v">{fact.value}</p>
+            <p class="stat__t">{fact.text}</p>
+          </div>
+        ))
+      }
+    </div>
   </div>
 </section>

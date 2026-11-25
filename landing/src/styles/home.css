@@ -38,8 +38,8 @@
   --container: 1240px;
   --gutter: clamp(16px, 4vw, 56px);
   --hero-h: max(600px, min(100vh, 920px));
-  --arc: 230px;
-  --peek: 0.24;
+  /* Статичное зерно (SVG feTurbulence) для свечения первого экрана, полосы фактов и веера. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 @supports (height: 100svh) {
@@ -143,7 +143,6 @@ html:has(.pf) .skip-link {
 .pf :focus-visible {
   outline: 2px solid oklch(var(--cyan));
   outline-offset: 3px;
-  border-radius: 10px;
 }
 
 .pf main {
@@ -251,96 +250,128 @@ html:has(.pf) .skip-link {
   padding-block: clamp(80px, 9vw, 140px);
 }
 
-/* текст в разделах проступает из размытия, пока въезжает в экран (как на fluidvoice) */
-@keyframes textIn {
-  from {
-    opacity: 0.15;
-    filter: blur(4px);
-    transform: translateY(18px);
+/* Проявление из размытия (как у fluidvoice). Заголовки (.rw) — по словам (.w, задержка по --i),
+   блоки (.rb) — целиком (задержка --d). Класс .is-in ставит IntersectionObserver из
+   scripts/home-motion.ts, когда элемент въезжает в экран; дальше — переход, без покадровой работы.
+   Без JS и при reduced motion ничего не скрыто. */
+@media (prefers-reduced-motion: no-preference) {
+  .pf--motion .rw .w {
+    display: inline-block;
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(0.28em);
+    transition:
+      opacity 0.8s var(--soft-ease),
+      filter 0.8s var(--soft-ease),
+      transform 0.8s var(--soft-ease);
+    transition-delay: calc(var(--i, 0) * 55ms);
+  }
+
+  .pf--motion .rw.is-in .w {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+
+  .pf--motion .rb {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(16px);
+    transition:
+      opacity 0.9s var(--soft-ease),
+      filter 0.9s var(--soft-ease),
+      transform 0.9s var(--soft-ease);
+    transition-delay: var(--d, 0ms);
+  }
+
+  .pf--motion .rb.is-in {
+    opacity: 1;
+    filter: none;
+    transform: none;
   }
 }
 
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .pf--motion .rv :is(h2, h3, p, .plan__list li):not(.statement__text, [aria-hidden="true"] *, .win *) {
-      animation: textIn linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 80%;
-    }
-  }
-}
-
-.pf--tjs .rv :is(h2, h3, p, .plan__list li):not(.statement__text, [aria-hidden="true"] *, .win *) {
-  opacity: calc(0.15 + var(--t, 1) * 0.85);
-  filter: blur(calc((1 - var(--t, 1)) * 4px));
-  transform: translate3d(0, calc((1 - var(--t, 1)) * 18px), 0);
-}
-
-/* ---------- кнопки ---------- */
+/* ---------- кнопки: пилюли с круглой стрелкой (как у fluidvoice) ---------- */
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 14px;
   border-radius: 999px;
   white-space: nowrap;
+}
+
+.pf a.btn,
+.pf button.btn {
   cursor: pointer;
 }
 
 .btn--solid,
 .pf a.btn--solid,
 .pf a.btn--solid:hover {
-  min-block-size: 46px;
-  padding: 11px 18px 11px 20px;
+  min-block-size: 50px;
+  padding: 6px 6px 6px 22px;
   border: 1px solid oklch(var(--white));
   background: oklch(var(--white));
   color: oklch(0% 0 0);
-  font-size: 15px;
+  font-size: 15.5px;
   font-weight: 500;
   line-height: 22px;
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .pf a.btn--solid:hover {
-  border-color: oklch(var(--white) / 0.86);
-  background: oklch(var(--white) / 0.86);
+  border-color: oklch(var(--white) / 0.88);
+  background: oklch(var(--white) / 0.88);
 }
 
 .btn--line,
 .pf a.btn--line {
-  gap: 0;
-  min-block-size: 46px;
-  padding: 11px 20px;
-  border: 1px solid oklch(var(--white) / 0.42);
+  min-block-size: 50px;
+  padding: 6px 6px 6px 22px;
+  border: 1px solid oklch(var(--white) / 0.22);
   background: transparent;
-  color: oklch(var(--white) / 0.56);
-  font-size: 15px;
+  color: oklch(var(--white));
+  font-size: 15.5px;
   font-weight: 450;
   line-height: 22px;
-  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, padding 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .pf a.btn--line:hover {
-  padding-inline-end: 12px;
-  border-color: oklch(var(--white));
+  border-color: oklch(var(--white) / 0.5);
   background: oklch(var(--white) / 0.05);
+}
+
+.btn__ic {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 38px;
+  block-size: 38px;
+  border-radius: 50%;
+}
+
+.btn--solid .btn__ic {
+  background: oklch(0% 0 0);
   color: oklch(var(--white));
 }
 
-.btn__arrow {
-  display: inline-flex;
-  flex-shrink: 0;
-  inline-size: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition: inline-size 0.2s ease, opacity 0.2s ease, margin 0.2s ease;
+.btn--line .btn__ic {
+  background: oklch(var(--white) / 0.08);
+  box-shadow: inset 0 0 0 1px oklch(var(--white) / 0.14);
+  color: oklch(var(--white));
 }
 
-.pf a.btn--line:hover .btn__arrow {
-  inline-size: 20px;
-  margin-inline-start: 6px;
-  opacity: 1;
+@media (prefers-reduced-motion: no-preference) {
+  .btn__ic svg {
+    transition: transform 0.2s ease;
+  }
+
+  .pf a.btn:hover .btn__ic svg {
+    transform: translateX(2px);
+  }
 }
 
 .btn--sm,
@@ -353,6 +384,7 @@ html:has(.pf) .skip-link {
 .btn--block,
 .pf a.btn--block {
   inline-size: 100%;
+  justify-content: space-between;
 }
 
 .actions {
@@ -390,11 +422,6 @@ html:has(.pf) .skip-link {
   .edge,
   .edge::after {
     animation: edgeSpin 6s linear infinite;
-  }
-
-  .edge--slow,
-  .edge--slow::after {
-    animation-duration: 10s;
   }
 }
 
@@ -668,12 +695,10 @@ html:has(.pf) .skip-link {
   isolation: isolate;
   overflow: clip;
   display: grid;
-  align-content: start;
+  grid-template-rows: minmax(0, 1fr) auto;
   min-block-size: var(--hero-h);
-  /* Окно доски наезжает только на пустой низ первого экрана, не на кнопки. */
-  padding-block: clamp(100px, 16vh, 168px) calc(var(--hero-h) * var(--peek) + 32px);
+  padding-block-start: clamp(96px, 13vh, 140px);
   background: oklch(var(--bg));
-  text-align: center;
 }
 
 html:not(.js) .pf .hero {
@@ -682,9 +707,23 @@ html:not(.js) .pf .hero {
 
 .hero__in {
   display: grid;
-  justify-items: center;
-  gap: 28px;
+  align-items: center;
   transform-origin: 50% 30%;
+}
+
+/* ПК: текст слева, окно доски справа (как у fluidvoice). */
+.hero__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: center;
+  gap: clamp(32px, 5vw, 80px);
+  padding-block: 8px clamp(40px, 6vh, 72px);
+}
+
+.hero__text {
+  display: grid;
+  justify-items: start;
+  gap: 26px;
 }
 
 .hero__sky {
@@ -693,8 +732,8 @@ html:not(.js) .pf .hero {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(55% 45% at 10% 0%, oklch(62% 0.03 345 / 0.26), oklch(62% 0.03 345 / 0) 70%),
-    radial-gradient(40% 40% at 100% 20%, oklch(48% 0.09 285 / 0.16), oklch(48% 0.09 285 / 0) 70%);
+    radial-gradient(55% 45% at 10% 0%, oklch(62% 0.03 345 / 0.22), oklch(62% 0.03 345 / 0) 70%),
+    radial-gradient(40% 40% at 100% 20%, oklch(48% 0.09 285 / 0.14), oklch(48% 0.09 285 / 0) 70%);
 }
 
 .hero__light {
@@ -708,8 +747,8 @@ html:not(.js) .pf .hero {
   margin-inline-start: -360px;
   border-radius: 50%;
   pointer-events: none;
-  background: radial-gradient(closest-side, oklch(var(--white) / 0.07), oklch(var(--white) / 0.02) 55%, oklch(var(--white) / 0));
-  transform: translate3d(50vw, clamp(200px, 32vh, 300px), 0);
+  background: radial-gradient(closest-side, oklch(var(--white) / 0.06), oklch(var(--white) / 0.02) 55%, oklch(var(--white) / 0));
+  transform: translate3d(30vw, clamp(200px, 32vh, 300px), 0);
   will-change: transform;
 }
 
@@ -719,30 +758,12 @@ html:not(.js) .pf .hero {
   }
 }
 
-.hero__horizon {
-  position: absolute;
-  z-index: -3;
-  inset-inline-start: 50%;
-  inset-block-end: 0;
-  inline-size: 2600px;
-  block-size: 2600px;
-  margin-inline-start: -1300px;
-  border-radius: 50%;
-  transform: translateY(calc(100% - var(--arc)));
-  pointer-events: none;
-  background: oklch(var(--bg));
-  box-shadow:
-    inset 0 1px 0 0 oklch(96% 0.012 280 / 0.8),
-    inset 0 24px 70px -36px oklch(86% 0.04 280 / 0.38),
-    0 -2px 28px 0 oklch(86% 0.04 280 / 0.26),
-    0 -60px 170px -40px oklch(70% 0.08 285 / 0.5);
-}
-
 .hero__title {
   display: grid;
-  justify-items: center;
+  justify-items: start;
   gap: 2px;
-  font-size: clamp(40px, min(6vw, 11vh), 84px);
+  /* В колонке ~490px на ПК заголовок укладывается в три строки. */
+  font-size: clamp(40px, min(4.2vw, 8.6vh), 68px);
 }
 
 .h1__a,
@@ -754,17 +775,53 @@ html:not(.js) .pf .hero {
   color: oklch(var(--white) / 0.42);
 }
 
+.hero__lead {
+  max-inline-size: 520px;
+}
+
+.hero__actions {
+  justify-content: flex-start;
+}
+
+.hero__note {
+  line-height: 1.65;
+}
+
+.pf .hero__note a {
+  color: oklch(var(--white) / 0.75);
+  text-decoration: underline;
+  text-decoration-color: oklch(var(--white) / 0.3);
+  text-underline-offset: 3px;
+}
+
+.hero__visual {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Зернистое белое свечение за окном доски: мягкий свет и статичное зерно поверх. */
+.hero__glow {
+  position: absolute;
+  z-index: -1;
+  inset: -22% -12% -12% -18%;
+  pointer-events: none;
+  background: radial-gradient(46% 50% at 34% 30%, oklch(var(--white) / 0.2), oklch(var(--white) / 0.06) 55%, oklch(var(--white) / 0) 78%);
+}
+
+.hero__glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--grain);
+  background-size: 180px 180px;
+  opacity: 0.22;
+  -webkit-mask-image: radial-gradient(46% 50% at 34% 30%, #000, transparent 78%);
+  mask-image: radial-gradient(46% 50% at 34% 30%, #000, transparent 78%);
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .announce {
     animation: softIn 1s var(--soft-ease) backwards;
-  }
-
-  .h1__a {
-    animation: softIn 1.2s var(--soft-ease) 0.15s backwards;
-  }
-
-  .h1__b {
-    animation: softIn 1.2s var(--soft-ease) 0.45s backwards;
   }
 
   .hero__lead {
@@ -779,12 +836,12 @@ html:not(.js) .pf .hero {
     animation: softIn 1s var(--soft-ease) 0.95s backwards;
   }
 
-  .hero__sky {
-    animation: fadeIn 2.4s ease 0.2s both;
+  .hero__visual {
+    animation: softIn 1.3s var(--soft-ease) 0.35s backwards;
   }
 
-  .hero__horizon {
-    animation: horizonIn 2.4s var(--ease-out) 0.3s both;
+  .hero__sky {
+    animation: fadeIn 2.4s ease 0.2s both;
   }
 }
 
@@ -802,40 +859,69 @@ html:not(.js) .pf .hero {
   }
 }
 
-@keyframes horizonIn {
-  from {
-    opacity: 0;
-    transform: translateY(calc(100% - var(--arc) + 110px));
-  }
-}
-
-/* прокрутка: первый экран отъезжает вглубь и гаснет под окном доски */
+/* прокрутка: первый экран отъезжает вглубь и гаснет под листом с главной фразой */
 .pf--motion .hero__in {
   transform: translate3d(0, calc(var(--h, 0) * -90px), 0) scale(calc(1 - var(--h, 0) * 0.06));
   opacity: calc(1 - var(--h, 0) * 1.5);
 }
 
-.pf--motion .hero__horizon {
-  transform: translateY(calc(100% - var(--arc) - var(--h, 0) * 90px));
+/* Полоса фактов внизу первого экрана: разделители и бирюзовое зерно (как у fluidvoice). */
+.stats {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  border-block-start: 1px solid oklch(var(--white) / 0.08);
+  background: linear-gradient(180deg, oklch(0% 0 0 / 0) 0%, oklch(26% 0.04 220 / 0.5) 55%, oklch(46% 0.07 215 / 0.8) 100%);
+}
+
+.stats::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--grain);
+  background-size: 180px 180px;
+  opacity: 0.3;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000);
+  mask-image: linear-gradient(180deg, transparent, #000);
+}
+
+.stats__in {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stat {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  padding: clamp(22px, 3.4vh, 34px) 12px;
+  text-align: center;
+}
+
+.stat + .stat {
+  border-inline-start: 1px solid oklch(var(--white) / 0.12);
+}
+
+.stat__v {
+  font-size: clamp(30px, 3vw, 46px);
+  font-weight: 450;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: oklch(var(--white));
+}
+
+.stat__t {
+  max-inline-size: 240px;
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: oklch(var(--white) / 0.62);
 }
 
 /* ---------- окно продукта ---------- */
-
-.stage {
-  position: relative;
-  z-index: 1;
-  margin-block-start: calc(var(--hero-h) * var(--peek) * -1);
-  padding-block-end: 48px;
-}
-
-.stage__glow {
-  position: absolute;
-  z-index: -1;
-  inset-inline: 4%;
-  inset-block: 12% -6%;
-  pointer-events: none;
-  background: radial-gradient(50% 50% at 50% 40%, oklch(var(--white) / 0.1), oklch(var(--white) / 0) 70%);
-}
 
 .win {
   position: relative;
@@ -843,11 +929,6 @@ html:not(.js) .pf .hero {
   border-radius: 18px;
   background: oklch(9% 0.003 265);
   box-shadow: 0 0 0 1px oklch(var(--white) / 0.12), 0 40px 80px oklch(0% 0 0 / 0.45), 0 50px 140px -50px oklch(var(--white) / 0.16);
-  transform-origin: 50% 0%;
-}
-
-.pf--motion .win {
-  transform: perspective(1800px) rotateX(calc((1 - var(--w, 1)) * 22deg)) scale(calc(0.9 + var(--w, 1) * 0.1));
 }
 
 .win::before {
@@ -913,14 +994,14 @@ html:not(.js) .pf .hero {
 
 .win__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
-  min-block-size: 470px;
+  grid-template-columns: minmax(0, 1fr) clamp(240px, 44%, 330px);
+  min-block-size: 440px;
 }
 
 .board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: auto repeat(3, minmax(92px, auto));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto repeat(2, minmax(92px, auto));
   gap: 12px;
   padding: 18px;
 }
@@ -939,12 +1020,9 @@ html:not(.js) .pf .hero {
 
 .c1 { grid-column: 1; }
 .c2 { grid-column: 2; }
-.c3 { grid-column: 3; }
-.c4 { grid-column: 4; }
 .r1 { grid-row: 1; }
 .r2 { grid-row: 2; }
 .r3 { grid-row: 3; }
-.r4 { grid-row: 4; }
 
 .colh {
   display: flex;
@@ -1376,58 +1454,15 @@ html:not(.js) .pf .hero {
   color: oklch(var(--white));
 }
 
-.pf--motion .lw:nth-child(1) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.0417) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(2) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.0833) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(3) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.125) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(4) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.1667) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(5) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.2083) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(6) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.25) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(7) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.2917) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(8) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.3333) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(9) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.375) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(10) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.4167) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(11) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.4583) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(12) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.5) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(13) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.5417) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(14) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.5833) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(15) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.625) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(16) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.6667) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(17) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.7083) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(18) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.75) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(19) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.7917) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(20) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.8333) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(21) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.875) * 16 + 0.14), 1); }
-.pf--motion .lw:nth-child(22) { opacity: clamp(0.14, calc((var(--wp, 1) - 0.9167) * 16 + 0.14), 1); }
-
-.facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
-  inline-size: 100%;
-  margin-block-start: clamp(40px, 5vw, 72px);
-  border-block-start: 1px solid oklch(var(--white) / 0.1);
+.pf--motion .lw {
+  opacity: 0.14;
+  filter: blur(5px);
+  transition: opacity 0.45s var(--soft-ease), filter 0.45s var(--soft-ease);
 }
 
-.fact {
-  display: grid;
-  align-content: start;
-  justify-items: center;
-  gap: 8px;
-  padding: 26px 12px 0;
-}
-
-.fact__v {
-  font-size: clamp(30px, 3vw, 42px);
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-  color: oklch(var(--white));
-}
-
-.fact__t {
-  max-inline-size: 220px;
-  font-size: 14.5px;
-  color: oklch(var(--white) / 0.5);
+.pf--motion .lw.on {
+  opacity: 1;
+  filter: none;
 }
 
 /* ---------- больше, чем доска ---------- */
@@ -1733,10 +1768,9 @@ html:not(.js) .pf .hero {
   transform-origin: 50% 0%;
 }
 
-.steps > .step:nth-child(1) { inset-block-start: 112px; }
-.steps > .step:nth-child(2) { inset-block-start: 134px; }
-.steps > .step:nth-child(3) { inset-block-start: 156px; }
-.steps > .step:nth-child(4) { inset-block-start: 178px; }
+.steps > .step {
+  inset-block-start: calc(112px + var(--i, 0) * 22px);
+}
 
 .step::after {
   content: "";
@@ -1981,75 +2015,6 @@ html:not(.js) .pf .hero {
   padding-block: clamp(110px, 14vh, 140px) 40px;
 }
 
-.marquee {
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-}
-
-.marquee__row {
-  display: flex;
-  gap: 10px;
-  inline-size: max-content;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .marquee__row {
-    animation: marquee 34s linear infinite;
-  }
-}
-
-@keyframes marquee {
-  to {
-    transform: translateX(calc(-50% - 5px));
-  }
-}
-
-/* Без движения строка платформ не бежит, поэтому переносится, а копии для цикла скрыты. */
-@media (prefers-reduced-motion: reduce) {
-  .marquee {
-    padding-inline: var(--gutter);
-    -webkit-mask-image: none;
-    mask-image: none;
-  }
-
-  .marquee__row {
-    flex-wrap: wrap;
-    justify-content: center;
-    inline-size: auto;
-  }
-
-  .marquee__row > [aria-hidden="true"] {
-    display: none;
-  }
-}
-
-.plat {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-block-size: 44px;
-  padding-inline: 14px 8px;
-  border-radius: 999px;
-  background: oklch(var(--white) / 0.04);
-  box-shadow: inset 0 0 0 1px oklch(var(--white) / 0.1);
-  font-size: 14.5px;
-  white-space: nowrap;
-  color: oklch(var(--white) / 0.85);
-}
-
-.plat .ico {
-  color: oklch(var(--white) / 0.6);
-}
-
-.plat__ok {
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: oklch(var(--green) / 0.1);
-  font: 500 11px/1 var(--font-mono);
-  color: oklch(var(--green));
-}
-
 .pin__view {
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%);
@@ -2077,6 +2042,17 @@ html:not(.js) .pf .hero {
   scroll-snap-type: none;
   transform: translate3d(var(--x, 0px), 0, 0);
   will-change: transform;
+}
+
+/* Без движения лента листается сама: полоса прокрутки видна, пустой полоски прогресса нет. */
+.pf:not(.pf--motion) .pin__foot {
+  display: none;
+}
+
+.pf:not(.pf--motion) .pin__track {
+  padding-block-end: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: oklch(var(--white) / 0.25) transparent;
 }
 
 .pin__bar {
@@ -2332,34 +2308,183 @@ html:not(.js) .pf .hero {
   flex: 1;
 }
 
-/* ---------- тарифы ---------- */
+/* ---------- где работает: веер карточек (как у fluidvoice) ---------- */
+
+.platforms {
+  overflow: clip;
+}
+
+.fan {
+  --card-w: clamp(150px, 19vw, 270px);
+  --card-h: calc(var(--card-w) * 4 / 3);
+  --spread: 15deg;
+  /* Ось веера далеко под картами: соседка закрывает меньше, и название каждой видно целиком. */
+  --pivot: 240%;
+  position: relative;
+  isolation: isolate;
+  block-size: calc(var(--card-h) * 1.5);
+  margin-block-start: clamp(36px, 5vw, 64px);
+}
+
+/* бирюзовое свечение под веером */
+.fan::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 30% 8% -12%;
+  pointer-events: none;
+  background: radial-gradient(50% 50% at 50% 60%, oklch(46% 0.07 215 / 0.32), oklch(46% 0.07 215 / 0) 72%);
+}
+
+.pcard {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: calc(50% - var(--card-w) / 2);
+  z-index: calc(var(--k) + 3);
+  display: grid;
+  align-content: start;
+  gap: calc(var(--card-w) * 0.015);
+  inline-size: var(--card-w);
+  block-size: var(--card-h);
+  padding: calc(var(--card-w) * 0.09);
+  border-radius: calc(var(--card-w) * 0.1);
+  background:
+    radial-gradient(60% 45% at 50% 62%, oklch(var(--white) / 0.06), oklch(var(--white) / 0) 70%),
+    linear-gradient(160deg, oklch(21% 0.006 265), oklch(13.5% 0.005 265));
+  box-shadow: inset 0 0 0 1px oklch(var(--white) / 0.1), 0 30px 60px -24px oklch(0% 0 0 / 0.85);
+  transform-origin: 50% var(--pivot);
+  transform: rotate(calc(var(--k) * var(--spread)));
+}
+
+.pcard__ic {
+  inline-size: calc(var(--card-w) * 0.1);
+  block-size: calc(var(--card-w) * 0.1);
+  color: oklch(var(--white) / 0.8);
+}
+
+.pcard__t {
+  margin-block-start: calc(var(--card-w) * 0.05);
+  font-size: max(12px, calc(var(--card-w) * 0.1));
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: oklch(var(--white));
+}
+
+.pcard__n {
+  font-size: max(10px, calc(var(--card-w) * 0.062));
+  color: oklch(var(--cyan) / 0.85);
+}
+
+.pcard__big {
+  position: absolute;
+  inset-block-start: 62%;
+  inset-inline-start: 50%;
+  inline-size: 28%;
+  block-size: auto;
+  aspect-ratio: 1;
+  stroke-width: 1.1;
+  color: oklch(var(--white) / 0.55);
+  translate: -50% -50%;
+}
+
+/* Сложенный веер до въезда в экран; раскрывается переходом, крайние карточки последними. */
+@media (prefers-reduced-motion: no-preference) {
+  .pf--motion .pcard {
+    transition: transform 1.1s var(--ease-out);
+    transition-delay: calc((2 - var(--k) * var(--k) / 2) * 40ms);
+  }
+
+  .pf--motion .fan:not(.is-in) .pcard {
+    transform: translateY(28px) rotate(calc(var(--k) * 2deg));
+  }
+}
+
+/* Телефон: пять карт веером в 360px не читаются, поэтому та же колода раскладывается вниз —
+   у каждой видна верхняя полоска (иконка, название, подпись), передняя карта — целиком. */
+@media (max-width: 600px) {
+  .fan {
+    --card-w: min(340px, 100%);
+    --card-h: 190px;
+    --step: 56px;
+    block-size: calc(var(--card-h) + 4 * var(--step) + 24px);
+  }
+
+  .pcard {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 10px;
+    padding: 16px 18px;
+    border-radius: 20px;
+    transform-origin: 50% 50%;
+    transform: translateY(calc((var(--k) + 2) * var(--step))) rotate(calc(var(--k) * 1.2deg));
+  }
+
+  .pcard__ic {
+    inline-size: 18px;
+    block-size: 18px;
+  }
+
+  .pcard__t {
+    margin: 0;
+    font-size: 17px;
+  }
+
+  .pcard__n {
+    font-size: 13px;
+    text-align: end;
+  }
+
+  .pcard__big {
+    inset-block-start: 60%;
+    inline-size: 52px;
+  }
+}
+
+@media (max-width: 600px) and (prefers-reduced-motion: no-preference) {
+  .pf--motion .fan:not(.is-in) .pcard {
+    transform: translateY(calc((var(--k) + 2) * 14px));
+  }
+}
+
+/* ---------- тарифы: одна карточка на три колонки (как у fluidvoice) ---------- */
 
 .plans {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-block-start: 48px;
+  overflow: hidden;
+  border-radius: 32px;
+  background: oklch(8.5% 0.003 265);
+  box-shadow: inset 0 0 0 1px oklch(var(--white) / 0.09);
+}
+
+/* радужная линия по верхнему краю карточки */
+.plans::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 0;
+  inset-inline: 6%;
+  block-size: 1px;
+  background: linear-gradient(90deg, oklch(var(--amber) / 0), oklch(var(--amber)) 18%, oklch(var(--pink)) 42%, oklch(var(--violet)) 62%, oklch(var(--cyan)) 82%, oklch(var(--cyan) / 0));
 }
 
 .plan {
   position: relative;
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 18px;
-  padding: clamp(24px, 2.6vw, 32px);
-  border-radius: 24px;
-  background: oklch(var(--bg-1));
-  box-shadow: inset 0 0 0 1px oklch(var(--white) / 0.08);
+  padding: clamp(28px, 3vw, 44px);
+}
+
+.plan + .plan {
+  border-inline-start: 1px solid oklch(var(--white) / 0.08);
 }
 
 .plan--hi {
-  isolation: isolate;
-  background: oklch(12.5% 0.004 265);
-  box-shadow: 0 30px 80px -40px oklch(var(--violet) / 0.45);
-}
-
-.plan--hi .edge::after {
-  opacity: 0.45;
+  background: radial-gradient(90% 45% at 50% 0%, oklch(var(--violet) / 0.09), oklch(var(--violet) / 0) 72%);
 }
 
 .plan__top {
@@ -2367,12 +2492,15 @@ html:not(.js) .pf .hero {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-block-size: 28px;
 }
 
 .plan__name {
-  font-size: 20px;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: oklch(var(--white) / 0.6);
 }
 
 .badge {
@@ -2390,25 +2518,19 @@ html:not(.js) .pf .hero {
   color: oklch(var(--white) / 0.7);
 }
 
-.plan__tag {
-  margin-block-start: -10px;
-  font-size: 15px;
-  color: oklch(var(--white) / 0.5);
-}
-
 .plan__price {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding-block: 6px;
 }
 
 .plan__num {
-  font-size: clamp(38px, 3.4vw, 48px);
+  font-size: clamp(44px, 4.4vw, 64px);
   font-weight: 500;
   line-height: 1;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
+  color: oklch(var(--white));
 }
 
 .plan__per {
@@ -2416,12 +2538,39 @@ html:not(.js) .pf .hero {
   color: oklch(var(--white) / 0.5);
 }
 
+.plan__tag {
+  font-size: 16px;
+  color: oklch(var(--white) / 0.56);
+}
+
+.plan__list {
+  display: grid;
+  margin-block-start: 6px;
+  border-block-start: 1px solid oklch(var(--white) / 0.08);
+}
+
+.plan__list li {
+  padding-block: 15px;
+  border-block-end: 1px solid oklch(var(--white) / 0.08);
+  font-size: 15px;
+  line-height: 1.45;
+  color: oklch(var(--white) / 0.82);
+}
+
+.plan__cta {
+  display: grid;
+  /* второй ряд — под ссылку на пробный час: кнопки всех тарифов на одной высоте */
+  grid-template-rows: auto 32px;
+  justify-items: start;
+  gap: 12px;
+  margin-block-start: auto;
+  padding-block-start: 18px;
+}
+
 .plan__trial {
-  justify-self: center;
   display: inline-flex;
   align-items: center;
   min-block-size: 32px;
-  margin-block-start: -8px;
   font-size: 14px;
 }
 
@@ -2433,28 +2582,16 @@ html:not(.js) .pf .hero {
   text-decoration-color: oklch(var(--white) / 0.3);
 }
 
-.plan__list {
-  display: grid;
-  gap: 12px;
-  padding-block-start: 20px;
-  border-block-start: 1px solid oklch(var(--white) / 0.08);
-}
+@media (max-width: 960px) {
+  .plans {
+    grid-template-columns: minmax(0, 1fr);
+    border-radius: 26px;
+  }
 
-.plan__list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: 15px;
-  color: oklch(var(--white) / 0.72);
-}
-
-.plan__list .ico {
-  margin-block-start: 3px;
-  color: oklch(var(--white) / 0.5);
-}
-
-.plan--hi .plan__list .ico {
-  color: oklch(var(--cyan));
+  .plan + .plan {
+    border-inline-start: 0;
+    border-block-start: 1px solid oklch(var(--white) / 0.08);
+  }
 }
 
 .guar {
@@ -2757,9 +2894,11 @@ html:not(.js) .pf .hero {
 
 /* ---------- адаптив ---------- */
 
-@media (max-width: 1080px) {
-  .win__body {
-    grid-template-columns: minmax(0, 1fr) 290px;
+/* Уже 1024px первый экран идёт столбиком: текст, окно доски, полоса фактов. */
+@media (max-width: 1023px) {
+  .hero__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
   }
 }
 
@@ -2793,27 +2932,28 @@ html:not(.js) .pf .hero {
 }
 
 @media (max-width: 760px) {
-  .pf {
-    --arc: 150px;
-    --peek: 0.15;
-  }
-
   .hero {
     padding-block-start: clamp(124px, 16vh, 146px);
   }
 
-  .hero__in {
-    gap: 24px;
+  .hero__text {
+    gap: 22px;
   }
 
   .hero__light {
     display: none;
   }
 
-  .hero__horizon {
-    inline-size: 1200px;
-    block-size: 1200px;
-    margin-inline-start: -600px;
+  .stats__in {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat:nth-child(3) {
+    border-inline-start: 0;
+  }
+
+  .stat:nth-child(n + 3) {
+    border-block-start: 1px solid oklch(var(--white) / 0.12);
   }
 
   .announce,
@@ -2830,7 +2970,7 @@ html:not(.js) .pf .hero {
 
   .hero__actions {
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
   }
 
   .sheet {
@@ -2859,23 +2999,9 @@ html:not(.js) .pf .hero {
   }
 
   .board {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: auto repeat(2, minmax(86px, auto));
     gap: 10px;
     padding: 12px;
-  }
-
-  .board .c1,
-  .board .c4 {
-    display: none;
-  }
-
-  .board .c2 {
-    grid-column: 1;
-  }
-
-  .board .c3 {
-    grid-column: 2;
   }
 
   .card {
@@ -2903,10 +3029,6 @@ html:not(.js) .pf .hero {
     display: none;
   }
 
-  .facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .big__vis {
     min-block-size: 0;
     padding: 16px;
@@ -2917,10 +3039,9 @@ html:not(.js) .pf .hero {
     inset-inline-end: -190px;
   }
 
-  .steps > .step:nth-child(1) { inset-block-start: 112px; }
-  .steps > .step:nth-child(2) { inset-block-start: 124px; }
-  .steps > .step:nth-child(3) { inset-block-start: 136px; }
-  .steps > .step:nth-child(4) { inset-block-start: 148px; }
+  .steps > .step {
+    inset-block-start: calc(112px + var(--i, 0) * 12px);
+  }
 
   .pin__track > .fc {
     grid-template-rows: 140px auto;

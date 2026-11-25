@@ -1,8 +1,11 @@
 ---
-// Тарифы из data/pricing.ts и гарантии из data/home.ts. У рекомендуемого тарифа (highlight)
-// медленная цветная обводка, бейдж и ссылка на пробный час.
+// Тарифы одной карточкой (как у fluidvoice): три колонки с разделителями, радужная линия по
+// верхнему краю. Данные — data/pricing.ts, гарантии — data/home.ts. Вошедшему вместо регистрации —
+// «Открыть приложение»: страницы выбора тарифа в приложении нет.
 import { GUARANTEES } from '@/data/home';
 import { PLANS, formatRub } from '@/data/pricing';
+import HomeArrow from './HomeArrow.astro';
+import Words from './Words.astro';
 
 interface Props {
   appBase: string;
@@ -22,49 +25,52 @@ const guaranteeIcon: Record<(typeof GUARANTEES)[number]['id'], string> = {
 <section id="pricing" class="section rv" aria-labelledby="pricing-title">
   <div class="wrap">
     <div class="sec-head sec-head--center">
-      <p class="eyebrow">Тарифы</p>
-      <h2 id="pricing-title" class="h2">Простые тарифы. <span class="dim">Старт бесплатно.</span></h2>
-      <p class="sub">Цены в рублях. Платный тариф не подошёл, вернём деньги.</p>
+      <p class="eyebrow rb">Тарифы</p>
+      <h2 id="pricing-title" class="h2 rw"><Words parts={[{ text: 'Простые тарифы.' }, { text: 'Старт бесплатно.', dim: true }]} /></h2>
+      <p class="sub rb" style="--d:120ms">Цены в рублях. Платный тариф не подошёл, вернём деньги.</p>
     </div>
     <div class="plans">
       {
-        PLANS.map((plan) => (
-          <article class:list={['plan', { 'plan--hi': plan.highlight }]}>
-            {plan.highlight && <span class="edge edge--slow" aria-hidden="true" />}
+        PLANS.map((plan, i) => (
+          <article class:list={['plan', 'rb', { 'plan--hi': plan.highlight }]} style={`--d:${i * 120}ms`}>
             <div class="plan__top">
               <h3 class="plan__name">{plan.name}</h3>
               {plan.badge && <span class="badge">{plan.badge}</span>}
               {plan.requestOnly && <span class="badge badge--muted">По запросу</span>}
             </div>
-            <p class="plan__tag">{plan.tagline}</p>
             <p class="plan__price">
               <span class="plan__num">{formatRub(plan.priceRub)}&nbsp;₽</span>
               <span class="plan__per">{plan.priceNote}</span>
             </p>
-            <a class:list={['btn', 'btn--block', plan.highlight ? 'btn--solid' : 'btn--line']} href={`${appBase}${plan.href}`}>
-              {plan.cta}
-            </a>
-            {plan.trialCta && (
-              <a class="plan__trial" href={`${appBase}${plan.href}`}>
-                {plan.trialCta}
-              </a>
-            )}
+            <p class="plan__tag">{plan.tagline}</p>
             <ul class="plan__list">
               {plan.features.map((feature) => (
-                <li>
-                  <svg class="ico ico--sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" /></svg>
-                  {capitalize(feature)}
-                </li>
+                <li>{capitalize(feature)}</li>
               ))}
             </ul>
+            <div class="plan__cta">
+              <a class:list={['btn', plan.highlight ? 'btn--solid' : 'btn--line']} href={`${appBase}${plan.href}`} data-auth-anon>
+                {plan.cta}
+                <span class="btn__ic" aria-hidden="true"><HomeArrow /></span>
+              </a>
+              <a class:list={['btn', plan.highlight ? 'btn--solid' : 'btn--line']} href={`${appBase}/`} data-auth-authed>
+                Открыть приложение
+                <span class="btn__ic" aria-hidden="true"><HomeArrow /></span>
+              </a>
+              {plan.trialCta && (
+                <a class="plan__trial" href={`${appBase}${plan.href}`} data-auth-anon>
+                  {plan.trialCta}
+                </a>
+              )}
+            </div>
           </article>
         ))
       }
     </div>
     <ul class="guar" aria-label="Гарантии">
       {
-        GUARANTEES.map((g) => (
-          <li>
+        GUARANTEES.map((g, i) => (
+          <li class="rb" style={`--d:${i * 80}ms`}>
             <span class="guar__ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" set:html={guaranteeIcon[g.id]} /></span>
             <div>
               <p class="guar__h">{g.title}</p>
