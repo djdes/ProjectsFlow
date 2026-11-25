@@ -233,6 +233,23 @@ async function unreachable(page, selector, { from = 0, to = Infinity, step = 40 
   return labels.filter((_, i) => !reached.has(i));
 }
 
+// Waits for an anchor jump to land: the section's top reaches its own scroll-margin. The jump can be
+// smooth and start several frames late where frames are slow (CI renders without a GPU), so sampling
+// the scroll position and calling two equal reads «done» returned before the scroll had even begun.
+async function waitAnchored(page, id, timeout = 8000) {
+  await page
+    .waitForFunction(
+      (sel) => {
+        const sec = document.getElementById(sel);
+        return Boolean(sec) && Math.abs(sec.getBoundingClientRect().top - parseFloat(getComputedStyle(sec).scrollMarginBlockStart)) <= 3;
+      },
+      id,
+      { timeout, polling: 100 },
+    )
+    .catch(() => {});
+  await waitScrollStable(page);
+}
+
 // Where a section ended up after an anchor jump, against its own scroll-margin.
 async function anchorReport(page, id) {
   return page.evaluate((sel) => {
@@ -533,13 +550,9 @@ async function phone320({ page, check }) {
 async function anchors({ page, check, baseUrl }) {
   for (const id of ['pricing', 'faq']) {
     await page.goto(`${baseUrl}/#${id}`, { waitUntil: 'load' });
-    await waitScrollStable(page);
-    const r = await page.evaluate((sel) => ({
-      y: window.scrollY,
-      header: document.querySelector('header.nav').getBoundingClientRect().bottom,
-      h2: document.querySelector(`#${sel} .h2`).getBoundingClientRect().top,
-    }), id);
-    check(`/#${id}: заголовок раздела не под фиксированной шапкой`, r.y > 0 && r.h2 >= r.header - 1, JSON.stringify(r));
+    await waitAnchored(page, id);
+    const r = await anchorReport(page, id);
+    check(`/#${id}: раздел встаёт ровно под фиксированную шапку`, r.y > 0 && Math.abs(r.top - r.margin) <= 3 && r.heading >= r.header - 1, JSON.stringify(r));
   }
 }
 
@@ -640,9 +653,8 @@ async function iosToolbar({ page, check }) {
 
 async function freshAnchor({ page, check, c }) {
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(1500);
-  await waitScrollStable(page);
   const id = c.path.split('#')[1];
+  await waitAnchored(page, id);
   const r = await anchorReport(page, id);
   check(`открыть ${c.path} (шрифты медленные): раздел встаёт ровно под шапку`, r.y > 0 && Math.abs(r.top - r.margin) <= 3 && r.heading >= r.header - 1, JSON.stringify(r));
 }
@@ -652,8 +664,7 @@ async function fromBlog({ page, check }) {
   await page.waitForURL(/\/#pricing$/);
   await page.waitForLoadState('load');
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(1500);
-  await waitScrollStable(page);
+  await waitAnchored(page, 'pricing');
   const r = await anchorReport(page, 'pricing');
   check('из журнала по ссылке «Тарифы»: раздел встаёт ровно под шапку', r.y > 0 && Math.abs(r.top - r.margin) <= 3 && r.heading >= r.header - 1, JSON.stringify(r));
 }
