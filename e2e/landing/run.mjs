@@ -355,7 +355,14 @@ async function desktopStructure({ page, check }) {
       offers: ld.find((x) => x['@type'] === 'SoftwareApplication')?.offers?.length ?? 0,
       themeColor: q('meta[name="theme-color"]')?.getAttribute('content') ?? '',
       words: document.querySelectorAll('.statement__text .lw').length,
-      facts: document.querySelectorAll('.fact').length,
+      facts: document.querySelectorAll('.hero .stats .stat').length,
+      statsBottom: q('.hero .stats')?.getBoundingClientRect().bottom ?? Infinity,
+      split: (() => {
+        const t = q('.hero__text')?.getBoundingClientRect();
+        const v = q('.hero__visual')?.getBoundingClientRect();
+        return t && v ? { textRight: Math.round(t.right), visualLeft: Math.round(v.left), visualTop: Math.round(v.top), textTop: Math.round(t.top) } : null;
+      })(),
+      btnIcons: ['.hero__actions', '.how__sticky', '.final .actions'].map((sel) => document.querySelectorAll(`${sel} a.btn .btn__ic`).length),
       steps: document.querySelectorAll('.step').length,
       details: document.querySelectorAll('.pin__track .fc').length,
       guarantees: document.querySelectorAll('.guar li').length,
@@ -375,6 +382,9 @@ async function desktopStructure({ page, check }) {
   check('JSON-LD: Organization, WebSite, SoftwareApplication, FAQPage', ['Organization', 'WebSite', 'SoftwareApplication', 'FAQPage'].every((t) => info.ldTypes.includes(t)), info.ldTypes.join(','));
   check('JSON-LD: 7 вопросов и 3 предложения', info.faqLd === 7 && info.offers === 3, `${info.faqLd}/${info.offers}`);
   check('theme-color #000000', info.themeColor === '#000000', info.themeColor);
+  check('первый экран: текст слева, окно доски справа', info.split && info.split.visualLeft >= info.split.textRight - 1, JSON.stringify(info.split));
+  check('полоса из 4 фактов внизу первого экрана', info.facts === 4 && info.statsBottom <= 901, `${info.facts} ${info.statsBottom}`);
+  check('кнопки-пилюли с круглой стрелкой (первый экран, шаги, финал)', info.btnIcons.every((n) => n >= 1), info.btnIcons.join(','));
   check('фраза из 22 слов, 4 факта, 4 шага, 8 мелочей, 4 гарантии', info.words === 22 && info.facts === 4 && info.steps === 4 && info.details === 8 && info.guarantees === 4, JSON.stringify(info));
   check('в подвале 3 свежие статьи', info.posts === 3, String(info.posts));
   check('шрифт Inter Variable загружен', info.font);
@@ -388,9 +398,11 @@ async function desktopMotion({ page, check }) {
 
   await scrollToY(page, 0);
   const h0 = await cssNumber(page, '.hero', '--h');
-  await scrollToY(page, DESKTOP.height * 0.85 + 10);
+  // A first screen taller than the window scrolls -heroTop px before it sticks and starts to recede.
+  const heroTop = (await cssNumber(page, '.hero', '--hero-top')) || 0;
+  await scrollToY(page, -heroTop + DESKTOP.height * 0.85 + 10);
   const h1 = await cssNumber(page, '.hero', '--h');
-  check('первый экран: --h от 0 до 1 за 85% высоты', h0 === 0 && h1 >= 0.99, `${h0} → ${h1}`);
+  check('первый экран: --h от 0 до 1 за 85% высоты после того, как экран встал', h0 === 0 && h1 >= 0.99, `${h0} → ${h1} (hero-top ${heroTop})`);
 
   const how = await page.evaluate(() => {
     const el = document.querySelector('#how');
@@ -526,6 +538,13 @@ async function phone390({ page, check }) {
   check('390: все пять разделов помещаются', nav.rights.length === 5 && nav.rights.every((r) => r <= nav.vw + 0.5) && nav.lefts.every((l) => l >= -0.5), JSON.stringify(nav.rights));
   const gaps = await linkGaps(page);
   check('390: разделы не слипаются (между ними ≥ 8px)', gaps.every((g) => g >= 8), gaps.join(', '));
+  const lay = await page.evaluate(() => {
+    const t = document.querySelector('.hero__text')?.getBoundingClientRect();
+    const v = document.querySelector('.hero__visual')?.getBoundingClientRect();
+    const s = [...document.querySelectorAll('.hero .stats .stat')].map((e) => Math.round(e.getBoundingClientRect().top));
+    return { textBottom: t ? Math.round(t.bottom) : null, visualTop: v ? Math.round(v.top) : null, stats: s };
+  });
+  check('390: окно доски под текстом, факты в две колонки', lay.textBottom !== null && lay.visualTop >= lay.textBottom - 1 && lay.stats.length === 4 && lay.stats[0] === lay.stats[1] && lay.stats[2] > lay.stats[0], JSON.stringify(lay));
 }
 
 async function phone320({ page, check }) {

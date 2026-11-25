@@ -8,7 +8,6 @@
 //   anchor settling        after fonts and the pinned strip change the layout, /#section is re-aligned
 // Motion only (root class .pf--motion), all 0…1 unless noted:
 //   .hero --h          first screen recedes under the board window
-//   .win --w           the window straightens out of its tilt
 //   .statement__text --wp   words of the statement light up one by one
 //   .step --c          a step card is covered by the next one (stacking)
 //   .pin --pp, .pin__track --x (px), .pin --pin-dist (px)   pinned sideways strip
@@ -30,7 +29,6 @@ export function initHomeMotion(root: HTMLElement): () => void {
 
   const hero = one('.hero');
   const light = one('.hero__light');
-  const win = one('.win');
   const words = one('.statement__text');
   const steps = all('.step');
   const pin = one('.pin');
@@ -84,7 +82,6 @@ export function initHomeMotion(root: HTMLElement): () => void {
     const vh = window.innerHeight;
     // Read every rect first, then write: no layout between writes.
     const y = -root.getBoundingClientRect().top;
-    const winTop = win?.getBoundingClientRect().top ?? 0;
     const wordsRect = words?.getBoundingClientRect();
     const stepRects = steps.map((el) => el.getBoundingClientRect());
     const pinRect = pin?.getBoundingClientRect();
@@ -94,7 +91,6 @@ export function initHomeMotion(root: HTMLElement): () => void {
 
     // The first screen starts to recede once it is stuck (a tall one scrolls -heroTop px first).
     put(hero, '--h', clamp01((y + heroTop) / (vh * 0.85)));
-    put(win, '--w', clamp01((vh - winTop) / (vh * 0.78)));
     if (wordsRect) put(words, '--wp', clamp01((vh * 0.9 - wordsRect.top) / (vh * 0.55 + wordsRect.height * 0.6)));
     steps.forEach((el, i) => {
       const cur = stepRects[i];

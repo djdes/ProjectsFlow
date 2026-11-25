@@ -1,7 +1,7 @@
 ---
 // Главная фраза: лист с закруглённым верхом наезжает на первый экран, слова загораются по одному
-// (--wp из scripts/home-motion.ts). Под фразой четыре факта.
-import { FACTS, STATEMENT } from '@/data/home';
+// по мере прокрутки (scripts/home-motion.ts). Факты — в полосе внизу первого экрана (HomeHero).
+import { STATEMENT } from '@/data/home';
 
 const words = STATEMENT.split(' ');
 ---
@@ -18,15 +18,5 @@ const words = STATEMENT.split(' ');
         </>
       ))}
     </p>
-    <div class="facts">
-      {
-        FACTS.map((fact) => (
-          <div class="fact">
-            <p class="fact__v">{fact.value}</p>
-            <p class="fact__t">{fact.text}</p>
-          </div>
-        ))
-      }
-    </div>
   </div>
 </section>
