@@ -1,0 +1,44 @@
+---
+// Подвал выезжает из-под страницы (--r у .foot). В колонке «Журнал» — свежие статьи.
+import HomeLogo from './HomeLogo.astro';
+
+interface Props {
+  appBase: string;
+  posts: readonly { slug: string; title: string }[];
+}
+const { appBase, posts } = Astro.props;
+const year = new Date().getFullYear();
+---
+
+<footer class="foot">
+  <div class="foot__inner">
+    <div class="wrap foot__grid">
+      <div class="foot__brand">
+        <a class="brand" href="/" aria-label="ProjectsFlow, на главную"><HomeLogo class="brand__mark" /><span>ProjectsFlow</span></a>
+        <p>Платформа для тех, кто строит с AI.</p>
+      </div>
+      <nav class="foot__col" aria-label="Продукт">
+        <p class="foot__h">Продукт</p>
+        <a href="#features">Возможности</a>
+        <a href="#how">Как это работает</a>
+        <a href="#pricing">Тарифы</a>
+        <a href="#faq">Вопросы</a>
+      </nav>
+      <nav class="foot__col" aria-label="Журнал">
+        <p class="foot__h">Журнал</p>
+        <a href="/blog">Все статьи</a>
+        {posts.map((post) => <a href={`/blog/${post.slug}/`}>{post.title}</a>)}
+      </nav>
+      <nav class="foot__col" aria-label="Аккаунт">
+        <p class="foot__h">Аккаунт</p>
+        <a href={`${appBase}/login`} data-auth-anon>Войти</a>
+        <a href={`${appBase}/register`} data-auth-anon>Зарегистрироваться</a>
+        <a href={`${appBase}/`} data-auth-authed>Открыть приложение</a>
+      </nav>
+    </div>
+    <div class="wrap foot__base">
+      <div class="foot__bottom"><span>© {year} ProjectsFlow</span><span>Цены в рублях</span></div>
+    </div>
+  </div>
+  <div class="foot__word" aria-hidden="true">ProjectsFlow</div>
+</footer>

@@ -99,18 +99,13 @@ html:has(.pf) .skip-link {
   box-sizing: border-box;
 }
 
-.pf h1,
-.pf h2,
-.pf h3,
-.pf p,
-.pf ul,
-.pf ol,
-.pf figure {
+/* :where() — нулевая специфичность у сброса, иначе он перебивает отступы компонентов
+   (.guar, .stage__cap, .plan__tag, .foot__h). */
+.pf :where(h1, h2, h3, p, ul, ol, figure) {
   margin: 0;
 }
 
-.pf ul,
-.pf ol {
+.pf :where(ul, ol) {
   padding: 0;
   list-style: none;
 }
@@ -508,7 +503,7 @@ html:has(.pf) .skip-link {
   inset-block-start: 0;
   inset-inline: 0;
   z-index: 40;
-  background: oklch(8% 0.003 265 / 0.86);
+  background: oklch(8% 0.003 265 / 0.94);
   border-block-end: 1px solid oklch(var(--white) / 0.08);
 }
 
@@ -800,7 +795,7 @@ html:has(.pf) .skip-link {
 /* прокрутка: первый экран отъезжает вглубь и гаснет под окном доски */
 .pf--motion .hero__in {
   transform: translate3d(0, calc(var(--h, 0) * -90px), 0) scale(calc(1 - var(--h, 0) * 0.06));
-  opacity: calc(1 - var(--h, 0) * 1.15);
+  opacity: calc(1 - var(--h, 0) * 1.5);
 }
 
 .pf--motion .hero__horizon {
@@ -2881,5 +2876,40 @@ html:has(.pf) .skip-link {
 
   .foot__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Узкие телефоны (320–359px): логотип и кнопка в одной строке шапки, пилюля в ширину колонки. */
+@media (max-width: 359px) {
+  .nav__in {
+    column-gap: 8px;
+  }
+
+  .brand,
+  .pf a.brand {
+    gap: 8px;
+    font-size: 15px;
+  }
+
+  .pf a.nav__cta {
+    padding: 8px 12px;
+    font-size: 13.5px;
+  }
+
+  .nav__more {
+    display: none;
+  }
+
+  .announce,
+  .pf a.announce {
+    gap: 6px;
+    padding: 4px 4px 4px 13px;
+    font-size: 12.5px;
+  }
+
+  .announce__arrow {
+    inline-size: 28px;
+    block-size: 28px;
+    margin-inline-start: 2px;
   }
 }

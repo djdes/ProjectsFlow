@@ -1,0 +1,32 @@
+---
+// Вопросы из data/faq.ts. <details name="faq"> — аккордеон без JS: открыт один вопрос
+// (где name не поддерживается, можно открыть несколько). Первый открыт сразу.
+import { FAQ } from '@/data/faq';
+---
+
+<section id="faq" class="section rv" aria-labelledby="faq-title">
+  <div class="wrap faq__grid">
+    <div class="faq__side">
+      <p class="eyebrow">Вопросы</p>
+      <h2 id="faq-title" class="h2">Коротко <span class="dim">о главном.</span></h2>
+      <p class="sub">Не нашёл ответа? Напиши в чат поддержки внутри платформы, ответим.</p>
+    </div>
+    <div class="faq__list">
+      {
+        FAQ.map((item, i) => (
+          <details class="faq__item" name="faq" open={i === 0}>
+            <summary class="faq__btn">
+              <h3 class="faq__q">{item.q}</h3>
+              <span class="faq__ic" aria-hidden="true">
+                <svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+              </span>
+            </summary>
+            <div class="faq__a">
+              <p>{item.a}</p>
+            </div>
+          </details>
+        ))
+      }
+    </div>
+  </div>
+</section>

@@ -312,9 +312,10 @@ async function desktopMotion({ page, check }) {
   for (let y = how.top; y < how.top + how.height; y += 90) {
     await scrollToY(page, y);
     maxC = Math.max(maxC, await cssNumber(page, '.step', '--c'));
-    if (maxC > 0.95) break;
+    if (maxC >= 0.9) break;
   }
-  check('шаги ложатся стопкой (--c первого шага доходит до 1)', maxC > 0.95, String(maxC));
+  // Stacked cards stay 22px apart (sticky offsets), so --c tops out at about 1 - 22/height.
+  check('шаги ложатся стопкой (первый шаг накрыт следующим, --c ≥ 0.9)', maxC >= 0.9, String(maxC));
 
   const pin = await page.evaluate(() => {
     const el = document.querySelector('.pin');
@@ -405,7 +406,7 @@ async function noScript({ page, check }) {
       return o;
     };
     return [...document.querySelectorAll('main h1, main h2, main h3, main p, main li, .statement__text .lw')]
-      .filter((el) => !el.closest('[aria-hidden="true"], .win'))
+      .filter((el) => !el.closest('[aria-hidden="true"], .win, details:not([open]) .faq__a'))
       .filter((el) => effective(el) < 0.99 || getComputedStyle(el).filter !== 'none')
       .slice(0, 8)
       .map((el) => `${el.tagName.toLowerCase()} «${(el.textContent ?? '').trim().slice(0, 28)}» ${effective(el).toFixed(2)} ${getComputedStyle(el).filter}`);
@@ -447,6 +448,12 @@ async function phone320({ page, check }) {
     return { vw, pill: [pill.left, pill.right], rowOverflow: getComputedStyle(row).overflowX, row: [row.getBoundingClientRect().left, row.getBoundingClientRect().right] };
   });
   check('320: пилюля-анонс помещается', geo.pill[0] >= 0 && geo.pill[1] <= geo.vw, JSON.stringify(geo.pill));
+  const rows = await page.evaluate(() => {
+    const brand = document.querySelector('.nav .brand').getBoundingClientRect();
+    const cta = [...document.querySelectorAll('.nav__cta')].find((a) => a.getBoundingClientRect().width > 0).getBoundingClientRect();
+    return { brandTop: Math.round(brand.top), ctaTop: Math.round(cta.top), ctaRight: Math.round(cta.right), header: Math.round(document.querySelector('header.nav').getBoundingClientRect().height) };
+  });
+  check('320: логотип и кнопка в одной строке, шапка в две строки', Math.abs(rows.brandTop + 8 - rows.ctaTop) <= 12 && rows.ctaRight <= 320 && rows.header <= 110, JSON.stringify(rows));
   check('320: строка разделов прокручивается сама и не шире экрана', ['auto', 'scroll'].includes(geo.rowOverflow) && geo.row[0] >= -0.5 && geo.row[1] <= geo.vw + 0.5, JSON.stringify(geo));
 }
 
@@ -474,8 +481,10 @@ const CASES = [
   { id: 'no-js', title: 'ПК 1440: без JavaScript', viewport: DESKTOP, javaScript: false, run: noScript },
   { id: 'phone-390', title: 'телефон 390', viewport: PHONE, run: phone390 },
   { id: 'phone-320', title: 'телефон 320', viewport: NARROW, run: phone320 },
+  { id: 'phone-320-authed', title: 'телефон 320: вошедший', viewport: NARROW, authed: true, run: phone320 },
   { id: 'anchors-desktop', title: 'ПК 1440: якоря /#pricing, /#faq', viewport: DESKTOP, run: anchors },
   { id: 'anchors-phone', title: 'телефон 390: якоря /#pricing, /#faq', viewport: PHONE, run: anchors },
+  { id: 'anchors-narrow', title: 'телефон 320: якоря /#pricing, /#faq', viewport: NARROW, run: anchors },
 ];
 
 async function runCase(browser, baseUrl, c) {

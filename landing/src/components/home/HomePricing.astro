@@ -1,0 +1,78 @@
+---
+// Тарифы из data/pricing.ts и гарантии из data/home.ts. У рекомендуемого тарифа (highlight)
+// медленная цветная обводка, бейдж и ссылка на пробный час.
+import { GUARANTEES } from '@/data/home';
+import { PLANS, formatRub } from '@/data/pricing';
+
+interface Props {
+  appBase: string;
+}
+const { appBase } = Astro.props;
+
+const capitalize = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+const guaranteeIcon: Record<(typeof GUARANTEES)[number]['id'], string> = {
+  trial: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7.5V12l3 2"></path>',
+  refund: '<path d="M4 4v5h5"></path><path d="M5.6 15a7.5 7.5 0 1 0 1.6-7.8L4 9"></path>',
+  help: '<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3.5"></circle><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"></path>',
+  nolockin: '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"></rect><path d="M8 10.5V7.5a4 4 0 0 1 7.6-1.7"></path>',
+};
+---
+
+<section id="pricing" class="section rv" aria-labelledby="pricing-title">
+  <div class="wrap">
+    <div class="sec-head sec-head--center">
+      <p class="eyebrow">Тарифы</p>
+      <h2 id="pricing-title" class="h2">Простые тарифы. <span class="dim">Старт бесплатно.</span></h2>
+      <p class="sub">Цены в рублях. Платный тариф не подошёл, вернём деньги.</p>
+    </div>
+    <div class="plans">
+      {
+        PLANS.map((plan) => (
+          <article class:list={['plan', { 'plan--hi': plan.highlight }]}>
+            {plan.highlight && <span class="edge edge--slow" aria-hidden="true" />}
+            <div class="plan__top">
+              <h3 class="plan__name">{plan.name}</h3>
+              {plan.badge && <span class="badge">{plan.badge}</span>}
+              {plan.requestOnly && <span class="badge badge--muted">По запросу</span>}
+            </div>
+            <p class="plan__tag">{plan.tagline}</p>
+            <p class="plan__price">
+              <span class="plan__num">{formatRub(plan.priceRub)}&nbsp;₽</span>
+              <span class="plan__per">{plan.priceNote}</span>
+            </p>
+            <a class:list={['btn', 'btn--block', plan.highlight ? 'btn--solid' : 'btn--line']} href={`${appBase}${plan.href}`}>
+              {plan.cta}
+            </a>
+            {plan.trialCta && (
+              <a class="plan__trial" href={`${appBase}${plan.href}`}>
+                {plan.trialCta}
+              </a>
+            )}
+            <ul class="plan__list">
+              {plan.features.map((feature) => (
+                <li>
+                  <svg class="ico ico--sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" /></svg>
+                  {capitalize(feature)}
+                </li>
+              ))}
+            </ul>
+          </article>
+        ))
+      }
+    </div>
+    <ul class="guar" aria-label="Гарантии">
+      {
+        GUARANTEES.map((g) => (
+          <li>
+            <span class="guar__ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" set:html={guaranteeIcon[g.id]} /></span>
+            <div>
+              <p class="guar__h">{g.title}</p>
+              <p class="guar__t">{g.text}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>

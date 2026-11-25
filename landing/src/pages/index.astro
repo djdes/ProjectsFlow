@@ -1,26 +1,30 @@
 ---
+// Главная: чёрная система (landing/DESIGN.md, стили styles/home.css, движение scripts/home-motion.ts).
+// Статичные Astro-компоненты без гидрации; тексты — data/home.ts, тарифы — pricing.ts, вопросы — faq.ts.
+import '@fontsource-variable/inter/opsz.css';
+import '@/styles/home.css';
 import { getCollection } from 'astro:content';
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import ShowcaseApp from '@/components/showcase/ShowcaseApp';
+import HomeDetails from '@/components/home/HomeDetails.astro';
+import HomeFaq from '@/components/home/HomeFaq.astro';
+import HomeFeatures from '@/components/home/HomeFeatures.astro';
+import HomeFinal from '@/components/home/HomeFinal.astro';
+import HomeFooter from '@/components/home/HomeFooter.astro';
+import HomeHero from '@/components/home/HomeHero.astro';
+import HomeNav from '@/components/home/HomeNav.astro';
+import HomePricing from '@/components/home/HomePricing.astro';
+import HomeStatement from '@/components/home/HomeStatement.astro';
+import HomeSteps from '@/components/home/HomeSteps.astro';
 import { PLANS } from '@/data/pricing';
 import { FAQ } from '@/data/faq';
 import { SITE_DESCRIPTION } from '@/data/site';
-import { readingMinutes, formatDate } from '@/lib/blog';
 
 const appBase = (import.meta.env.PUBLIC_APP_URL ?? '').replace(/\/+$/, '');
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
   .slice(0, 3)
-  .map((p) => ({
-    slug: p.id,
-    title: p.data.title,
-    topic: p.data.topic,
-    dateIso: p.data.date.toISOString(),
-    dateFormatted: formatDate(p.data.date),
-    minutes: readingMinutes(p.body ?? ''),
-    description: p.data.description,
-  }));
+  .map((p) => ({ slug: p.id, title: p.data.title }));
 
 const SITE = 'https://projectsflow.ru';
 
@@ -71,6 +75,28 @@ const jsonLd = [
 ];
 ---
 
-<BaseLayout jsonLd={jsonLd}>
-  <ShowcaseApp client:load posts={posts} appBase={appBase} />
+<BaseLayout jsonLd={jsonLd} themeColor="#000000">
+  <div class="pf">
+    <HomeNav appBase={appBase} />
+    <main id="main">
+      <div class="intro">
+        <HomeHero appBase={appBase} />
+        <HomeStatement />
+      </div>
+      <HomeFeatures />
+      <HomeSteps appBase={appBase} />
+      <HomeDetails />
+      <HomePricing appBase={appBase} />
+      <HomeFaq />
+      <HomeFinal appBase={appBase} />
+    </main>
+    <HomeFooter appBase={appBase} posts={posts} />
+  </div>
 </BaseLayout>
+
+<script>
+  import { initHomeMotion } from '@/scripts/home-motion';
+
+  const root = document.querySelector('.pf');
+  if (root instanceof HTMLElement) initHomeMotion(root);
+</script>

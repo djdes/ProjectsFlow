@@ -1,0 +1,114 @@
+---
+// «Мелочи»: раздел закрепляется, и при прокрутке вниз карточки едут вбок (--x у .pin__track).
+// Без движения (reduce, нет JS) — обычная горизонтальная прокрутка ленты. Над лентой бежит
+// строка платформ; её вторая половина — копия для бесшовного цикла, скрыта от чтения с экрана.
+import { DETAILS, PLATFORMS, type PlatformId } from '@/data/home';
+
+const platformIcon: Record<PlatformId, string> = {
+  browser:
+    '<circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"></path>',
+  iphone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M11 18.5h2"></path>',
+  telegram: '<path d="M21 4L3 11l6.5 2.5L12 20l3-5.5L21 4z"></path><path d="M9.5 13.5L21 4"></path>',
+  mcp: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"></rect><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5"></path>',
+  github:
+    '<circle cx="6" cy="5.5" r="2"></circle><circle cx="6" cy="18.5" r="2"></circle><circle cx="18" cy="8" r="2"></circle><path d="M6 7.5v9M18 10c0 4.5-6 4-11 7"></path>',
+};
+const loop = [...PLATFORMS.map((p) => ({ ...p, copy: false })), ...PLATFORMS.map((p) => ({ ...p, copy: true }))];
+---
+
+<section id="details" class="pin" aria-labelledby="details-title">
+  <div class="pin__in">
+    <div class="wrap pin__head">
+      <div class="sec-head">
+        <p class="eyebrow">Каждая мелочь</p>
+        <h2 id="details-title" class="h2">Мелочи, сделанные <span class="dim">как надо.</span></h2>
+      </div>
+    </div>
+    <div class="marquee">
+      <ul class="marquee__row" aria-label="Где работает ProjectsFlow">
+        {
+          loop.map((p) => (
+            <li class="plat" aria-hidden={p.copy ? 'true' : undefined}>
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" set:html={platformIcon[p.id]} />
+              {p.name}
+              <span class="plat__ok">доступно</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+    <div class="pin__view">
+      <div class="pin__track">
+        {
+          DETAILS.map((item) => (
+            <article class="fc">
+              <div class="fc__vis" aria-hidden="true">
+                {item.id === 'team' && (
+                  <div class="mini-col mini-col--center">
+                    <div class="avs">
+                      <span class="av av--1">А</span>
+                      <span class="av av--2">М</span>
+                      <span class="av av--3">К</span>
+                      <span class="av av--add"><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></span>
+                    </div>
+                    <div class="roles"><span class="tag">Владелец</span><span class="tag">Участник</span></div>
+                  </div>
+                )}
+                {item.id === 'telegram' && (
+                  <div class="tgb">
+                    <b>ProjectsFlow</b>Задача «Оплата по СБП» готова, стенд обновлён.<span class="tgb__time">14:17</span>
+                  </div>
+                )}
+                {item.id === 'commits' && (
+                  <div class="mini-col">
+                    <span class="cm"><code>a3f9c21</code>Каталог: фильтры</span>
+                    <span class="cm"><code>7be04d1</code>Корзина: итог заказа</span>
+                    <span class="cm"><code>c19e8aa</code>СБП: приём оплаты</span>
+                  </div>
+                )}
+                {item.id === 'finance' && (
+                  <div class="bars">
+                    {[34, 52, 44, 68, 82, 100].map((h, i) => (
+                      <i class={i >= 4 ? 'hi' : undefined} style={`block-size: ${h}%`} />
+                    ))}
+                  </div>
+                )}
+                {item.id === 'monitoring' && (
+                  <div class="mini-col">
+                    <svg class="spark" viewBox="0 0 220 64" preserveAspectRatio="none"><path d="M0 40 L20 38 L40 42 L60 30 L80 34 L100 22 L120 28 L140 18 L160 24 L180 14 L200 20 L220 12" /></svg>
+                    <span class="ok-line"><span class="st st--done" />Все серверы в норме</span>
+                  </div>
+                )}
+                {item.id === 'together' && (
+                  <div class="stack3">
+                    <span><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" /><path d="M14 3v5h5" /></svg>Заметки</span>
+                    <span><svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4" /><path d="M11 12l9-9M17 6l3 3M14.5 8.5l2 2" /></svg>Доступы</span>
+                    <span><svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M4 4v5h5" /><path d="M4.6 15a8 8 0 1 0 1.9-8.3L4 9" /><path d="M12 8v4l3 2" /></svg>История</span>
+                  </div>
+                )}
+                {item.id === 'public' && (
+                  <span class="linkpill">
+                    <svg class="ico ico--sm" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>
+                    Ссылка на доску<span class="kbd">копировать</span>
+                  </span>
+                )}
+                {item.id === 'search' && (
+                  <div class="search">
+                    <svg class="ico ico--sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></svg>
+                    <span>Найти задачу или проект</span>
+                    <span class="kbd">⌘K</span>
+                  </div>
+                )}
+              </div>
+              <div class="fc__txt">
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+    <div class="wrap pin__foot"><div class="pin__bar" aria-hidden="true"><i></i></div></div>
+  </div>
+</section>
