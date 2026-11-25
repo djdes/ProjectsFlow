@@ -10,7 +10,7 @@
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { extname, join, resolve, sep } from 'node:path';
+import { extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
@@ -194,6 +194,60 @@ async function visibleLinks(page) {
   });
 }
 
+// Things a person must be able to see and click. For each element matched by `selector` (and
+// rendered), is there a scroll position — scanned in steps between `from` and `to` — where its
+// centre is on screen, it is at least half opaque, and it is the topmost element there?
+// Returns the labels of the elements never reachable.
+async function unreachable(page, selector, { from = 0, to = Infinity, step = 40 } = {}) {
+  const max = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+  const end = Math.max(0, Math.min(to, max));
+  const reached = new Set();
+  let labels = [];
+  for (let y = Math.max(0, Math.min(from, end)); ; y = Math.min(y + step, end)) {
+    await scrollToY(page, y);
+    const res = await page.evaluate((sel) => {
+      const effective = (el) => {
+        let o = 1;
+        for (let a = el; a; a = a.parentElement) o *= parseFloat(getComputedStyle(a).opacity);
+        return o;
+      };
+      const els = [...document.querySelectorAll(sel)].filter((el) => el.getBoundingClientRect().width > 0);
+      return {
+        labels: els.map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 32) || String(el.className)),
+        hits: els
+          .map((el, i) => {
+            const r = el.getBoundingClientRect();
+            const x = r.left + r.width / 2;
+            const yy = r.top + r.height / 2;
+            if (x < 0 || x > window.innerWidth || yy < 0 || yy > window.innerHeight || effective(el) < 0.5) return -1;
+            const hit = document.elementFromPoint(x, yy);
+            return hit && (hit === el || el.contains(hit)) ? i : -1;
+          })
+          .filter((i) => i >= 0),
+      };
+    }, selector);
+    labels = res.labels;
+    res.hits.forEach((i) => reached.add(i));
+    if (reached.size === labels.length || y >= end) break;
+  }
+  return labels.filter((_, i) => !reached.has(i));
+}
+
+// Where a section ended up after an anchor jump, against its own scroll-margin.
+async function anchorReport(page, id) {
+  return page.evaluate((sel) => {
+    const sec = document.getElementById(sel);
+    const heading = sec.querySelector('.h2, .h1');
+    return {
+      y: Math.round(window.scrollY),
+      top: Math.round(sec.getBoundingClientRect().top),
+      margin: parseFloat(getComputedStyle(sec).scrollMarginBlockStart),
+      header: Math.round(document.querySelector('header.nav').getBoundingClientRect().bottom),
+      heading: Math.round(heading.getBoundingClientRect().top),
+    };
+  }, id);
+}
+
 // Gaps between the texts of neighbouring header section links (px).
 async function linkGaps(page) {
   return page.evaluate(() => {
@@ -304,6 +358,8 @@ async function desktopStructure({ page, check }) {
   check('фраза из 22 слов, 4 факта, 4 шага, 8 мелочей, 4 гарантии', info.words === 22 && info.facts === 4 && info.steps === 4 && info.details === 8 && info.guarantees === 4, JSON.stringify(info));
   check('в подвале 3 свежие статьи', info.posts === 3, String(info.posts));
   check('шрифт Inter Variable загружен', info.font);
+  const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+  check('светлая тема ОС: у чёрной страницы тёмные полосы прокрутки (color-scheme: dark)', scheme === 'dark', scheme);
 }
 
 async function desktopMotion({ page, check }) {
@@ -487,6 +543,121 @@ async function anchors({ page, check, baseUrl }) {
   }
 }
 
+// Every link to a section of the main page (/#id from the journal, #id on the page) must hit a real id.
+function checkAnchorTargets({ check }) {
+  const index = readFileSync(join(DIST, 'index.html'), 'utf8');
+  const ids = new Set([...index.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  const bad = [];
+  const walk = (dir) => {
+    for (const d of readdirSync(dir, { withFileTypes: true })) {
+      const file = join(dir, d.name);
+      if (d.isDirectory()) walk(file);
+      else if (d.name.endsWith('.html')) {
+        for (const m of readFileSync(file, 'utf8').matchAll(/href="\/#([^"]+)"/g)) {
+          if (!ids.has(m[1])) bad.push(`${relative(DIST, file)} → /#${m[1]}`);
+        }
+      }
+    }
+  };
+  walk(DIST);
+  for (const m of index.matchAll(/href="#([^"]+)"/g)) if (!ids.has(m[1])) bad.push(`index.html → #${m[1]}`);
+  check('все ссылки на разделы главной (из журнала и с главной) ведут на существующий раздел', bad.length === 0, [...new Set(bad)].slice(0, 6).join('; '));
+}
+
+const sizeLabel = (c) => `${c.viewport.width}×${c.viewport.height}`;
+
+async function shortHero({ page, check, c }) {
+  await page.evaluate(() => document.fonts.ready);
+  // The first-screen intro (blur → sharp, up to ~1.9 s) has to finish before the buttons count as seen.
+  await page.waitForTimeout(2300);
+  await settle(page);
+  const missing = await unreachable(page, '.hero__actions a, .hero__note', { to: c.viewport.height * 1.5 });
+  check(`${sizeLabel(c)}: кнопки и подпись первого экрана видны и нажимаются`, missing.length === 0, missing.join(' | '));
+}
+
+async function shortFooter({ page, check, c }) {
+  await page.evaluate(() => document.fonts.ready);
+  const from = await page.evaluate(() => document.querySelector('.foot').getBoundingClientRect().top + window.scrollY - window.innerHeight);
+  const missing = await unreachable(page, '.foot a, .foot__h, .foot__brand p', { from });
+  check(`${sizeLabel(c)}: весь подвал можно увидеть и нажать`, missing.length === 0, missing.join(' | '));
+}
+
+async function shortPhone(ctx) {
+  await shortHero(ctx);
+  await shortFooter(ctx);
+}
+
+async function landscape(ctx) {
+  const { page, check, c } = ctx;
+  await shortHero(ctx);
+  const steps = await unreachable(page, '.step h3, .step p');
+  check(`${sizeLabel(c)}: тексты шагов видны`, steps.length === 0, steps.join(' | '));
+  const strip = await page.evaluate(() => {
+    const track = document.querySelector('.pin__track');
+    return { position: getComputedStyle(document.querySelector('.pin__in')).position, overflowX: getComputedStyle(track).overflowX, scrollable: track.scrollWidth > track.clientWidth + 10 };
+  });
+  check(`${sizeLabel(c)}: «Мелочи» не закрепляются выше экрана, лента листается вбок`, strip.position !== 'sticky' && ['auto', 'scroll'].includes(strip.overflowX) && strip.scrollable, JSON.stringify(strip));
+  await shortFooter(ctx);
+}
+
+async function reducedPhone({ page, check }) {
+  const r = await page.evaluate(() => {
+    const marquee = document.querySelector('.marquee');
+    const box = marquee.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    return {
+      mask: getComputedStyle(marquee).maskImage,
+      items: [...document.querySelectorAll('.marquee__row > li:not([aria-hidden="true"])')].map((li) => {
+        const b = li.getBoundingClientRect();
+        return { name: (li.textContent ?? '').trim().slice(0, 24), ok: b.left >= Math.max(0, box.left) - 0.5 && b.right <= Math.min(vw, box.right) + 0.5 };
+      }),
+    };
+  });
+  const clipped = r.items.filter((x) => !x.ok).map((x) => x.name);
+  check('reduce, 390: все пять платформ видны целиком (строка переносится, без затухания по краям)', r.items.length === 5 && clipped.length === 0 && r.mask === 'none', `${r.mask} ${clipped.join(' | ')}`);
+}
+
+async function iosToolbar({ page, check }) {
+  await page.evaluate(() => document.fonts.ready);
+  await settle(page);
+  const read = () => page.evaluate(() => ({
+    pin: document.querySelector('.pin').offsetHeight,
+    pricing: Math.round(document.querySelector('#pricing').getBoundingClientRect().top + window.scrollY),
+  }));
+  const before = await read();
+  // Safari on iOS: the toolbar collapses while scrolling — innerHeight grows and resize fires, the small viewport (svh) stays.
+  await page.evaluate(() => {
+    const h = window.innerHeight + 81;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, get: () => h });
+    window.dispatchEvent(new Event('resize'));
+  });
+  await settle(page);
+  await page.waitForTimeout(100);
+  await settle(page);
+  const after = await read();
+  check('iOS: свернувшаяся панель Safari (innerHeight +81) не сдвигает страницу ниже «Мелочей»', before.pin === after.pin && before.pricing === after.pricing, `${JSON.stringify(before)} → ${JSON.stringify(after)}`);
+}
+
+async function freshAnchor({ page, check, c }) {
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(1500);
+  await waitScrollStable(page);
+  const id = c.path.split('#')[1];
+  const r = await anchorReport(page, id);
+  check(`открыть ${c.path} (шрифты медленные): раздел встаёт ровно под шапку`, r.y > 0 && Math.abs(r.top - r.margin) <= 3 && r.heading >= r.header - 1, JSON.stringify(r));
+}
+
+async function fromBlog({ page, check }) {
+  await page.click('nav[aria-label="Основная навигация"] a[href="/#pricing"]');
+  await page.waitForURL(/\/#pricing$/);
+  await page.waitForLoadState('load');
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(1500);
+  await waitScrollStable(page);
+  const r = await anchorReport(page, 'pricing');
+  check('из журнала по ссылке «Тарифы»: раздел встаёт ровно под шапку', r.y > 0 && Math.abs(r.top - r.margin) <= 3 && r.heading >= r.header - 1, JSON.stringify(r));
+}
+
 const CASES = [
   { id: 'data', title: 'данные: /index.md, /llms-full.txt, без старой витрины', fsOnly: true, run: checkData },
   { id: 'desktop', title: 'ПК 1440: разметка и данные', viewport: DESKTOP, run: desktopStructure },
@@ -502,6 +673,20 @@ const CASES = [
   { id: 'anchors-desktop', title: 'ПК 1440: якоря /#pricing, /#faq', viewport: DESKTOP, run: anchors },
   { id: 'anchors-phone', title: 'телефон 390: якоря /#pricing, /#faq', viewport: PHONE, run: anchors },
   { id: 'anchors-narrow', title: 'телефон 320: якоря /#pricing, /#faq', viewport: NARROW, run: anchors },
+  { id: 'anchor-targets', title: 'ссылки на разделы главной', fsOnly: true, run: checkAnchorTargets },
+  { id: 'fresh-faq', title: 'ПК: открыть /#faq с медленными шрифтами', viewport: DESKTOP, path: '/#faq', delayFonts: 800, run: freshAnchor },
+  { id: 'fresh-start', title: 'ПК: открыть /#start с медленными шрифтами', viewport: DESKTOP, path: '/#start', delayFonts: 800, run: freshAnchor },
+  { id: 'fresh-pricing-phone', title: 'телефон 390: открыть /#pricing с медленными шрифтами', viewport: PHONE, path: '/#pricing', delayFonts: 800, run: freshAnchor },
+  { id: 'from-blog', title: 'ПК: из журнала в «Тарифы»', viewport: DESKTOP, path: '/blog/', delayFonts: 800, run: fromBlog },
+  { id: 'short-1366', title: 'ноутбук 1366×620', viewport: { width: 1366, height: 620 }, run: shortHero },
+  { id: 'short-1280', title: 'ноутбук 1280×600', viewport: { width: 1280, height: 600 }, run: shortHero },
+  { id: 'short-1366-no-js', title: 'ноутбук 1366×620 без JavaScript', viewport: { width: 1366, height: 620 }, javaScript: false, run: shortHero },
+  { id: 'short-375', title: 'iPhone SE 375×553 (Safari)', viewport: { width: 375, height: 553 }, run: shortPhone },
+  { id: 'short-375-reduce', title: 'iPhone SE 375×553, reduced motion', viewport: { width: 375, height: 553 }, reducedMotion: 'reduce', run: shortPhone },
+  { id: 'short-390', title: 'iPhone 390×664 (панель Safari развёрнута)', viewport: { width: 390, height: 664 }, run: shortPhone },
+  { id: 'landscape', title: 'телефон боком 844×340', viewport: { width: 844, height: 340 }, mobile: true, run: landscape },
+  { id: 'reduced-phone', title: 'телефон 390: prefers-reduced-motion', viewport: PHONE, reducedMotion: 'reduce', run: reducedPhone },
+  { id: 'ios-toolbar', title: 'iPhone 390×664: панель Safari сворачивается', viewport: { width: 390, height: 664 }, run: iosToolbar },
 ];
 
 async function runCase(browser, baseUrl, c) {
@@ -511,7 +696,7 @@ async function runCase(browser, baseUrl, c) {
     c.run({ check });
     return results;
   }
-  const phone = c.viewport.width < 600;
+  const phone = c.mobile ?? c.viewport.width < 600;
   const context = await browser.newContext({
     viewport: c.viewport,
     deviceScaleFactor: 1,
@@ -519,9 +704,16 @@ async function runCase(browser, baseUrl, c) {
     hasTouch: phone,
     locale: 'ru-RU',
     reducedMotion: c.reducedMotion ?? 'no-preference',
+    colorScheme: c.colorScheme ?? 'light',
     javaScriptEnabled: c.javaScript !== false,
     extraHTTPHeaders: c.authed ? { 'x-test-auth': 'authed' } : {},
   });
+  if (c.delayFonts) {
+    await context.route('**/*.woff2', async (route) => {
+      await new Promise((ok) => setTimeout(ok, c.delayFonts));
+      await route.continue();
+    });
+  }
   const page = await context.newPage();
   page.setDefaultTimeout(8000);
   const errors = [];
@@ -538,9 +730,9 @@ async function runCase(browser, baseUrl, c) {
   try {
     await Promise.race([
       (async () => {
-        await page.goto(`${baseUrl}/`, { waitUntil: 'load' });
+        await page.goto(`${baseUrl}${c.path ?? '/'}`, { waitUntil: 'load' });
         await settle(page);
-        await c.run({ page, check, baseUrl });
+        await c.run({ page, check, baseUrl, c });
       })(),
       new Promise((_, fail) => {
         timer = setTimeout(() => fail(new Error(`сценарий не уложился в ${CASE_TIMEOUT_MS / 1000} с`)), CASE_TIMEOUT_MS);
