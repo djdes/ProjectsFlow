@@ -446,8 +446,10 @@ async function desktopStructure({ page, check }) {
         cta: text(p.querySelector('.btn')),
         edge: Boolean(p.querySelector('.edge')),
         badge: text(p.querySelector('.badge')),
-        top: Math.round(p.getBoundingClientRect().top),
-        ctaTop: Math.round([...p.querySelectorAll('.plan__cta .btn')].find((b) => b.getBoundingClientRect().height > 0)?.getBoundingClientRect().top ?? -1),
+        // Layout positions: the cards may still be emerging (staggered translateY), so the row is
+        // read from offsetTop and a button from its offset inside its own card.
+        top: p.offsetTop,
+        ctaTop: Math.round(([...p.querySelectorAll('.plan__cta .btn')].find((b) => b.getBoundingClientRect().height > 0)?.getBoundingClientRect().top ?? NaN) - p.getBoundingClientRect().top),
         trial: text(p.querySelector('.plan__trial')),
         items: p.querySelectorAll('.plan__list li').length,
       })),
