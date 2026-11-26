@@ -30,6 +30,8 @@ import { PAGE_BODY_CLASS, PageMessage } from '@/presentation/pages/PageScaffold'
 
 const dateFmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
 const fmtDate = (d: Date): string => dateFmt.format(d);
+// Маржа по-русски: «−943,7 %», а не «-943.68%».
+const percentFmt = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
 const isoDay = (d: Date): string => d.toISOString().slice(0, 10);
 
 export function FinancePage(): React.ReactElement {
@@ -133,7 +135,7 @@ export function FinancePage(): React.ReactElement {
           label="Прибыль"
           value={formatRub(finance.profitKopecks)}
           valueClass={profitPositive ? 'text-done' : 'text-destructive'}
-          hint={finance.marginPercent === null ? undefined : `маржа ${finance.marginPercent}%`}
+          hint={finance.marginPercent === null ? undefined : `маржа ${percentFmt.format(finance.marginPercent)} %`}
         />
       </div>
 
@@ -292,7 +294,18 @@ function Stat({
     <Card>
       <CardContent className="py-3">
         <p className="truncate text-2xs text-muted-foreground">{label}</p>
-        <p className={cn('truncate font-mono text-lg font-semibold tabular-nums', valueClass)}>{value}</p>
+        {/* Сумма не обрезается многоточием: на телефоне в карточке ~130px, и «-11 795 990 ₽»
+            превращалось в «-11 795 990…» — терялась сама цифра. Чуть меньше кегль на телефоне и
+            перенос по необходимости вместо truncate. */}
+        <p
+          className={cn(
+            'font-mono text-base font-semibold leading-snug tabular-nums [overflow-wrap:anywhere] sm:text-lg',
+            valueClass,
+          )}
+          title={value}
+        >
+          {value}
+        </p>
         {hint && <p className="truncate text-2xs text-muted-foreground">{hint}</p>}
       </CardContent>
     </Card>
