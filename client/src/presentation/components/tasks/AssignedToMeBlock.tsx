@@ -192,8 +192,9 @@ type Props = {
   // Свои задачи виртуально зеркалятся в верхнюю личную колонку без дублирования в БД.
   boardTasks: readonly Task[] | null;
   inboxProjectId: string;
-  // Колбэк после смены ответственного/toggle — InboxPage перефетчит доску ниже.
-  onChanged?: () => void;
+  // Колбэк после смены ответственного/toggle — InboxPage перефетчит личный инбокс, только
+  // если изменение могло его затронуть (projectId совпал или не указан).
+  onChanged?: (changedProjectId?: string) => void;
   // Заголовок страницы и её действия («Выделить») — блок ставит их в свою первую строку
   // рядом с вкладками, людьми и поиском (дизайн C4: одна строка управления над доской).
   heading?: React.ReactNode;
@@ -732,9 +733,9 @@ export function AssignedToMeBlock({
     });
   };
 
-  const handleToggled = (): void => {
+  const handleToggled = (changedProjectId?: string): void => {
     void refresh();
-    onChanged?.();
+    onChanged?.(changedProjectId);
   };
 
   // Keep the inline composer in its project column. New tasks are drafts assigned
@@ -779,7 +780,7 @@ export function AssignedToMeBlock({
       }
       setMobileSection('queue');
       void refresh();
-      onChanged?.();
+      onChanged?.(projectId);
       return created;
     },
     [user, focusedMemberId, taskRepository, allProjects, tasks, byMeTasks, focusedMemberTasks, handleTabChange, setFocusedMember, setMobileSection, refresh, onChanged],
@@ -806,7 +807,7 @@ export function AssignedToMeBlock({
       // а не только из инбокса.
       await taskRepository.delete(target.projectId, target.id);
       toast.success('Задача удалена');
-      handleToggled();
+      handleToggled(target.projectId);
     } catch (err) {
       // Сеть подвела уже ПОСЛЕ того, как карточка исчезла — возвращаем её на место.
       fx.restore();
@@ -1315,7 +1316,7 @@ export function AssignedToMeBlock({
         await taskRepository.assign(item.projectId, item.id, prevAssigneeId);
         toast.success('Ответственный возвращён');
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         toast.error(`Не удалось вернуть ответственного: ${(e as Error).message}`);
       }
@@ -1336,7 +1337,7 @@ export function AssignedToMeBlock({
         });
         // Не await: перерисовка списков не должна удерживать жест (см. setWorkStatus).
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         toast.error(`Не удалось переназначить: ${(e as Error).message}`);
       }
@@ -1360,7 +1361,7 @@ export function AssignedToMeBlock({
           action: { label: 'Отменить', onClick: () => void undoAssign(item, prevAssignee) },
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         toast.error(`Не удалось забрать: ${(e as Error).message}`);
       }
@@ -1379,7 +1380,7 @@ export function AssignedToMeBlock({
         forget(item.id);
         toast.success('Задача снова в работе');
         await refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         toast.error(`Не удалось забрать: ${(e as Error).message}`);
       }
@@ -1398,7 +1399,7 @@ export function AssignedToMeBlock({
           afterTaskId: null,
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         dropPatch(item.id);
         toast.error(`Не удалось отменить: ${(e as Error).message}`);
@@ -1472,7 +1473,7 @@ export function AssignedToMeBlock({
                     .then(() => {
                       dropPatch(item.id);
                       void refresh();
-                      onChanged?.();
+                      onChanged?.(item.projectId);
                     })
                     .catch((err: unknown) => {
                       toast.error(`Не удалось отменить: ${(err as Error).message}`);
@@ -1482,7 +1483,7 @@ export function AssignedToMeBlock({
           },
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         dropPatch(item.id);
         toast.error(`Не удалось: ${(e as Error).message}`);
@@ -1502,12 +1503,12 @@ export function AssignedToMeBlock({
           description: plainTaskTitle(item.description ?? '') || undefined,
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId === inboxProjectId || targetProjectId === inboxProjectId ? inboxProjectId : item.projectId);
       } catch (e) {
         toast.error(`Не удалось перенести: ${(e as Error).message}`);
       }
     },
-    [allProjects, taskRepository, refresh, onChanged],
+    [allProjects, inboxProjectId, taskRepository, refresh, onChanged],
   );
 
   // Вспышка полки «В работе»: `key` растёт на каждое взятие задачи (булев флаг не дал бы
@@ -1545,7 +1546,7 @@ export function AssignedToMeBlock({
           action: { label: 'Отменить', onClick: () => void restoreStatus(item, prev) },
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         dropPatch(item.id);
         toast.error(`Не удалось: ${(e as Error).message}`);
@@ -1578,7 +1579,7 @@ export function AssignedToMeBlock({
           action: { label: 'Отменить', onClick: () => void withdrawApproval(item) },
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         // Оптимистичный celebrate обязателен к откату на ошибке — иначе локальная цифра
         // навсегда разъедется с серверной (контракт useCompletedToday).
@@ -1614,7 +1615,7 @@ export function AssignedToMeBlock({
         });
         toast.success('Задача принята');
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         dropPatch(item.id);
         throw e;
@@ -1648,7 +1649,7 @@ export function AssignedToMeBlock({
       toast.success('Возвращена в работу — комментарий добавлен');
       setRejectTarget(null);
       await refresh();
-      onChanged?.();
+      onChanged?.(item.projectId);
     } catch (e) {
       toast.error(`Не удалось: ${(e as Error).message}`);
     }
@@ -1844,7 +1845,7 @@ export function AssignedToMeBlock({
         item={item}
         open={!ghost && drawerTask?.id === item.id}
         onOpen={() => setDrawerTask(item)}
-        onChanged={handleToggled}
+        onChanged={() => handleToggled(item.projectId)}
         onMoveDone={(input) => moveTaskDone(item, input)}
         onDelete={() => handleDelete(item)}
         extraActions={
@@ -2294,7 +2295,7 @@ export function AssignedToMeBlock({
           items={inProgressTasks}
           openTaskId={drawerTask?.id}
           onOpen={(t) => setDrawerTask(t)}
-          onChanged={handleToggled}
+          onChanged={(projectId) => handleToggled(projectId)}
           onMoveDone={moveTaskDone}
           onDelete={handleDelete}
           renderActions={(t) => (
@@ -3904,7 +3905,7 @@ function InProgressShelf({
   items: readonly InboxBlockTask[];
   openTaskId?: string | null;
   onOpen: (item: InboxBlockTask) => void;
-  onChanged: () => void;
+  onChanged: (projectId?: string) => void;
   onMoveDone?: (item: InboxBlockTask, input: MoveTaskInput) => Promise<unknown>;
   onDelete: (item: InboxBlockTask) => void;
   // Быстрые действия карточки «В работе» (сдать на утверждение, вернуть в очередь) —
@@ -4013,7 +4014,7 @@ function InProgressShelf({
                     item={item}
                     open={!exiting && item.id === openTaskId}
                     onOpen={() => onOpen(item)}
-                    onChanged={onChanged}
+                    onChanged={() => onChanged(item.projectId)}
                     onMoveDone={onMoveDone ? (input) => onMoveDone(item, input) : undefined}
                     onDelete={() => onDelete(item)}
                     extraActions={exiting ? null : renderActions(item)}

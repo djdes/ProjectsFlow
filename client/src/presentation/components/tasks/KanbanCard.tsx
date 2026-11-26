@@ -289,7 +289,10 @@ function KanbanCardImpl({
         task={task}
         lastDoneTaskId={lastDoneTaskId}
         lastTodoTaskId={lastTodoTaskId}
-        onChanged={onTaskChanged}
+        // When optimistic useTasks().move handles the request, it already applies the authoritative
+        // updated task from POST .../move; skip the redundant immediate GET unless recurrence may
+        // spawn a next task (SSE still reconciles in the background).
+        onChanged={onMove && !task.recurrence ? undefined : onTaskChanged}
         variant="toolbar"
         doneTitle={awaitingApproval ? 'Принять работу' : undefined}
         // Колонка «Готово» видна рядом — карточка переезжает туда сама, только отметка.

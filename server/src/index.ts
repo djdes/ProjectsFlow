@@ -19,7 +19,7 @@ import { MysqlAppErrorReportRepository } from './infrastructure/repositories/Mys
 import { AppErrorReports } from './application/app-errors/AppErrorReports.js';
 import { RequestWorkspaceContext } from './infrastructure/workspace/RequestWorkspaceContext.js';
 import { workspaceScope } from './presentation/middleware/workspaceScope.js';
-import { RequestMemo, requestScopedAdminCheck } from './infrastructure/request/RequestMemo.js';
+import { memoKey, RequestMemo, requestScopedAdminCheck } from './infrastructure/request/RequestMemo.js';
 import { requestMemoScope } from './presentation/middleware/requestMemoScope.js';
 // Composition root: собираем зависимости + поднимаем HTTP-сервер.
 
@@ -2538,15 +2538,27 @@ void publicBoardSnapshotCache.refreshAll().catch((err) => {
 });
 
 // The inbox lists: each has its own endpoint, and /api/assignees/overview runs all five at once.
+// Memoize read-only project/user lookups for the duration of one GET request (requestMemoScope),
+// so the five parallel overview lists don't query the same projects and users repeatedly.
+const overviewProjects: typeof projectRepo = Object.assign(Object.create(Object.getPrototypeOf(projectRepo)), projectRepo, {
+  getById: (id: string) => requestMemo.memoize(memoKey('projects.getById', id), () => projectRepo.getById(id)),
+  isInWorkspace: (projectId: string, workspaceId: string) =>
+    requestMemo.memoize(memoKey('projects.isInWorkspace', projectId, workspaceId), () =>
+      projectRepo.isInWorkspace(projectId, workspaceId),
+    ),
+});
+const overviewUsers: typeof userRepo = Object.assign(Object.create(Object.getPrototypeOf(userRepo)), userRepo, {
+  getById: (id: string) => requestMemo.memoize(memoKey('users.getById', id), () => userRepo.getById(id)),
+});
 const listAssignedToMe = new ListTasksAssignedToMe({
-  projects: projectRepo,
+  projects: overviewProjects,
   members: projectMemberRepo,
   tasks: taskRepo,
   taskCommits: taskCommitRepo,
   attachments: taskAttachmentRepo,
   comments: taskCommentRepo,
   resolveActiveWorkspace,
-  users: userRepo,
+  users: overviewUsers,
 });
 const listAssignedToOthers = new ListTasksAssignedToOthers({
   members: projectMemberRepo,
@@ -2555,10 +2567,10 @@ const listAssignedToOthers = new ListTasksAssignedToOthers({
   attachments: taskAttachmentRepo,
   comments: taskCommentRepo,
   resolveActiveWorkspace,
-  users: userRepo,
+  users: overviewUsers,
 });
 const listPersonalOfColleagues = new ListPersonalTasksOfColleagues({
-  projects: projectRepo,
+  projects: overviewProjects,
   members: projectMemberRepo,
   tasks: taskRepo,
   taskCommits: taskCommitRepo,
@@ -2568,7 +2580,7 @@ const listPersonalOfColleagues = new ListPersonalTasksOfColleagues({
 });
 const listApprovalQueue = new ListApprovalQueue({
   approval: taskApprovalService,
-  projects: projectRepo,
+  projects: overviewProjects,
   members: projectMemberRepo,
   workspaces: workspaceRepo,
   tasks: taskRepo,
@@ -2576,17 +2588,17 @@ const listApprovalQueue = new ListApprovalQueue({
   attachments: taskAttachmentRepo,
   comments: taskCommentRepo,
   resolveActiveWorkspace,
-  users: userRepo,
+  users: overviewUsers,
 });
 const listAwaitingMyReply = new ListTasksAwaitingMyReply({
-  projects: projectRepo,
+  projects: overviewProjects,
   members: projectMemberRepo,
   tasks: taskRepo,
   taskCommits: taskCommitRepo,
   attachments: taskAttachmentRepo,
   comments: taskCommentRepo,
   resolveActiveWorkspace,
-  users: userRepo,
+  users: overviewUsers,
 });
 
 const deploymentAuditRuns = new Set<string>();

@@ -180,7 +180,11 @@ export function InboxPage({
           tabStorageKey={embedded ? `pf.inbox.global.${workspace?.id}.tab` : undefined}
           boardTasks={boardTasks}
           inboxProjectId={project.id}
-          onChanged={() => void reloadInboxTasks(project.id, true)}
+          onChanged={(changedProjectId) => {
+            if (!changedProjectId || changedProjectId === project.id) {
+              void reloadInboxTasks(project.id, true);
+            }
+          }}
           heading={heading}
           actions={
             <>
