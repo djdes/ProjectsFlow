@@ -233,6 +233,11 @@ function attachmentToDto(att: TaskAttachment): AttachmentDto {
 export function tasksRouter(deps: Deps): Router {
   const router = Router({ mergeParams: true });
   router.use(requireAuth);
+  // Mutable task endpoints: prevent browser/proxy HTTP caches from serving stale task lists.
+  router.use((_req, res, next) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    next();
+  });
 
   // multer memory-storage: small images (max 10MB), хранилище живёт в RAM до момента
   // когда UploadTaskAttachment запишет на диск через AttachmentStorage. Это даёт нам

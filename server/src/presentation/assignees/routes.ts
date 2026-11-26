@@ -52,6 +52,11 @@ const awaitingReplyViewToDto = (v: AwaitingReplyView) => ({
 export function taskAssigneesRouter(deps: Deps): Router {
   const r = Router();
   r.use(requireAuth);
+  // Mutable per-user task lists: never let browser/proxy HTTP caches serve stale snapshots.
+  r.use((_req, res, next) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    next();
+  });
 
   // Все задачи, где caller — текущий ответственный.
   r.get('/mine', async (req: Request, res: Response, next: NextFunction) => {

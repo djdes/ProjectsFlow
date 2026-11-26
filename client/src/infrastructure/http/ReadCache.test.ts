@@ -212,3 +212,38 @@ test('own writes are remembered for the page, merged once there are many', () =>
   c.advance(1);
   assert.equal(cache.changedSince('/me/ui-prefs', c.now()), null);
 });
+
+test('a read started immediately after a write in the same millisecond is stored; one started before is rejected', () => {
+  const c = clock();
+  const cache = new ReadCache(c.now);
+  const policy = { fresh: 15_000, keep: 600_000 };
+
+  const beforeSeq = cache.currentSeq();
+  const sameMs = c.now();
+  cache.afterWrite('/projects/p1/tasks/t1/move');
+  const afterSeq = cache.currentSeq();
+
+  assert.equal(
+    cache.store('w:/assignees/overview', '/assignees/overview', { old: true }, policy, '{"old":true}', sameMs, beforeSeq),
+    false,
+    'in-flight read started before the write must be rejected',
+  );
+  assert.equal(
+    cache.store('w:/assignees/overview', '/assignees/overview', { fresh: true }, policy, '{"fresh":true}', sameMs, afterSeq),
+    true,
+    'post-write read started in the same millisecond must be stored',
+  );
+  assert.deepEqual(cache.get('w:/assignees/overview'), { fresh: true });
+});
+
+test('store with stale:true keeps an entry readable via peek while forcing revalidation', () => {
+  const c = clock();
+  const cache = new ReadCache(c.now);
+  const policy = { fresh: 60_000, keep: 600_000 };
+  assert.equal(
+    cache.store('w:/projects', '/projects', { projects: ['saved'] }, policy, '{"projects":["saved"]}', c.now(), undefined, { stale: true }),
+    true,
+  );
+  assert.equal(cache.get('w:/projects'), undefined, 'strict readers still revalidate');
+  assert.deepEqual(cache.peek('w:/projects'), { projects: ['saved'] }, 'first render may show it');
+});

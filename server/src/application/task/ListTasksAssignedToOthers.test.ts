@@ -113,3 +113,44 @@ test('other assignees never reveal a colleague private inbox or a different work
   });
   assert.deepEqual((await list.execute('me')).map((item) => item.task.id), ['allowed']);
 });
+
+test('batches tasks across workspace projects with one listByProjects read and one filterVisibleTasks pass', async () => {
+  let batchCalls = 0;
+  let singleCalls = 0;
+  let visibilityCalls = 0;
+  const list = new ListTasksAssignedToOthers({
+    members: {
+      listProjectsForUserInWorkspace: async () => [
+        { id: 'p2', name: 'Второй', workspaceId: 'ws', ownerId: 'me', isInbox: false, role: 'editor' },
+        { id: 'p1', name: 'Первый', workspaceId: 'ws', ownerId: 'me', isInbox: false, role: 'editor' },
+      ],
+      filterVisibleTasks: async <T,>(_userId: string, items: readonly T[]) => {
+        visibilityCalls += 1;
+        return [...items];
+      },
+    } as never,
+    tasks: {
+      listByProject: async () => {
+        singleCalls += 1;
+        return [];
+      },
+      listByProjects: async (projectIds: readonly string[]) => {
+        batchCalls += 1;
+        assert.deepEqual(projectIds, ['p2', 'p1']);
+        // Intentionally returned in DB project-id order (p1 before p2): output must still follow project list order.
+        return [task('t1', 'p1', 'bob'), task('t2', 'p2', 'carol'), task('t-mine', 'p2', 'me')];
+      },
+    } as never,
+    taskCommits: { countsByTasks: async () => new Map() } as never,
+    attachments: { countsByTasks: async () => new Map() } as never,
+    comments: { countsByTasks: async () => new Map() } as never,
+    resolveActiveWorkspace: async () => ({ id: 'ws', kind: 'team' as const }),
+    users: { getById: async () => null } as never,
+  });
+
+  const items = await list.execute('me');
+  assert.deepEqual(items.map((item) => item.task.id), ['t2', 't1']);
+  assert.equal(batchCalls, 1, 'one batched SQL read for all workspace projects');
+  assert.equal(singleCalls, 0, 'no N+1 per-project reads');
+  assert.equal(visibilityCalls, 1, 'one visibility filter pass');
+});

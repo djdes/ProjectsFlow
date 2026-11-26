@@ -32,7 +32,7 @@ export function InboxPage({
   embedded?: boolean;
   onHideWorkspace?: () => void;
 }): React.ReactElement {
-  const { projectRepository, taskRepository, taskAssigneeRepository } = useContainer();
+  const { projectRepository, taskRepository, taskAssigneeRepository, userRepository } = useContainer();
   const { workspace } = useCurrentWorkspace();
   // Known from an earlier visit, or the copy saved on this device: shown on the first frame and
   // refreshed in the background — a skeleton only for what is not known yet.
@@ -51,10 +51,13 @@ export function InboxPage({
   // блок ответственных); зеркало ускоряет обновление личных задач после локальных действий.
   // null = ещё грузится, отличается от честного пустого инбокса.
   const [boardTasks, setBoardTasks] = useState<readonly Task[] | null>(known.tasks);
+  const latestTasksInFlight = useRef(0);
   // latest — after own changes and on pull to refresh: wait for the current list. Otherwise the
   // known list comes at once and a newer one is announced (useReadRefreshed below).
   const reloadInboxTasks = useCallback(
     async (projectId: string, latest: boolean, propagateError = false): Promise<void> => {
+      if (!latest && latestTasksInFlight.current > 0) return;
+      if (latest) latestTasksInFlight.current += 1;
       try {
         setBoardTasks(await taskRepository.listForScreen(projectId, { latest }));
       } catch (error) {
@@ -62,6 +65,8 @@ export function InboxPage({
         // Блок не должен «залипнуть» в пустом рендере из-за сетевой ошибки: сам он
         // грузит задачи отдельно и покажет их, а личное зеркало просто будет пустым.
         setBoardTasks(current => current ?? []);
+      } finally {
+        if (latest && latestTasksInFlight.current > 0) latestTasksInFlight.current -= 1;
       }
     },
     [taskRepository],
@@ -90,11 +95,16 @@ export function InboxPage({
     void loadInbox();
   }, [loadInbox]);
 
-  // First visit on this device (the inbox project is not known yet): the lists start loading
-  // alongside it, not after it — the board mounts and takes them (one round trip, not two).
+  // First visit on this device (the inbox project is not known yet): start all initial screen
+  // reads alongside `/inbox`, not after it — when AssignedToMeBlock mounts, they are already
+  // in flight or cached (one round trip instead of two).
   useEffect(() => {
-    if (!known.project) void taskAssigneeRepository.loadInboxOverview().catch(() => undefined);
-  }, [known.project, taskAssigneeRepository]);
+    if (!known.project) {
+      void taskAssigneeRepository.loadInboxOverview().catch(() => undefined);
+      void userRepository.getUiPrefs().catch(() => undefined);
+      void projectRepository.listSharedMembersForScreen().catch(() => undefined);
+    }
+  }, [known.project, taskAssigneeRepository, userRepository, projectRepository]);
 
   useEffect(() => {
     if (projectId) void reloadInboxTasks(projectId, false);

@@ -48,7 +48,7 @@ const POLICIES: ReadonlyArray<readonly [RegExp, ReadPolicy]> = [
   [/^\/projects\/[^/]+\/site$/, { fresh: 20 * SECOND, keep: DAY }],
 ];
 
-type PathMatch = (path: string) => boolean;
+export type PathMatch = (path: string) => boolean;
 
 const EVERYTHING: PathMatch = () => true;
 const exactly = (target: string): PathMatch => (path) => path === target;
@@ -104,13 +104,25 @@ type Entry = {
   readonly text: string | null;
   // When the request for it was sent (or the device copy was saved).
   readonly fetchedAt: number;
+  // Monotonic cache-change sequence captured when a network request started (null for saved copies).
+  readonly readSeq: number | null;
   readonly freshUntil: number;
   readonly keepUntil: number;
 };
 
 export type CacheHit = { readonly value: unknown; readonly stale: boolean; readonly text: string | null };
 
-type Change = { readonly at: number; readonly kind: 'dropped' | 'expired'; readonly matches: PathMatch };
+type Change = {
+  readonly at: number;
+  readonly seq: number;
+  readonly kind: 'dropped' | 'expired';
+  readonly matches: PathMatch;
+};
+
+export type StoreOptions = {
+  /** Force the entry to be stored as stale (e.g. device copies on cold start must still revalidate). */
+  readonly stale?: boolean;
+};
 
 // Expiries matter only to reads that were in flight across them (requests time out well before).
 const EXPIRY_MEMORY = 2 * MINUTE;
@@ -121,12 +133,19 @@ const MAX_WRITES = 64;
 export class ReadCache {
   private readonly entries = new Map<string, Entry>();
   private changes: Change[] = [];
+  private seq = 0;
 
   constructor(
     private readonly now: () => number = () => Date.now(),
-    // Told about every drop and expiry (httpClient stops sharing reads already in flight).
-    private readonly onChange: (kind: 'dropped' | 'expired') => void = () => undefined,
+    // Told about every drop and expiry (httpClient stops sharing reads already in flight and
+    // drops matching device copies on own writes).
+    private readonly onChange: (kind: 'dropped' | 'expired', matches: PathMatch) => void = () => undefined,
   ) {}
+
+  /** Monotonic sequence of changes so far; captured before a network read starts. */
+  currentSeq(): number {
+    return this.seq;
+  }
 
   /** The cached answer (a copy) and whether it is past its fresh window; undefined past `keep`. */
   lookup(key: string): CacheHit | undefined {
@@ -154,31 +173,54 @@ export class ReadCache {
 
   /**
    * Stores an answer obtained at `at` (the request was sent, or the device copy saved) unless a
-   * newer one is already here or an own write since `at` may have changed it. A change made
-   * elsewhere since `at` stores it as already expired: the answer may predate that change.
+   * newer one is already here or an own write since `at` (or since `readSeq` for live reads) may
+   * have changed it. A change made elsewhere since `at`/`readSeq` stores it as already expired:
+   * the answer may predate that change.
    * Returns whether it was stored.
    */
-  store(key: string, path: string, value: unknown, policy: ReadPolicy, text: string | null = null, at = this.now()): boolean {
+  store(
+    key: string,
+    path: string,
+    value: unknown,
+    policy: ReadPolicy,
+    text: string | null = null,
+    at = this.now(),
+    readSeq?: number,
+    options?: StoreOptions,
+  ): boolean {
     const now = this.now();
     const keepUntil = at + policy.keep;
     if (keepUntil <= now) return false;
     const current = this.entries.get(key);
-    if (current && current.fetchedAt > at) return false;
-    const change = this.changedSince(path, at);
+    if (current) {
+      if (current.fetchedAt > at) return false;
+      if (readSeq !== undefined && current.readSeq !== null && current.readSeq > readSeq) return false;
+    }
+    const change = this.changedSince(path, at, readSeq);
     if (change === 'dropped') return false;
-    const freshUntil = change === 'expired' ? 0 : at + policy.fresh;
-    this.entries.set(key, { path, value: structuredClone(value), text, fetchedAt: at, freshUntil, keepUntil });
+    const freshUntil = options?.stale || change === 'expired' ? 0 : at + policy.fresh;
+    this.entries.set(key, {
+      path,
+      value: structuredClone(value),
+      text,
+      fetchedAt: at,
+      readSeq: readSeq ?? null,
+      freshUntil,
+      keepUntil,
+    });
     return true;
   }
 
   /**
-   * The strongest change to `path` since `time`: 'dropped' (an own write — a copy from before
-   * it must not be shown), 'expired' (changed elsewhere — showable, not fresh) or null.
+   * The strongest change to `path` since `time` (or strictly after `readSeq` when supplied):
+   * 'dropped' (an own write — a copy from before it must not be shown), 'expired' (changed
+   * elsewhere — showable, not fresh) or null.
    */
-  changedSince(path: string, time: number): 'dropped' | 'expired' | null {
+  changedSince(path: string, time: number, readSeq?: number): 'dropped' | 'expired' | null {
     let found: 'expired' | null = null;
     for (const change of this.changes) {
-      if (change.at < time || !change.matches(path)) continue;
+      const older = readSeq !== undefined ? change.seq <= readSeq : change.at < time;
+      if (older || !change.matches(path)) continue;
       if (change.kind === 'dropped') return 'dropped';
       found = 'expired';
     }
@@ -250,16 +292,17 @@ export class ReadCache {
 
   private remember(kind: Change['kind'], matches: PathMatch): void {
     const at = this.now();
+    const seq = ++this.seq;
     if (kind === 'dropped' && matches === EVERYTHING) {
       // Everything earlier is covered by this one.
-      this.changes = [{ at, kind, matches }];
+      this.changes = [{ at, seq, kind, matches }];
     } else {
       this.changes = this.changes.filter((c) => c.kind === 'dropped' || c.at > at - EXPIRY_MEMORY);
-      this.changes.push({ at, kind, matches });
+      this.changes.push({ at, seq, kind, matches });
       if (this.changes.filter((c) => c.kind === 'dropped').length > MAX_WRITES) {
-        this.changes = [{ at, kind: 'dropped', matches: EVERYTHING }];
+        this.changes = [{ at, seq, kind: 'dropped', matches: EVERYTHING }];
       }
     }
-    this.onChange(kind);
+    this.onChange(kind, matches);
   }
 }

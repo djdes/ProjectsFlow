@@ -96,6 +96,7 @@ import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import type { Task, RalphMode, RunMode, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import type { InboxOverview } from '@/domain/task/InboxOverview';
 import {
@@ -599,6 +600,7 @@ export function AssignedToMeBlock({
   // существует). Читаем актуальное значение через ref в момент вызова.
   const focusedMemberIdRef = useRef(focusedMemberId);
   const refreshGeneration = useRef(0);
+  const latestRefreshInFlight = useRef(0);
   const focusedGeneration = useRef(0);
   useEffect(() => {
     focusedMemberIdRef.current = focusedMemberId;
@@ -615,7 +617,11 @@ export function AssignedToMeBlock({
   // latest (default) — after a change, an event or a gesture: wait for the current lists.
   // Otherwise (a newer answer was announced) take what is known.
   const refresh = useCallback(async (propagateError = false, latest = true): Promise<void> => {
+    // Never let a background SWR re-read (useReadRefreshed) cancel or downgrade an in-flight
+    // latest=true network refresh started after a mutation or realtime event.
+    if (!latest && latestRefreshInFlight.current > 0) return;
     const generation = ++refreshGeneration.current;
+    if (latest) latestRefreshInFlight.current += 1;
     lastRefreshAtRef.current = Date.now();
     // Снимок на момент старта запроса — сверяем с актуальным ПОСЛЕ await (см. ниже), а не
     // просто читаем ref второй раз: доска могла закрыться и открыться на ДРУГОГО сотрудника
@@ -645,6 +651,7 @@ export function AssignedToMeBlock({
       setLoadError(true);
       toast.error('Не удалось загрузить задачи. Повторите попытку.');
     } finally {
+      if (latest) latestRefreshInFlight.current -= 1;
       // Штампуем ещё раз ПОСЛЕ применения ответа, не только в начале запроса: на медленной
       // сети (ответ дольше 400мс) эхо этой же мутации от SSE прилетает уже за пределами
       // окна, отсчитанного от старта, и второй refetch всё равно проходит гвард ниже.
@@ -1267,10 +1274,12 @@ export function AssignedToMeBlock({
     void loadMembers();
   }, [loadMembers]);
   // A newer answer than the one shown arrived in the background (lists, people): re-read —
-  // from memory now; only what changed re-renders.
+  // from memory now; only what changed re-renders. Shared members have fresh=0 for pickers, so
+  // read them from memory (peek) here instead of starting another network revalidation loop.
   useReadRefreshed(() => {
-    void refresh(false, false);
-    void loadMembers();
+    if (latestRefreshInFlight.current === 0) void refresh(false, false);
+    const knownMembers = projectRepository.peekSharedMembers();
+    if (knownMembers) setMembers(knownMembers);
   });
   // Сотрудник выпал из пространства (или роль перестала быть руководящей) — возвращаемся
   // к своим входящим, иначе блок завис бы на пустой чужой доске без выхода.
@@ -1398,6 +1407,34 @@ export function AssignedToMeBlock({
     [taskRepository, refresh, onChanged, dropPatch],
   );
 
+  // Отметка «готово» с кнопки/чекбокса/ПКМ на карточке: оптимистично патчим статус СРАЗУ,
+  // чтобы карточка исчезла из списка в React-состоянии сразу после анимации (не дожидаясь
+  // полного refresh() и не позволяя параллельному refresh() или таймеру playTaskExit вернуть её).
+  // После ответа сервера сверяем статус с фактическим (для общих проектов правило приёмки
+  // может отличаться от текущего пространства).
+  const moveTaskDone = useCallback(
+    async (item: InboxBlockTask, input: MoveTaskInput): Promise<Task> => {
+      const optimisticStatus: TaskStatus =
+        input.targetStatus === 'done'
+          ? approvalEnabled && !isApprover
+            ? 'pending_approval'
+            : 'done'
+          : input.targetStatus;
+      setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: optimisticStatus }));
+      try {
+        const updated = await taskRepository.move(item.projectId, item.id, input);
+        if (updated.status !== optimisticStatus) {
+          setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: updated.status }));
+        }
+        return updated;
+      } catch (e) {
+        dropPatch(item.id);
+        throw e;
+      }
+    },
+    [approvalEnabled, isApprover, taskRepository, dropPatch],
+  );
+
   // «Готово» броском на нижнюю полосу. Там, где работу принимает руководитель, сервер
   // переводит 'done' исполнителя в 'pending_approval' — показываем сразу итоговый статус,
   // иначе оптимистичная правка разошлась бы с ответом сервера и не снялась.
@@ -1407,20 +1444,24 @@ export function AssignedToMeBlock({
       const shownStatus: TaskStatus = approvalEnabled && !isApprover ? 'pending_approval' : 'done';
       setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: shownStatus }));
       try {
-        await taskRepository.move(item.projectId, item.id, {
+        const updated = await taskRepository.move(item.projectId, item.id, {
           targetStatus: 'done',
           beforeTaskId: null,
           afterTaskId: null,
         });
+        const actualStatus = updated.status;
+        if (actualStatus !== shownStatus) {
+          setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: actualStatus }));
+        }
         celebrate(item.id);
-        toast.success(shownStatus === 'done' ? 'Готово' : 'Отправлена на утверждение', {
+        toast.success(actualStatus === 'done' ? 'Готово' : 'Отправлена на утверждение', {
           description: plainTaskTitle(item.description ?? '') || undefined,
           duration: 8000,
           action: {
             label: 'Отменить',
             onClick: () => {
               forget(item.id);
-              void (shownStatus === 'done'
+              void (actualStatus === 'done'
                 ? taskRepository
                     .move(item.projectId, item.id, {
                       targetStatus: item.status,
@@ -1564,16 +1605,22 @@ export function AssignedToMeBlock({
   // здесь — фоновая сверка снимка, её не ждём.
   const acceptApproval = useCallback(
     async (item: InboxBlockTask): Promise<void> => {
-      await taskRepository.move(item.projectId, item.id, {
-        targetStatus: 'done',
-        beforeTaskId: null,
-        afterTaskId: null,
-      });
-      toast.success('Задача принята');
-      void refresh();
-      onChanged?.();
+      setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: 'done' }));
+      try {
+        await taskRepository.move(item.projectId, item.id, {
+          targetStatus: 'done',
+          beforeTaskId: null,
+          afterTaskId: null,
+        });
+        toast.success('Задача принята');
+        void refresh();
+        onChanged?.();
+      } catch (e) {
+        dropPatch(item.id);
+        throw e;
+      }
     },
-    [taskRepository, refresh, onChanged],
+    [taskRepository, dropPatch, refresh, onChanged],
   );
 
   // Без useCallback: колбэк закрывает диалог через сеттер, а мемоизировать его незачем —
@@ -1798,6 +1845,7 @@ export function AssignedToMeBlock({
         open={!ghost && drawerTask?.id === item.id}
         onOpen={() => setDrawerTask(item)}
         onChanged={handleToggled}
+        onMoveDone={(input) => moveTaskDone(item, input)}
         onDelete={() => handleDelete(item)}
         extraActions={
           <>
@@ -2247,6 +2295,7 @@ export function AssignedToMeBlock({
           openTaskId={drawerTask?.id}
           onOpen={(t) => setDrawerTask(t)}
           onChanged={handleToggled}
+          onMoveDone={moveTaskDone}
           onDelete={handleDelete}
           renderActions={(t) => (
             <>
@@ -3837,6 +3886,7 @@ function InProgressShelf({
   openTaskId = null,
   onOpen,
   onChanged,
+  onMoveDone,
   onDelete,
   renderActions,
   swipe,
@@ -3855,6 +3905,7 @@ function InProgressShelf({
   openTaskId?: string | null;
   onOpen: (item: InboxBlockTask) => void;
   onChanged: () => void;
+  onMoveDone?: (item: InboxBlockTask, input: MoveTaskInput) => Promise<unknown>;
   onDelete: (item: InboxBlockTask) => void;
   // Быстрые действия карточки «В работе» (сдать на утверждение, вернуть в очередь) —
   // их собирает родитель: только он знает правила приёмки.
@@ -3963,6 +4014,7 @@ function InProgressShelf({
                     open={!exiting && item.id === openTaskId}
                     onOpen={() => onOpen(item)}
                     onChanged={onChanged}
+                    onMoveDone={onMoveDone ? (input) => onMoveDone(item, input) : undefined}
                     onDelete={() => onDelete(item)}
                     extraActions={exiting ? null : renderActions(item)}
                     dueOnTop
@@ -4903,6 +4955,7 @@ function AcceptedCard({
   open = false,
   onOpen,
   onChanged,
+  onMoveDone,
   onDelete,
   showCreatedAt = false,
   hideProjectLabel = false,
@@ -4920,6 +4973,7 @@ function AcceptedCard({
   open?: boolean;
   onOpen: () => void;
   onChanged: () => void;
+  onMoveDone?: (input: MoveTaskInput) => Promise<unknown>;
   onDelete: () => void;
   // Отмеченная выполненной карточка уходит из списка (выполненные скрыты) — анимация ухода;
   // false — остаётся на месте зачёркнутой, только штамп галки и зелёная вспышка.
@@ -4963,11 +5017,13 @@ function AcceptedCard({
     setCompleting(true);
     const fx = await playTaskExit(item.id, 'complete', { origin, leave: doneLeaves });
     try {
-      await taskRepository.move(item.projectId, item.id, {
+      const moveInput: MoveTaskInput = {
         targetStatus: 'done',
         beforeTaskId: null,
         afterTaskId: null,
-      });
+      };
+      if (onMoveDone) await onMoveDone(moveInput);
+      else await taskRepository.move(item.projectId, item.id, moveInput);
       celebrate(item.id);
       onChanged();
     } catch (err) {
@@ -5023,6 +5079,7 @@ function AcceptedCard({
       lastDoneTaskId={null}
       lastTodoTaskId={null}
       onChanged={onChanged}
+      move={onMoveDone}
       disabled={!item.canModify}
       variant="toolbar"
       exit={doneLeaves ? 'leave' : 'pulse'}

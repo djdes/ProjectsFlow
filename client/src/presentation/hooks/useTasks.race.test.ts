@@ -9,6 +9,7 @@ import { ContainerProvider, useContainer } from '@/infrastructure/di/container';
 import { AuthProvider } from '@/presentation/auth/AuthProvider';
 import type { Task } from '@/domain/task/Task';
 import type { TaskRepository } from '@/application/task/TaskRepository';
+import { READ_REFRESHED_EVENT } from '@/lib/readRefreshed';
 import { useTasks, type UseTasks } from './useTasks';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
@@ -270,6 +271,35 @@ test('a pending mutation in A neither blocks B nor inserts its result into B', a
       await mutation;
     });
     assert.equal(view.current.tasks[0].projectId, 'b');
+  } finally {
+    await view.close();
+  }
+});
+
+test('a background read-refreshed event cannot cancel an in-flight latest refetch', async () => {
+  const fresh = deferred<Task[]>();
+  let calls = 0;
+  const view = await harness(async () => {
+    calls += 1;
+    if (calls === 1) return [task('a', 'backlog')];
+    if (calls === 2) return fresh.promise;
+    // If read-refreshed fired another read during refetch, it would return stale data and cancel call #2.
+    return [task('a', 'backlog')];
+  });
+  try {
+    let refetching!: Promise<void>;
+    await act(async () => {
+      refetching = view.current.refetch();
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event(READ_REFRESHED_EVENT));
+    });
+    await act(async () => {
+      fresh.resolve([task('a', 'done')]);
+      await refetching;
+    });
+    assert.equal(calls, 2, 'read-refreshed did not start a competing read while latest refetch was in flight');
+    assert.equal(view.current.tasks[0].status, 'done');
   } finally {
     await view.close();
   }
