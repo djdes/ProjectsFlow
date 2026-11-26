@@ -15,6 +15,13 @@ const store = new Map<string, Response>();
       async match(key: string) {
         return store.get(String(key))?.clone();
       },
+      async keys() {
+        return [...store.keys()].map((url) => ({ url }));
+      },
+      async delete(req: { url?: string } | string) {
+        const key = typeof req === 'string' ? req : String(req.url ?? '');
+        return store.delete(key);
+      },
     };
   },
   async delete() {
@@ -146,4 +153,86 @@ test('a read started ahead is handed to the next reader once; an own write disca
   calls = serve(t, { [path]: { comments: ['after the write'] } });
   assert.deepEqual(await httpClient.get(path), { comments: ['after the write'] }, 'fetched before an own write: not handed out');
   assert.equal(calls.length, 1);
+});
+
+test('a stale in-flight GET finishing after task completion cannot poison offline storage or resurrect completed tasks', async (t) => {
+  const overviewPath = '/assignees/overview';
+  const taskDoneState = { done: false };
+  let releaseStaleRead!: () => void;
+  let staleReadStarted!: () => void;
+  const staleGate = new Promise<void>((resolve) => {
+    releaseStaleRead = resolve;
+  });
+  const staleStarted = new Promise<void>((resolve) => {
+    staleReadStarted = resolve;
+  });
+  let overviewCalls = 0;
+
+  t.mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
+    const path = url.replace(/^\/api/, '');
+    if (init?.method === 'POST' && path === '/projects/indiv/tasks/t1/move') {
+      taskDoneState.done = true;
+      return new Response(JSON.stringify({ task: { id: 't1', status: 'done' } }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (path === overviewPath) {
+      overviewCalls += 1;
+      const callNum = overviewCalls;
+      if (callNum === 1) {
+        staleReadStarted();
+        await staleGate;
+        // Stale snapshot taken before the move completed.
+        return new Response(JSON.stringify({ mine: { items: [{ id: 't1', status: 'backlog' }] } }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(
+        JSON.stringify({ mine: { items: taskDoneState.done ? [] : [{ id: 't1', status: 'backlog' }] } }),
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    return new Response(JSON.stringify({}), { headers: { 'Content-Type': 'application/json' } });
+  });
+
+  // Start a read before the mutation, then complete the task while that read is still in flight.
+  const stalePromise = httpClient.get(overviewPath);
+  await staleStarted;
+  await httpClient.post('/projects/indiv/tasks/t1/move', { targetStatus: 'done' });
+  // Even an immediate post-write read (potentially in the same millisecond) must be cached and fresh.
+  const fresh = await httpClient.get<{ mine: { items: unknown[] } }>(overviewPath);
+  assert.deepEqual(fresh.mine.items, []);
+
+  // Now the older in-flight GET finishes AFTER the write and fresh read.
+  releaseStaleRead();
+  await stalePromise;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  // Neither RAM cache nor offline storage may revert to the stale pre-mutation snapshot.
+  const afterStale = await httpClient.get<{ mine: { items: unknown[] } }>(overviewPath, { swr: true });
+  assert.deepEqual(afterStale.mine.items, [], 'SWR read must stay on the post-mutation snapshot');
+  const saved = store.get(offlineKey('u1', 'ws', overviewPath));
+  assert.ok(saved, 'fresh snapshot is stored');
+  assert.deepEqual(JSON.parse(await saved!.clone().text()).mine.items, [], 'offline store was not overwritten by stale GET');
+});
+
+test('an own write drops affected offline copies so a subsequent SWR read waits for the network instead of showing stale data', async (t) => {
+  const path = '/projects/p-drop/tasks';
+  store.set(
+    offlineKey('u1', 'ws', path),
+    new Response(JSON.stringify({ tasks: [{ id: 'old-open', status: 'todo' }] }), {
+      headers: { 'Content-Type': 'application/json', 'X-Pf-Saved-At': String(Date.now()) },
+    }),
+  );
+  serve(
+    t,
+    {
+      '/projects/p-drop/tasks/old-open/move': { task: { id: 'old-open', status: 'done' } },
+      [path]: { tasks: [{ id: 'old-open', status: 'done' }] },
+    },
+    30,
+  );
+  await httpClient.post('/projects/p-drop/tasks/old-open/move', { targetStatus: 'done' });
+  const next = await httpClient.get<{ tasks: Array<{ status: string }> }>(path, { swr: true });
+  assert.equal(next.tasks[0]?.status, 'done', 'stale offline copy dropped by the write is never shown');
 });

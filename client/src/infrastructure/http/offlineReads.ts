@@ -4,10 +4,12 @@
 // on logout, on an expired session and when another account signs in on this device.
 
 export type OfflineStore = {
-  put(key: string, text: string): Promise<void>;
+  put(key: string, text: string, savedAt?: number): Promise<void>;
   get(key: string): Promise<string | null>;
   /** The saved copy with the time it was saved (null for copies saved before times were kept). */
   read(key: string): Promise<{ text: string; savedAt: number | null } | null>;
+  /** Removes stored copies whose offline key matches `predicate` (e.g. invalidated by an own write). */
+  deleteMatching(predicate: (key: string) => boolean): Promise<void>;
   clear(): Promise<void>;
 };
 
@@ -29,6 +31,14 @@ export function offlineKey(owner: string, workspace: string | null, path: string
   return `/__pf/offline/${encodeURIComponent(owner)}/${encodeURIComponent(workspace ?? 'account')}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 
+/** Extracts the API path from an offline key belonging to `owner` (null for other keys/owners). */
+export function offlinePathOf(key: string, owner: string): string | null {
+  const prefix = `/__pf/offline/${encodeURIComponent(owner)}/`;
+  if (!key.startsWith(prefix)) return null;
+  const slash = key.indexOf('/', prefix.length);
+  return slash === -1 ? null : key.slice(slash);
+}
+
 /** fetch rejected (no network, DNS, aborted by our deadline) — not an HTTP error status. */
 export function isNetworkFailure(error: unknown): boolean {
   return error instanceof TypeError || (error instanceof Error && /не ответил вовремя/.test(error.message));
@@ -41,11 +51,11 @@ export function fitsOfflineStore(text: string): boolean {
 export function cacheStorageStore(): OfflineStore | null {
   if (typeof caches === 'undefined') return null;
   return {
-    async put(key, text) {
+    async put(key, text, savedAt = Date.now()) {
       const cache = await caches.open(CACHE_NAME);
       await cache.put(
         key,
-        new Response(text, { headers: { 'Content-Type': 'application/json', [SAVED_AT_HEADER]: String(Date.now()) } }),
+        new Response(text, { headers: { 'Content-Type': 'application/json', [SAVED_AT_HEADER]: String(savedAt) } }),
       );
     },
     async get(key) {
@@ -59,6 +69,22 @@ export function cacheStorageStore(): OfflineStore | null {
       if (!hit) return null;
       const savedAt = Number(hit.headers.get(SAVED_AT_HEADER));
       return { text: await hit.text(), savedAt: Number.isFinite(savedAt) && savedAt > 0 ? savedAt : null };
+    },
+    async deleteMatching(predicate) {
+      const cache = await caches.open(CACHE_NAME);
+      if (typeof cache.keys !== 'function' || typeof cache.delete !== 'function') return;
+      const requests = await cache.keys();
+      await Promise.all(
+        requests.map((req) => {
+          let pathname = req.url;
+          try {
+            pathname = new URL(req.url).pathname + new URL(req.url).search;
+          } catch {
+            /* relative key in test stand-ins */
+          }
+          return predicate(pathname) ? cache.delete(req) : Promise.resolve(false);
+        }),
+      );
     },
     async clear() {
       await caches.delete(CACHE_NAME);

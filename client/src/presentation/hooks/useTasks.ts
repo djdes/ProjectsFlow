@@ -83,6 +83,7 @@ export function useTasks(projectId: string): UseTasks {
     latestState.current = state;
   }, [state]);
   const requests = useRef(0);
+  const latestInFlight = useRef(0);
   const mutations = useRef(new Map<string, number>());
   const moveVersions = useRef(new Map<string, number>());
   useLayoutEffect(() => {
@@ -90,6 +91,7 @@ export function useTasks(projectId: string): UseTasks {
     return () => {
       scope.current = '';
       requests.current += 1;
+      latestInFlight.current = 0;
     };
   }, [projectId]);
   const apply = (change: (current: State) => State): void => {
@@ -144,7 +146,11 @@ export function useTasks(projectId: string): UseTasks {
   // Otherwise what is known comes at once and a newer list is announced (useReadRefreshed).
   const load = useCallback(
     async (propagateError = false, latest = true): Promise<void> => {
+      // Never let a background SWR re-read (useReadRefreshed) cancel an in-flight latest=true
+      // network refetch or run while a local mutation is active on this board.
+      if (!latest && (latestInFlight.current > 0 || mutations.current.has(projectId))) return;
       const request = ++requests.current;
+      if (latest) latestInFlight.current += 1;
       try {
         const tasks = await taskRepository.listForScreen(projectId, { latest });
         if (
@@ -165,6 +171,8 @@ export function useTasks(projectId: string): UseTasks {
             error: (e as Error).message ?? 'Не удалось загрузить',
           }));
         if (propagateError) throw e;
+      } finally {
+        if (latest && latestInFlight.current > 0) latestInFlight.current -= 1;
       }
     },
     [taskRepository, projectId],

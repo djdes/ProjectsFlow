@@ -13,21 +13,12 @@ import {
   isNetworkFailure,
   isOfflineCacheable,
   offlineKey,
+  offlinePathOf,
   readOfflineOwner,
   writeOfflineOwner,
 } from './offlineReads';
 
 const reads = new InFlightReads();
-// Stable resources (project settings, members, the project list…) are not re-read on every
-// task opening and page visit: see ReadCache.ts for what is kept and what clears it.
-// A change (own write or one made elsewhere) also stops sharing reads already in flight: a
-// reader asking after it must not get an answer sent before it.
-const cache = new ReadCache(undefined, (kind) => {
-  reads.invalidate();
-  // An own write may have changed what was fetched ahead (prefetch below).
-  if (kind === 'dropped') prefetched.clear();
-});
-if (typeof window !== 'undefined') cache.listen(window);
 // Background re-reads of kept answers, one per cache key at a time.
 const revalidating = new Map<string, Promise<void>>();
 // Parts of combined reads in flight (ReadOptions.parts), by cache key: a separate read of one
@@ -42,19 +33,49 @@ let requestWorkspace: string | null = null;
 // Offline reading (offlineReads.ts): the account the stored reads belong to.
 const offlineStore = cacheStorageStore();
 let offlineOwner: string | null = readOfflineOwner();
+// Serialize Cache Storage mutations (put / deleteMatching / clear) so a slow put from an
+// older read can never overtake an invalidation triggered by a newer write.
+let offlineQueue: Promise<void> = Promise.resolve();
+function enqueueOffline(op: () => Promise<void>): void {
+  offlineQueue = offlineQueue.then(op).catch(() => undefined);
+}
+
+// Stable resources (project settings, members, the project list…) are not re-read on every
+// task opening and page visit: see ReadCache.ts for what is kept and what clears it.
+// A change (own write or one made elsewhere) also stops sharing reads already in flight: a
+// reader asking after it must not get an answer sent before it.
+const cache = new ReadCache(undefined, (kind, matches) => {
+  reads.invalidate();
+  pendingParts.clear();
+  if (kind === 'dropped') {
+    // An own write may have changed what was fetched ahead or revalidating in the background.
+    prefetched.clear();
+    revalidating.clear();
+    const owner = offlineOwner;
+    if (owner && offlineStore) {
+      enqueueOffline(() =>
+        offlineStore.deleteMatching((key) => {
+          const entryPath = offlinePathOf(key, owner);
+          return entryPath !== null && matches(entryPath);
+        }),
+      );
+    }
+  }
+});
+if (typeof window !== 'undefined') cache.listen(window);
 
 function forgetOfflineReads(): void {
   offlineOwner = null;
   writeOfflineOwner(null);
   cache.clear();
-  void offlineStore?.clear().catch(() => undefined);
+  if (offlineStore) enqueueOffline(() => offlineStore.clear());
 }
 
 function rememberOfflineOwner(data: unknown): void {
   const id = (data as { user?: { id?: unknown } } | null)?.user?.id;
   if (typeof id !== 'string' || id === offlineOwner) return;
   // Another account on this device: the previous account's reads must not be shown offline.
-  if (offlineOwner) void offlineStore?.clear().catch(() => undefined);
+  if (offlineOwner && offlineStore) enqueueOffline(() => offlineStore.clear());
   offlineOwner = id;
   writeOfflineOwner(id);
 }
@@ -78,9 +99,16 @@ type Options = {
 };
 
 // A response: parsed data, the body as received (compared to tell whether anything changed),
-// whether it came from the offline copy because the network was down, and when the request was
-// sent (what changed after that may not be in it).
-type Raw = { readonly data: unknown; readonly text: string | null; readonly offline: boolean; readonly sentAt: number };
+// whether it came from the offline copy because the network was down, when the request was
+// sent (what changed after that may not be in it), and the monotonic cache-change sequence
+// captured before the request started (null for saved copies read from disk).
+type Raw = {
+  readonly data: unknown;
+  readonly text: string | null;
+  readonly offline: boolean;
+  readonly sentAt: number;
+  readonly readSeq: number | null;
+};
 
 async function request<T>(path: string, opts: Options = {}): Promise<T> {
   return (await requestRaw(path, opts)).data as T;
@@ -88,10 +116,13 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
 
 async function requestRaw(path: string, opts: Options = {}): Promise<Raw> {
   const sentAt = Date.now();
+  const readSeq = cache.currentSeq();
   const workspace = opts.workspaceId ?? requestWorkspace;
   const init: RequestInit = {
     method: opts.method ?? 'GET',
     credentials: 'include',
+    // Never let the browser HTTP cache serve stale mutable API JSON (ReadCache handles memory/SWR).
+    cache: 'no-store',
     headers: { Accept: 'application/json',
       ...(workspace && !/^\/(auth|workspaces)(\/|$)/.test(path) ? { 'X-Workspace-Id': workspace } : {}),
     },
@@ -111,6 +142,7 @@ async function requestRaw(path: string, opts: Options = {}): Promise<Raw> {
   } catch (error) {
     // No network: answer a read from the last saved copy of this account and workspace.
     if (isRead && offlineOwner && offlineStore && isNetworkFailure(error)) {
+      await offlineQueue;
       const saved = await offlineStore.get(offlineKey(offlineOwner, workspace, path)).catch(() => null);
       if (saved !== null) {
         try {
@@ -118,7 +150,7 @@ async function requestRaw(path: string, opts: Options = {}): Promise<Raw> {
         } catch {
           /* non-browser environment */
         }
-        return { data: JSON.parse(saved) as unknown, text: saved, offline: true, sentAt };
+        return { data: JSON.parse(saved) as unknown, text: saved, offline: true, sentAt, readSeq: null };
       }
     }
     throw error;
@@ -126,7 +158,7 @@ async function requestRaw(path: string, opts: Options = {}): Promise<Raw> {
   const { response: res, text } = fetched;
   if (res.ok && init.method === 'POST' && path === '/auth/logout') forgetOfflineReads();
 
-  if (res.status === 204) return { data: undefined, text: null, offline: false, sentAt };
+  if (res.status === 204) return { data: undefined, text: null, offline: false, sentAt, readSeq };
 
   // JSON.parse под try/catch: nginx 502/504 отдаёт HTML, а не JSON — без гарда
   // наверх летел бы SyntaxError вместо HttpError, и все `instanceof HttpError`-ветки
@@ -163,11 +195,18 @@ async function requestRaw(path: string, opts: Options = {}): Promise<Raw> {
 
   if (isRead) {
     if (path === '/auth/me') rememberOfflineOwner(data);
-    if (offlineOwner && offlineStore && fitsOfflineStore(text)) {
-      void offlineStore.put(offlineKey(offlineOwner, workspace, path), text).catch(() => undefined);
+    // Never write a pre-mutation response to the device store: it would resurrect old state on
+    // SWR re-reads or page reload. Stamp `sentAt` (when requested), not response arrival time.
+    const owner = offlineOwner;
+    if (owner && offlineStore && fitsOfflineStore(text) && cache.changedSince(path, sentAt, readSeq) !== 'dropped') {
+      const storageKey = offlineKey(owner, workspace, path);
+      enqueueOffline(async () => {
+        if (offlineOwner !== owner || cache.changedSince(path, sentAt, readSeq) === 'dropped') return;
+        await offlineStore.put(storageKey, text, sentAt);
+      });
     }
   }
-  return { data, text, offline: false, sentAt };
+  return { data, text, offline: false, sentAt, readSeq };
 }
 
 async function mutate<T>(path: string, opts: Options): Promise<T> {
@@ -204,7 +243,12 @@ function fetchRaw(path: string, options?: ReadOptions): Promise<Raw> {
 }
 
 /** Network read of a cacheable path, stored under the cache's rules (ReadCache.store). */
-async function loadAndStore(path: string, options: ReadOptions | undefined, cacheKey: string, policy: ReadPolicy): Promise<Raw> {
+async function loadAndStore(
+  path: string,
+  options: ReadOptions | undefined,
+  cacheKey: string,
+  policy: ReadPolicy,
+): Promise<{ readonly raw: Raw; readonly stored: boolean }> {
   const parts = Object.entries(options?.parts ?? {}).map(([property, partPath]) => ({
     property, path: partPath, key: keyOf(partPath, options?.workspaceId),
   }));
@@ -215,16 +259,16 @@ async function loadAndStore(path: string, options: ReadOptions | undefined, cach
   for (const part of parts) pendingParts.set(part.key, settled);
   try {
     const raw = await fetchRaw(path, options);
-    if (raw.offline) return raw;
-    cache.store(cacheKey, path, raw.data, policy, raw.text, raw.sentAt);
+    if (raw.offline) return { raw, stored: false };
+    const stored = cache.store(cacheKey, path, raw.data, policy, raw.text, raw.sentAt, raw.readSeq ?? undefined);
     for (const part of parts) {
       const partPolicy = readCachePolicy(part.path);
       const value = (raw.data as Record<string, unknown> | null)?.[part.property];
       if (partPolicy && value !== undefined) {
-        cache.store(part.key, part.path, value, partPolicy, JSON.stringify(value), raw.sentAt);
+        cache.store(part.key, part.path, value, partPolicy, JSON.stringify(value), raw.sentAt, raw.readSeq ?? undefined);
       }
     }
-    return raw;
+    return { raw, stored };
   } catch (error) {
     // Gone or no longer allowed: what is kept must not be shown any more. Screens showing it
     // re-read and get the error themselves. A server failure or a lost network keeps it.
@@ -239,17 +283,19 @@ async function loadAndStore(path: string, options: ReadOptions | undefined, cach
   }
 }
 
-/** Fresh copy of a kept answer in the background; readers are told only if it differs. */
+/** Fresh copy of a kept answer in the background; readers are told only if stored and changed. */
 function revalidate(path: string, options: ReadOptions | undefined, cacheKey: string, policy: ReadPolicy, shown: string | null): void {
   if (revalidating.has(cacheKey)) return;
   const run = loadAndStore(path, options, cacheKey, policy)
-    .then((raw) => {
-      if (!raw.offline && raw.text !== shown) announceReadRefreshed();
+    .then(({ raw, stored }) => {
+      if (!raw.offline && stored && raw.text !== shown) announceReadRefreshed();
     })
     .catch(() => {
       /* The kept answer stays on screen; the next read tries again. */
     })
-    .finally(() => revalidating.delete(cacheKey));
+    .finally(() => {
+      if (revalidating.get(cacheKey) === run) revalidating.delete(cacheKey);
+    });
   revalidating.set(cacheKey, run);
 }
 
@@ -260,10 +306,13 @@ function revalidate(path: string, options: ReadOptions | undefined, cacheKey: st
 async function readSaved(path: string, workspaceId: string | undefined, policy: ReadPolicy): Promise<{ raw: Raw; savedAt: number } | null> {
   if (!offlineOwner || !offlineStore) return null;
   try {
+    // Wait for any pending invalidation delete so a copy being dropped is never read back.
+    await offlineQueue;
+    if (!offlineOwner) return null;
     const saved = await offlineStore.read(offlineKey(offlineOwner, workspaceId ?? requestWorkspace, path));
     if (!saved || saved.savedAt === null || Date.now() - saved.savedAt > policy.keep) return null;
     if (cache.changedSince(path, saved.savedAt) === 'dropped') return null;
-    const raw: Raw = { data: JSON.parse(saved.text) as unknown, text: saved.text, offline: false, sentAt: saved.savedAt };
+    const raw: Raw = { data: JSON.parse(saved.text) as unknown, text: saved.text, offline: false, sentAt: saved.savedAt, readSeq: null };
     return { raw, savedAt: saved.savedAt };
   } catch {
     return null;
@@ -287,14 +336,16 @@ function raceSaved(path: string, options: ReadOptions | undefined, cacheKey: str
     };
     saved.then((copy) => {
       if (shown || failed || !copy) return;
-      // Kept for the next readers unless the network answer is already here (store keeps the newer).
-      cache.store(cacheKey, path, copy.raw.data, policy, copy.raw.text, copy.savedAt);
+      // Kept as stale until the racing network answer arrives. If an own write happened while
+      // reading from disk, store() rejects it and we wait for the network instead.
+      const stored = cache.store(cacheKey, path, copy.raw.data, policy, copy.raw.text, copy.savedAt, undefined, { stale: true });
+      if (!stored) return;
       show(copy.raw);
     });
     network.then(
-      (raw) => {
+      ({ raw, stored }) => {
         if (!shown) show(raw);
-        else if (!raw.offline && raw.text !== shown.text) announceReadRefreshed();
+        else if (!raw.offline && stored && raw.text !== shown.text) announceReadRefreshed();
       },
       (error: unknown) => {
         if (shown) return;
@@ -307,7 +358,7 @@ function raceSaved(path: string, options: ReadOptions | undefined, cacheKey: str
         }
         void saved.then((copy) => {
           if (shown) return;
-          if (copy) show(copy.raw);
+          if (copy && cache.changedSince(path, copy.savedAt) !== 'dropped') show(copy.raw);
           else reject(error);
         });
       },
@@ -367,7 +418,7 @@ async function readAnswer<T>(path: string, options?: ReadOptions): Promise<Answe
     }
     return answer(await raceSaved(path, options, cacheKey, policy));
   }
-  return answer(await loadAndStore(path, options, cacheKey, policy));
+  return answer((await loadAndStore(path, options, cacheKey, policy)).raw);
 }
 
 /** What is already known about `path` — fresh or kept — without a request: for a first render. */
@@ -379,19 +430,27 @@ function peekAnswer<T>(path: string, options?: Pick<Options, 'workspaceId'>): An
 
 // Read on almost every start: their saved copies are pulled into memory as soon as the
 // workspace is known, so the first screen renders them synchronously (peek), not a skeleton.
-const WARM_PATHS = ['/inbox', '/assignees/overview', '/me/ui-prefs', '/projects'];
+// Stored as stale so a reload still revalidates against the server in the background.
+const WARM_PATHS = ['/inbox', '/assignees/overview', '/me/ui-prefs', '/projects', '/me/shared-members'];
+
+function warmPath(path: string, workspaceId: string): void {
+  const policy = readCachePolicy(path);
+  const cacheKey = keyOf(path, workspaceId);
+  if (!policy || cache.lookup(cacheKey)) return;
+  void readSaved(path, workspaceId, policy).then((copy) => {
+    if (!copy) return;
+    // A network answer that arrived meanwhile is newer and stays (ReadCache.store).
+    cache.store(cacheKey, path, copy.raw.data, policy, copy.raw.text, copy.savedAt, undefined, { stale: true });
+    if (path === '/inbox') {
+      const inboxId = (copy.raw.data as { project?: { id?: unknown } } | null)?.project?.id;
+      if (typeof inboxId === 'string' && inboxId) warmPath(`/projects/${inboxId}/tasks`, workspaceId);
+    }
+  });
+}
 
 function warmFromSaved(workspaceId: string): void {
   if (!offlineOwner || !offlineStore) return;
-  for (const path of WARM_PATHS) {
-    const policy = readCachePolicy(path);
-    const cacheKey = keyOf(path, workspaceId);
-    if (!policy || cache.lookup(cacheKey)) continue;
-    void readSaved(path, workspaceId, policy).then((copy) => {
-      // A network answer that arrived meanwhile is newer and stays (ReadCache.store).
-      if (copy) cache.store(cacheKey, path, copy.raw.data, policy, copy.raw.text, copy.savedAt);
-    });
-  }
+  for (const path of WARM_PATHS) warmPath(path, workspaceId);
 }
 
 export const httpClient = {

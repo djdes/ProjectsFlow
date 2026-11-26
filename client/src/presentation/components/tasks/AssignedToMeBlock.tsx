@@ -96,6 +96,7 @@ import { useCtrlOrMetaHeld } from '@/presentation/hooks/useCtrlOrMetaHeld';
 import { useProjectsContext } from '@/presentation/hooks/ProjectsProvider';
 import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import type { Task, RalphMode, RunMode, TaskPriority, TaskStatus } from '@/domain/task/Task';
+import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
 import type { InboxOverview } from '@/domain/task/InboxOverview';
 import {
@@ -191,8 +192,9 @@ type Props = {
   // Свои задачи виртуально зеркалятся в верхнюю личную колонку без дублирования в БД.
   boardTasks: readonly Task[] | null;
   inboxProjectId: string;
-  // Колбэк после смены ответственного/toggle — InboxPage перефетчит доску ниже.
-  onChanged?: () => void;
+  // Колбэк после смены ответственного/toggle — InboxPage перефетчит личный инбокс, только
+  // если изменение могло его затронуть (projectId совпал или не указан).
+  onChanged?: (changedProjectId?: string) => void;
   // Заголовок страницы и её действия («Выделить») — блок ставит их в свою первую строку
   // рядом с вкладками, людьми и поиском (дизайн C4: одна строка управления над доской).
   heading?: React.ReactNode;
@@ -599,6 +601,7 @@ export function AssignedToMeBlock({
   // существует). Читаем актуальное значение через ref в момент вызова.
   const focusedMemberIdRef = useRef(focusedMemberId);
   const refreshGeneration = useRef(0);
+  const latestRefreshInFlight = useRef(0);
   const focusedGeneration = useRef(0);
   useEffect(() => {
     focusedMemberIdRef.current = focusedMemberId;
@@ -615,7 +618,11 @@ export function AssignedToMeBlock({
   // latest (default) — after a change, an event or a gesture: wait for the current lists.
   // Otherwise (a newer answer was announced) take what is known.
   const refresh = useCallback(async (propagateError = false, latest = true): Promise<void> => {
+    // Never let a background SWR re-read (useReadRefreshed) cancel or downgrade an in-flight
+    // latest=true network refresh started after a mutation or realtime event.
+    if (!latest && latestRefreshInFlight.current > 0) return;
     const generation = ++refreshGeneration.current;
+    if (latest) latestRefreshInFlight.current += 1;
     lastRefreshAtRef.current = Date.now();
     // Снимок на момент старта запроса — сверяем с актуальным ПОСЛЕ await (см. ниже), а не
     // просто читаем ref второй раз: доска могла закрыться и открыться на ДРУГОГО сотрудника
@@ -645,6 +652,7 @@ export function AssignedToMeBlock({
       setLoadError(true);
       toast.error('Не удалось загрузить задачи. Повторите попытку.');
     } finally {
+      if (latest) latestRefreshInFlight.current -= 1;
       // Штампуем ещё раз ПОСЛЕ применения ответа, не только в начале запроса: на медленной
       // сети (ответ дольше 400мс) эхо этой же мутации от SSE прилетает уже за пределами
       // окна, отсчитанного от старта, и второй refetch всё равно проходит гвард ниже.
@@ -725,9 +733,9 @@ export function AssignedToMeBlock({
     });
   };
 
-  const handleToggled = (): void => {
+  const handleToggled = (changedProjectId?: string): void => {
     void refresh();
-    onChanged?.();
+    onChanged?.(changedProjectId);
   };
 
   // Keep the inline composer in its project column. New tasks are drafts assigned
@@ -772,7 +780,7 @@ export function AssignedToMeBlock({
       }
       setMobileSection('queue');
       void refresh();
-      onChanged?.();
+      onChanged?.(projectId);
       return created;
     },
     [user, focusedMemberId, taskRepository, allProjects, tasks, byMeTasks, focusedMemberTasks, handleTabChange, setFocusedMember, setMobileSection, refresh, onChanged],
@@ -799,7 +807,7 @@ export function AssignedToMeBlock({
       // а не только из инбокса.
       await taskRepository.delete(target.projectId, target.id);
       toast.success('Задача удалена');
-      handleToggled();
+      handleToggled(target.projectId);
     } catch (err) {
       // Сеть подвела уже ПОСЛЕ того, как карточка исчезла — возвращаем её на место.
       fx.restore();
@@ -1267,10 +1275,12 @@ export function AssignedToMeBlock({
     void loadMembers();
   }, [loadMembers]);
   // A newer answer than the one shown arrived in the background (lists, people): re-read —
-  // from memory now; only what changed re-renders.
+  // from memory now; only what changed re-renders. Shared members have fresh=0 for pickers, so
+  // read them from memory (peek) here instead of starting another network revalidation loop.
   useReadRefreshed(() => {
-    void refresh(false, false);
-    void loadMembers();
+    if (latestRefreshInFlight.current === 0) void refresh(false, false);
+    const knownMembers = projectRepository.peekSharedMembers();
+    if (knownMembers) setMembers(knownMembers);
   });
   // Сотрудник выпал из пространства (или роль перестала быть руководящей) — возвращаемся
   // к своим входящим, иначе блок завис бы на пустой чужой доске без выхода.
@@ -1306,7 +1316,7 @@ export function AssignedToMeBlock({
         await taskRepository.assign(item.projectId, item.id, prevAssigneeId);
         toast.success('Ответственный возвращён');
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         toast.error(`Не удалось вернуть ответственного: ${(e as Error).message}`);
       }
@@ -1327,7 +1337,7 @@ export function AssignedToMeBlock({
         });
         // Не await: перерисовка списков не должна удерживать жест (см. setWorkStatus).
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         toast.error(`Не удалось переназначить: ${(e as Error).message}`);
       }
@@ -1351,7 +1361,7 @@ export function AssignedToMeBlock({
           action: { label: 'Отменить', onClick: () => void undoAssign(item, prevAssignee) },
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         toast.error(`Не удалось забрать: ${(e as Error).message}`);
       }
@@ -1370,7 +1380,7 @@ export function AssignedToMeBlock({
         forget(item.id);
         toast.success('Задача снова в работе');
         await refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         toast.error(`Не удалось забрать: ${(e as Error).message}`);
       }
@@ -1389,13 +1399,41 @@ export function AssignedToMeBlock({
           afterTaskId: null,
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         dropPatch(item.id);
         toast.error(`Не удалось отменить: ${(e as Error).message}`);
       }
     },
     [taskRepository, refresh, onChanged, dropPatch],
+  );
+
+  // Отметка «готово» с кнопки/чекбокса/ПКМ на карточке: оптимистично патчим статус СРАЗУ,
+  // чтобы карточка исчезла из списка в React-состоянии сразу после анимации (не дожидаясь
+  // полного refresh() и не позволяя параллельному refresh() или таймеру playTaskExit вернуть её).
+  // После ответа сервера сверяем статус с фактическим (для общих проектов правило приёмки
+  // может отличаться от текущего пространства).
+  const moveTaskDone = useCallback(
+    async (item: InboxBlockTask, input: MoveTaskInput): Promise<Task> => {
+      const optimisticStatus: TaskStatus =
+        input.targetStatus === 'done'
+          ? approvalEnabled && !isApprover
+            ? 'pending_approval'
+            : 'done'
+          : input.targetStatus;
+      setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: optimisticStatus }));
+      try {
+        const updated = await taskRepository.move(item.projectId, item.id, input);
+        if (updated.status !== optimisticStatus) {
+          setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: updated.status }));
+        }
+        return updated;
+      } catch (e) {
+        dropPatch(item.id);
+        throw e;
+      }
+    },
+    [approvalEnabled, isApprover, taskRepository, dropPatch],
   );
 
   // «Готово» броском на нижнюю полосу. Там, где работу принимает руководитель, сервер
@@ -1407,20 +1445,24 @@ export function AssignedToMeBlock({
       const shownStatus: TaskStatus = approvalEnabled && !isApprover ? 'pending_approval' : 'done';
       setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: shownStatus }));
       try {
-        await taskRepository.move(item.projectId, item.id, {
+        const updated = await taskRepository.move(item.projectId, item.id, {
           targetStatus: 'done',
           beforeTaskId: null,
           afterTaskId: null,
         });
+        const actualStatus = updated.status;
+        if (actualStatus !== shownStatus) {
+          setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: actualStatus }));
+        }
         celebrate(item.id);
-        toast.success(shownStatus === 'done' ? 'Готово' : 'Отправлена на утверждение', {
+        toast.success(actualStatus === 'done' ? 'Готово' : 'Отправлена на утверждение', {
           description: plainTaskTitle(item.description ?? '') || undefined,
           duration: 8000,
           action: {
             label: 'Отменить',
             onClick: () => {
               forget(item.id);
-              void (shownStatus === 'done'
+              void (actualStatus === 'done'
                 ? taskRepository
                     .move(item.projectId, item.id, {
                       targetStatus: item.status,
@@ -1431,7 +1473,7 @@ export function AssignedToMeBlock({
                     .then(() => {
                       dropPatch(item.id);
                       void refresh();
-                      onChanged?.();
+                      onChanged?.(item.projectId);
                     })
                     .catch((err: unknown) => {
                       toast.error(`Не удалось отменить: ${(err as Error).message}`);
@@ -1441,7 +1483,7 @@ export function AssignedToMeBlock({
           },
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         dropPatch(item.id);
         toast.error(`Не удалось: ${(e as Error).message}`);
@@ -1461,12 +1503,12 @@ export function AssignedToMeBlock({
           description: plainTaskTitle(item.description ?? '') || undefined,
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId === inboxProjectId || targetProjectId === inboxProjectId ? inboxProjectId : item.projectId);
       } catch (e) {
         toast.error(`Не удалось перенести: ${(e as Error).message}`);
       }
     },
-    [allProjects, taskRepository, refresh, onChanged],
+    [allProjects, inboxProjectId, taskRepository, refresh, onChanged],
   );
 
   // Вспышка полки «В работе»: `key` растёт на каждое взятие задачи (булев флаг не дал бы
@@ -1504,7 +1546,7 @@ export function AssignedToMeBlock({
           action: { label: 'Отменить', onClick: () => void restoreStatus(item, prev) },
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         dropPatch(item.id);
         toast.error(`Не удалось: ${(e as Error).message}`);
@@ -1537,7 +1579,7 @@ export function AssignedToMeBlock({
           action: { label: 'Отменить', onClick: () => void withdrawApproval(item) },
         });
         void refresh();
-        onChanged?.();
+        onChanged?.(item.projectId);
       } catch (e) {
         // Оптимистичный celebrate обязателен к откату на ошибке — иначе локальная цифра
         // навсегда разъедется с серверной (контракт useCompletedToday).
@@ -1564,16 +1606,22 @@ export function AssignedToMeBlock({
   // здесь — фоновая сверка снимка, её не ждём.
   const acceptApproval = useCallback(
     async (item: InboxBlockTask): Promise<void> => {
-      await taskRepository.move(item.projectId, item.id, {
-        targetStatus: 'done',
-        beforeTaskId: null,
-        afterTaskId: null,
-      });
-      toast.success('Задача принята');
-      void refresh();
-      onChanged?.();
+      setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: 'done' }));
+      try {
+        await taskRepository.move(item.projectId, item.id, {
+          targetStatus: 'done',
+          beforeTaskId: null,
+          afterTaskId: null,
+        });
+        toast.success('Задача принята');
+        void refresh();
+        onChanged?.(item.projectId);
+      } catch (e) {
+        dropPatch(item.id);
+        throw e;
+      }
     },
-    [taskRepository, refresh, onChanged],
+    [taskRepository, dropPatch, refresh, onChanged],
   );
 
   // Без useCallback: колбэк закрывает диалог через сеттер, а мемоизировать его незачем —
@@ -1601,7 +1649,7 @@ export function AssignedToMeBlock({
       toast.success('Возвращена в работу — комментарий добавлен');
       setRejectTarget(null);
       await refresh();
-      onChanged?.();
+      onChanged?.(item.projectId);
     } catch (e) {
       toast.error(`Не удалось: ${(e as Error).message}`);
     }
@@ -1797,7 +1845,8 @@ export function AssignedToMeBlock({
         item={item}
         open={!ghost && drawerTask?.id === item.id}
         onOpen={() => setDrawerTask(item)}
-        onChanged={handleToggled}
+        onChanged={() => handleToggled(item.projectId)}
+        onMoveDone={(input) => moveTaskDone(item, input)}
         onDelete={() => handleDelete(item)}
         extraActions={
           <>
@@ -2246,7 +2295,8 @@ export function AssignedToMeBlock({
           items={inProgressTasks}
           openTaskId={drawerTask?.id}
           onOpen={(t) => setDrawerTask(t)}
-          onChanged={handleToggled}
+          onChanged={(projectId) => handleToggled(projectId)}
+          onMoveDone={moveTaskDone}
           onDelete={handleDelete}
           renderActions={(t) => (
             <>
@@ -3837,6 +3887,7 @@ function InProgressShelf({
   openTaskId = null,
   onOpen,
   onChanged,
+  onMoveDone,
   onDelete,
   renderActions,
   swipe,
@@ -3854,7 +3905,8 @@ function InProgressShelf({
   items: readonly InboxBlockTask[];
   openTaskId?: string | null;
   onOpen: (item: InboxBlockTask) => void;
-  onChanged: () => void;
+  onChanged: (projectId?: string) => void;
+  onMoveDone?: (item: InboxBlockTask, input: MoveTaskInput) => Promise<unknown>;
   onDelete: (item: InboxBlockTask) => void;
   // Быстрые действия карточки «В работе» (сдать на утверждение, вернуть в очередь) —
   // их собирает родитель: только он знает правила приёмки.
@@ -3962,7 +4014,8 @@ function InProgressShelf({
                     item={item}
                     open={!exiting && item.id === openTaskId}
                     onOpen={() => onOpen(item)}
-                    onChanged={onChanged}
+                    onChanged={() => onChanged(item.projectId)}
+                    onMoveDone={onMoveDone ? (input) => onMoveDone(item, input) : undefined}
                     onDelete={() => onDelete(item)}
                     extraActions={exiting ? null : renderActions(item)}
                     dueOnTop
@@ -4903,6 +4956,7 @@ function AcceptedCard({
   open = false,
   onOpen,
   onChanged,
+  onMoveDone,
   onDelete,
   showCreatedAt = false,
   hideProjectLabel = false,
@@ -4920,6 +4974,7 @@ function AcceptedCard({
   open?: boolean;
   onOpen: () => void;
   onChanged: () => void;
+  onMoveDone?: (input: MoveTaskInput) => Promise<unknown>;
   onDelete: () => void;
   // Отмеченная выполненной карточка уходит из списка (выполненные скрыты) — анимация ухода;
   // false — остаётся на месте зачёркнутой, только штамп галки и зелёная вспышка.
@@ -4963,11 +5018,13 @@ function AcceptedCard({
     setCompleting(true);
     const fx = await playTaskExit(item.id, 'complete', { origin, leave: doneLeaves });
     try {
-      await taskRepository.move(item.projectId, item.id, {
+      const moveInput: MoveTaskInput = {
         targetStatus: 'done',
         beforeTaskId: null,
         afterTaskId: null,
-      });
+      };
+      if (onMoveDone) await onMoveDone(moveInput);
+      else await taskRepository.move(item.projectId, item.id, moveInput);
       celebrate(item.id);
       onChanged();
     } catch (err) {
@@ -5023,6 +5080,7 @@ function AcceptedCard({
       lastDoneTaskId={null}
       lastTodoTaskId={null}
       onChanged={onChanged}
+      move={onMoveDone}
       disabled={!item.canModify}
       variant="toolbar"
       exit={doneLeaves ? 'leave' : 'pulse'}

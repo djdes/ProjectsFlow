@@ -44,11 +44,14 @@ export function ProjectsProvider({ children }: { children: ReactNode }): React.R
   const [error, setError] = useState<Error | null>(null);
   // Гард от гонок: учитываем результат только последней загрузки.
   const loadSeq = useRef(0);
+  const latestInFlight = useRef(0);
 
   // latest (default) — after a change or an event: wait for the current list. Otherwise what is
   // known comes at once and a newer list is announced (useReadRefreshed below).
   const load = useCallback((latest: boolean) => {
+    if (!latest && latestInFlight.current > 0) return;
     const seq = (loadSeq.current += 1);
+    if (latest) latestInFlight.current += 1;
     listProjects
       .forScreen({ latest })
       .then((projects) => {
@@ -59,6 +62,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }): React.R
       })
       .catch((e: Error) => {
         if (seq === loadSeq.current) setError(e);
+      })
+      .finally(() => {
+        if (latest && latestInFlight.current > 0) latestInFlight.current -= 1;
       });
   }, [listProjects]);
   const refresh = useCallback(() => load(true), [load]);

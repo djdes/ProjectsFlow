@@ -34,20 +34,30 @@ export class ListTasksAssignedToOthers {
           (project.workspaceId === ws.id || (project.sharedWorkspaces ?? []).some((w) => w.id === ws.id)) &&
           (!project.isInbox || project.ownerId === userId),
       );
-    const rows = await Promise.all(
-      projects.map(async (project) => {
-        const own = (await this.deps.tasks.listByProject(project.id)).filter(
-          (task) => task.projectId === project.id && task.assignee.userId !== userId,
-        );
-        // Общие проекты (db/182): только задачи, видимые по правилам пространств и людей.
-        const tasks = this.deps.members.filterVisibleTasks
-          ? await this.deps.members.filterVisibleTasks(userId, own)
-          : own;
-        return { project, tasks };
-      }),
+    if (projects.length === 0) return [];
+    const projectIds = projects.map((project) => project.id);
+    const projectById = new Map(projects.map((project) => [project.id, project]));
+    // Batch all workspace projects into one SQL read + one visibility pass instead of N+1
+    // queries per project (big win on workspaces with 20+ projects). Preserve project order.
+    const allTasks =
+      typeof this.deps.tasks.listByProjects === 'function'
+        ? await this.deps.tasks.listByProjects(projectIds)
+        : (await Promise.all(projectIds.map((id) => this.deps.tasks.listByProject(id)))).flat();
+    const otherTasks = allTasks.filter(
+      (task) => projectById.has(task.projectId) && task.assignee.userId !== userId,
     );
-    const flat = rows.flatMap(({ project, tasks }) =>
-      tasks.map((task) => ({ task, project })),
+    // Общие проекты (db/182): только задачи, видимые по правилам пространств и людей.
+    const visibleTasks = this.deps.members.filterVisibleTasks
+      ? await this.deps.members.filterVisibleTasks(userId, otherTasks)
+      : otherTasks;
+    const tasksByProject = new Map<string, typeof visibleTasks>();
+    for (const task of visibleTasks) {
+      const bucket = tasksByProject.get(task.projectId);
+      if (bucket) bucket.push(task);
+      else tasksByProject.set(task.projectId, [task]);
+    }
+    const flat = projects.flatMap((project) =>
+      (tasksByProject.get(project.id) ?? []).map((task) => ({ task, project })),
     );
     const ids = flat.map(({ task }) => task.id);
     const [commitCounts, attachmentCounts, commentCounts] = await Promise.all([
