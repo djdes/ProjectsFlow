@@ -375,7 +375,7 @@ export function AssignedToMeBlock({
   // What an earlier visit (or the copy saved on this device) already knows: the first frame
   // shows it — no skeleton — and the mount read below refreshes it.
   const [known] = useState(() => ({
-    overview: taskAssigneeRepository.peekInboxOverview(),
+    overview: taskAssigneeRepository.peekInboxOverview({ excludeDone: hideDone }),
     prefs: userRepository.peekUiPrefs(),
     members: projectRepository.peekSharedMembers(),
   }));
@@ -633,7 +633,7 @@ export function AssignedToMeBlock({
     const focusedRequest = latest ? ++focusedGeneration.current : focusedGeneration.current;
     try {
       const [overview, focused] = await Promise.all([
-        taskAssigneeRepository.loadInboxOverview({ latest }),
+        taskAssigneeRepository.loadInboxOverview({ latest, excludeDone: hideDoneRef.current }),
         focusedAtStart
           ? taskAssigneeRepository.listMemberTasks(focusedAtStart)
           : Promise.resolve<AssignedTask[] | null>(null),
@@ -701,7 +701,7 @@ export function AssignedToMeBlock({
     // Все списки «Входящих» одним запросом + сохранённая группировка: первый рендер гейтим на
     // всё — блок не «мигает» дефолтной группировкой/счётчиками. Уже известное показано сразу
     // (known выше): тогда это чтение лишь подтягивает свежее, без скелетона.
-    Promise.all([taskAssigneeRepository.loadInboxOverview(), userRepository.getUiPrefs()])
+    Promise.all([taskAssigneeRepository.loadInboxOverview({ excludeDone: hideDoneRef.current }), userRepository.getUiPrefs()])
       .then(([overview, prefs]) => {
         if (cancelled) return;
         if (generation === refreshGeneration.current) applyOverview(overview);
@@ -724,6 +724,15 @@ export function AssignedToMeBlock({
       stopTabReturn();
     };
   }, [taskAssigneeRepository, userRepository, refresh, applyOverview]);
+
+  // When the user switches «Скрыть выполненные» OFF, load the historical done tasks on demand
+  // (they were skipped while hideDone=true to keep `/assignees/overview` fast and compact).
+  const prevHideDoneRef = useRef(hideDone);
+  useEffect(() => {
+    const prev = prevHideDoneRef.current;
+    prevHideDoneRef.current = hideDone;
+    if (prev && !hideDone) void refresh(false, true);
+  }, [hideDone, refresh]);
 
   const handleGroupingChange = (next: AssignedGrouping): void => {
     // Оптимистично: сортировка применяется мгновенно, сохранение летит в фоне.
@@ -1275,13 +1284,15 @@ export function AssignedToMeBlock({
     void loadMembers();
   }, [loadMembers]);
   // A newer answer than the one shown arrived in the background (lists, people): re-read —
-  // from memory now; only what changed re-renders. Shared members have fresh=0 for pickers, so
-  // read them from memory (peek) here instead of starting another network revalidation loop.
+  // from memory now; only what changed re-renders. Scoped by topic so unrelated refreshes
+  // (e.g. sidebar project list) don't churn the inbox board.
   useReadRefreshed(() => {
     if (latestRefreshInFlight.current === 0) void refresh(false, false);
+  }, ['inbox']);
+  useReadRefreshed(() => {
     const knownMembers = projectRepository.peekSharedMembers();
     if (knownMembers) setMembers(knownMembers);
-  });
+  }, ['members']);
   // Сотрудник выпал из пространства (или роль перестала быть руководящей) — возвращаемся
   // к своим входящим, иначе блок завис бы на пустой чужой доске без выхода.
   useEffect(() => {

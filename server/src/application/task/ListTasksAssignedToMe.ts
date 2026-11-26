@@ -38,11 +38,12 @@ export type AssignedTaskView = {
 export class ListTasksAssignedToMe {
   constructor(private readonly deps: Deps) {}
 
-  async execute(userId: string): Promise<AssignedTaskView[]> {
+  async execute(userId: string, options?: { readonly excludeDone?: boolean }): Promise<AssignedTaskView[]> {
     const ws = await this.deps.resolveActiveWorkspace(userId);
     if (!ws) return [];
     // Named projects and personal inboxes are scoped to the same active workspace.
-    const taskList = await this.deps.tasks.listAssignedToInWorkspace(userId, ws.id);
+    const rawTasks = await this.deps.tasks.listAssignedToInWorkspace(userId, ws.id, options);
+    const taskList = options?.excludeDone ? rawTasks.filter((t) => t.status !== 'done') : rawTasks;
     const projectIds = [...new Set(taskList.map((t) => t.projectId))];
     const contexts = await Promise.all(
       projectIds.map(async (projectId) => {

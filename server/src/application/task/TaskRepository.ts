@@ -92,8 +92,12 @@ export type TrashedTaskRef = {
   readonly deletedAt: Date;
 };
 
+export type TaskListOptions = {
+  readonly excludeDone?: boolean;
+};
+
 export interface TaskRepository {
-  listByProject(projectId: string): Promise<Task[]>;
+  listByProject(projectId: string, options?: TaskListOptions): Promise<Task[]>;
   // Пометить задачу как поставленную из рабочей Telegram-группы (db/190). Optional — старые
   // fake-репозитории без него.
   setGroupOrigin?(taskId: string, origin: TaskGroupOrigin): Promise<void>;
@@ -120,12 +124,12 @@ export interface TaskRepository {
   listByIds(taskIds: readonly string[]): Promise<Task[]>;
   // Живые задачи сразу нескольких проектов одним запросом. Порядок — как в listByProject
   // (project, status, position). Access-check делает вызывающий use-case.
-  listByProjects(projectIds: readonly string[]): Promise<Task[]>;
+  listByProjects(projectIds: readonly string[], options?: TaskListOptions): Promise<Task[]>;
   // Все задачи, где userId — текущий ответственный (в любых проектах).
   listAssignedTo(userId: string): Promise<Task[]>;
   // Как listAssignedTo, но только задачи проектов заданного пространства (изоляция
   // «Входящих» по активному team-пространству — см. ListTasksAssignedToMe).
-  listAssignedToInWorkspace(userId: string, workspaceId: string): Promise<Task[]>;
+  listAssignedToInWorkspace(userId: string, workspaceId: string, options?: TaskListOptions): Promise<Task[]>;
   // Задачи в одном статусе по всем проектам пространства (именованным и личным) — очередь
   // приёмки руководителя (ListApprovalQueue). Access-check делает вызывающий use-case.
   listByStatusInWorkspace(workspaceId: string, status: TaskStatus): Promise<Task[]>;

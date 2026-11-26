@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { memoKey, RequestMemo, requestScopedAdminCheck } from './RequestMemo.js';
+import { memoKey, RequestMemo, requestScopedAdminCheck, requestScopedCountsByTasks } from './RequestMemo.js';
 
 // Runs `work` inside a memo scope, the way requestMemoScope does for a GET request.
 function inScope<T>(memo: RequestMemo, work: () => Promise<T>, active: () => boolean = () => true): Promise<T> {
@@ -122,4 +122,29 @@ test('admin check: one read per request, a revoked flag applies to the next requ
   admins.delete('root');
   await inScope(memo, async () => assert.equal(await check('root'), false));
   assert.equal(reads.filter((id) => id === 'root').length, 2);
+});
+
+test('countsByTasks deduplicates overlapping task ids within one request and reads fresh on the next', async () => {
+  const memo = new RequestMemo();
+  const batches: string[][] = [];
+  const counts = requestScopedCountsByTasks(memo, 'comments', async (ids) => {
+    batches.push([...ids]);
+    return new Map(ids.map((id) => [id, id === 't1' ? 3 : id === 't2' ? 1 : 0]));
+  });
+
+  await inScope(memo, async () => {
+    const [a, b] = await Promise.all([counts(['t1', 't2']), counts(['t2', 't3'])]);
+    assert.deepEqual(Object.fromEntries(a), { t1: 3, t2: 1 });
+    assert.deepEqual(Object.fromEntries(b), { t2: 1 });
+    const c = await counts(['t1', 't3']);
+    assert.deepEqual(Object.fromEntries(c), { t1: 3 });
+  });
+  // t1 and t2 loaded in batch 1, only unseen t3 in batch 2, third call hits 0 queries.
+  assert.deepEqual(batches, [['t1', 't2'], ['t3']]);
+
+  await inScope(memo, async () => {
+    const next = await counts(['t1']);
+    assert.deepEqual(Object.fromEntries(next), { t1: 3 });
+  });
+  assert.equal(batches.length, 3, 'next request queries fresh');
 });

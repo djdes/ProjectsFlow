@@ -7,6 +7,8 @@ type Deps = {
   readonly publisher: RealtimePublisher;
   // Общий проект (db/182): кому из участников видна задача события. Без него — всем.
   readonly taskAudience?: (projectId: string, taskId: string, userIds: readonly string[]) => Promise<string[]>;
+  // Optional per-request tab identifier (`X-Tab-Id`) so the originating tab recognises its own SSE echo.
+  readonly currentTabId?: () => string | null;
 };
 
 // Транслирует доменное событие проекта всем его участникам (по их userId). Так чужие
@@ -32,10 +34,14 @@ export class ProjectEventBroadcaster {
     // кому задача назначена.
     extraUserIds: readonly string[] = [],
   ): Promise<void> {
+    const sourceTabId = kind === 'task_changed' ? (this.deps.currentTabId?.() ?? null) : null;
     const members = await this.deps.members.listByProject(projectId);
     const userIds = new Set([...members.map((m) => m.userId), ...extraUserIds]);
+    const payload = (
+      sourceTabId ? { kind, projectId, sourceTabId } : { kind, projectId }
+    ) as RealtimeEvent;
     for (const userId of userIds) {
-      this.deps.publisher.publish(userId, { kind, projectId } as RealtimeEvent);
+      this.deps.publisher.publish(userId, payload);
     }
   }
 

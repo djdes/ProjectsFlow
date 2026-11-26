@@ -29,7 +29,8 @@ export type ReadPolicy = { readonly fresh: number; readonly keep: number };
 
 const POLICIES: ReadonlyArray<readonly [RegExp, ReadPolicy]> = [
   // Task lists: fresh only long enough to make going back and forth between pages instant.
-  [/^\/assignees\/(overview|mine|others|personal|approvals|awaiting-reply)$/, { fresh: 15 * SECOND, keep: DAY }],
+  [/^\/assignees\/overview(\?excludeDone=1)?$/, { fresh: 15 * SECOND, keep: DAY }],
+  [/^\/assignees\/(mine|others|personal|approvals|awaiting-reply)$/, { fresh: 15 * SECOND, keep: DAY }],
   [/^\/projects\/[^/]+\/tasks$/, { fresh: 15 * SECOND, keep: DAY }],
   // The workspace's inbox project (read for its id and name) and the user's own preferences
   // practically never change.
@@ -87,7 +88,6 @@ const WRITE_SCOPES: ReadonlyArray<readonly [RegExp, (match: RegExpMatchArray) =>
 ];
 
 export function readCachePolicy(path: string): ReadPolicy | null {
-  if (path.includes('?')) return null;
   for (const [pattern, policy] of POLICIES) if (pattern.test(path)) return policy;
   return null;
 }
@@ -265,7 +265,14 @@ export class ReadCache {
       return typeof id === 'string' && id ? id : null;
     };
     // A task changed somewhere (by a colleague, a worker): its lists and counts.
-    target.addEventListener('pf:task-changed', (event) => this.expire(taskLists(projectOf(event))));
+    // Skip own-tab echoes: our own write already called `afterWrite` synchronously before any
+    // post-write read started, so re-expiring on the delayed SSE echo would needlessly stale
+    // the fresh snapshot we just loaded.
+    target.addEventListener('pf:task-changed', (event) => {
+      const detail = (event as CustomEvent<{ ownTab?: unknown }>).detail;
+      if (detail?.ownTab === true) return;
+      this.expire(taskLists(projectOf(event)));
+    });
     target.addEventListener('pf:notifications-changed', () => this.expire(taskLists(null)));
     target.addEventListener('pf:live-changed', (event) => {
       const projectId = projectOf(event);

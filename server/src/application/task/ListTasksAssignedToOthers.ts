@@ -24,7 +24,7 @@ type Deps = {
 export class ListTasksAssignedToOthers {
   constructor(private readonly deps: Deps) {}
 
-  async execute(userId: string): Promise<AssignedTaskView[]> {
+  async execute(userId: string, options?: { readonly excludeDone?: boolean }): Promise<AssignedTaskView[]> {
     const ws = await this.deps.resolveActiveWorkspace(userId);
     if (!ws) return [];
     const projects = (await this.deps.members.listProjectsForUserInWorkspace(userId, ws.id))
@@ -41,10 +41,13 @@ export class ListTasksAssignedToOthers {
     // queries per project (big win on workspaces with 20+ projects). Preserve project order.
     const allTasks =
       typeof this.deps.tasks.listByProjects === 'function'
-        ? await this.deps.tasks.listByProjects(projectIds)
-        : (await Promise.all(projectIds.map((id) => this.deps.tasks.listByProject(id)))).flat();
+        ? await this.deps.tasks.listByProjects(projectIds, options)
+        : (await Promise.all(projectIds.map((id) => this.deps.tasks.listByProject(id, options)))).flat();
     const otherTasks = allTasks.filter(
-      (task) => projectById.has(task.projectId) && task.assignee.userId !== userId,
+      (task) =>
+        projectById.has(task.projectId) &&
+        task.assignee.userId !== userId &&
+        (!options?.excludeDone || task.status !== 'done'),
     );
     // Общие проекты (db/182): только задачи, видимые по правилам пространств и людей.
     const visibleTasks = this.deps.members.filterVisibleTasks

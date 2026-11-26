@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Express, type Request, type Response, type RequestHandler } from 'express';
+import { requestTabScope } from '../infrastructure/request/RequestTabContext.js';
 import { mountBuildAssets } from './staticAssets.js';
 import type { ImageGenerationService } from '../application/image-generation/ImageGenerationService.js';
 import { imageGenerationRouter, imageGenerationAgentRouter } from './image-generation/routes.js';
@@ -1003,6 +1004,7 @@ export function createApp(deps: AppDeps): CreatedApp {
   app.use(accountTokenOnTaskPaths(deps.agent.authenticateAgentToken));
   if (deps.workspaceScope) app.use('/api', deps.workspaceScope);
   if (deps.requestMemoScope) app.use('/api', deps.requestMemoScope);
+  app.use('/api', requestTabScope());
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });

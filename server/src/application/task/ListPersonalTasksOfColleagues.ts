@@ -38,7 +38,7 @@ type Deps = {
 export class ListPersonalTasksOfColleagues {
   constructor(private readonly deps: Deps) {}
 
-  async execute(userId: string): Promise<AssignedTaskView[]> {
+  async execute(userId: string, options?: { readonly excludeDone?: boolean }): Promise<AssignedTaskView[]> {
     const ws = await this.deps.resolveActiveWorkspace(userId);
     if (!ws) return [];
     // team → только со-участники этого пространства (их личные доски и покажем).
@@ -57,10 +57,14 @@ export class ListPersonalTasksOfColleagues {
 
     const projectById = new Map(visibleInboxes.map((p) => [p.id, p]));
     // listByProjects отдаёт только живые задачи (deleted_at IS NULL, db/134).
-    const taskList = await this.deps.tasks.listByProjects([...projectById.keys()]);
+    const taskList = await this.deps.tasks.listByProjects([...projectById.keys()], options);
     // Только поставленные caller'ом; где ответственный — сам caller, уже показаны во вкладке «Мне».
     const visible = taskList.filter(
-      (t) => projectById.has(t.projectId) && t.createdBy === userId && t.assignee.userId !== userId,
+      (t) =>
+        projectById.has(t.projectId) &&
+        t.createdBy === userId &&
+        t.assignee.userId !== userId &&
+        (!options?.excludeDone || t.status !== 'done'),
     );
 
     const ids = visible.map((t) => t.id);

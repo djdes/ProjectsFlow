@@ -21,8 +21,9 @@ export interface TaskAssigneeRepository {
   // руководителя («На утверждении», не руководителю — пусто); вопросы ко мне без ответа. Повторный визит получает известное сразу, а свежее подгружается следом: о нём
   // сообщает onReadRefreshed (lib/readRefreshed) — экран перечитывает, уже из памяти.
   // latest — дождаться актуального (обновление жестом, после своих правок, по событию).
+  // excludeDone — не тянуть историю выполненных задач, пока в UI включено «Скрыть выполненные».
   // Пока ответ не менялся, отдаёт те же объекты (React не перерисовывает); не изменять их.
-  loadInboxOverview(options?: { readonly latest?: boolean }): Promise<InboxOverview>;
+  loadInboxOverview(options?: { readonly latest?: boolean; readonly excludeDone?: boolean }): Promise<InboxOverview>;
   // Что об обзоре уже известно — без запроса, для первого кадра; null — пока ничего.
-  peekInboxOverview(): InboxOverview | null;
+  peekInboxOverview(options?: { readonly excludeDone?: boolean }): InboxOverview | null;
 }

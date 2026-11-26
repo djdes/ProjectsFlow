@@ -33,11 +33,11 @@ export type InboxOverview = {
 export class GetInboxOverview {
   constructor(private readonly deps: Deps) {}
 
-  async execute(userId: string): Promise<InboxOverview> {
+  async execute(userId: string, options?: { readonly excludeDone?: boolean }): Promise<InboxOverview> {
     const [mine, others, personal, approvals, awaitingReply] = await Promise.all([
-      this.deps.listAssignedToMe.execute(userId),
-      this.deps.listAssignedToOthers.execute(userId),
-      this.deps.listPersonalOfColleagues.execute(userId),
+      this.deps.listAssignedToMe.execute(userId, options),
+      this.deps.listAssignedToOthers.execute(userId, options),
+      this.deps.listPersonalOfColleagues.execute(userId, options),
       this.deps.listApprovalQueue.execute(userId),
       this.deps.listAwaitingMyReply.execute(userId),
     ]);

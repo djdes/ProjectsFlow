@@ -44,6 +44,16 @@ const OVERVIEW_PARTS = {
   awaitingReply: '/assignees/awaiting-reply',
 } as const;
 
+// When excludeDone=1, approvals (only pending_approval) and awaitingReply (already excludes done)
+// are still byte-for-byte identical to their standalone endpoints, so badges still share them.
+const OPEN_OVERVIEW_PARTS = {
+  approvals: '/assignees/approvals',
+  awaitingReply: '/assignees/awaiting-reply',
+} as const;
+
+const overviewPath = (excludeDone?: boolean): string =>
+  excludeDone ? '/assignees/overview?excludeDone=1' : '/assignees/overview';
+
 function fromAwaitingReplyDto(item: AwaitingReplyItemDto): AwaitingReplyTask {
   return {
     ...fromAssignedDto(item),
@@ -75,7 +85,8 @@ function fromAssignedDto(item: AssignedItemDto): AssignedTask {
 export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
   // Unchanged answers give the same objects (see memoByAnswer): re-reading them after a
   // navigation or a refresh signal does not re-render the inbox and the cards.
-  private readonly overviewOf = memoByAnswer(overviewFromDto);
+  private readonly overviewFullOf = memoByAnswer(overviewFromDto);
+  private readonly overviewOpenOf = memoByAnswer(overviewFromDto);
   private readonly awaitingReplyOf = memoByAnswer((dto: { items: AwaitingReplyItemDto[] }) => dto.items.map(fromAwaitingReplyDto));
 
   constructor(private readonly client: typeof httpClient = httpClient) {}
@@ -96,14 +107,25 @@ export class HttpTaskAssigneeRepository implements TaskAssigneeRepository {
     return this.awaitingReplyOf(await this.client.read<{ items: AwaitingReplyItemDto[] }>('/assignees/awaiting-reply'));
   }
 
-  async loadInboxOverview(options?: { readonly latest?: boolean }): Promise<InboxOverview> {
-    const answer = await this.client.read<OverviewDto>('/assignees/overview', { swr: !options?.latest, parts: OVERVIEW_PARTS });
-    return this.overviewOf(answer);
+  async loadInboxOverview(options?: { readonly latest?: boolean; readonly excludeDone?: boolean }): Promise<InboxOverview> {
+    const excludeDone = options?.excludeDone === true;
+    const answer = await this.client.read<OverviewDto>(overviewPath(excludeDone), {
+      swr: !options?.latest,
+      parts: excludeDone ? OPEN_OVERVIEW_PARTS : OVERVIEW_PARTS,
+    });
+    return (excludeDone ? this.overviewOpenOf : this.overviewFullOf)(answer);
   }
 
-  peekInboxOverview(): InboxOverview | null {
-    const answer = this.client.peekAnswer<OverviewDto>('/assignees/overview');
-    return answer ? this.overviewOf(answer) : null;
+  peekInboxOverview(options?: { readonly excludeDone?: boolean }): InboxOverview | null {
+    const excludeDone = options?.excludeDone === true;
+    const answer = this.client.peekAnswer<OverviewDto>(overviewPath(excludeDone));
+    if (answer) return (excludeDone ? this.overviewOpenOf : this.overviewFullOf)(answer);
+    if (excludeDone) {
+      // Full overview already in memory is a superset of open tasks (UI filters done locally too).
+      const full = this.client.peekAnswer<OverviewDto>(overviewPath(false));
+      if (full) return this.overviewFullOf(full);
+    }
+    return null;
   }
 
   private async fetchAssignedList(path: string, workspaceId?: string): Promise<AssignedTask[]> {

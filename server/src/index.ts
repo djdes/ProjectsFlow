@@ -19,7 +19,8 @@ import { MysqlAppErrorReportRepository } from './infrastructure/repositories/Mys
 import { AppErrorReports } from './application/app-errors/AppErrorReports.js';
 import { RequestWorkspaceContext } from './infrastructure/workspace/RequestWorkspaceContext.js';
 import { workspaceScope } from './presentation/middleware/workspaceScope.js';
-import { memoKey, RequestMemo, requestScopedAdminCheck } from './infrastructure/request/RequestMemo.js';
+import { memoKey, RequestMemo, requestScopedAdminCheck, requestScopedCountsByTasks } from './infrastructure/request/RequestMemo.js';
+import { requestTabContext } from './infrastructure/request/RequestTabContext.js';
 import { requestMemoScope } from './presentation/middleware/requestMemoScope.js';
 // Composition root: собираем зависимости + поднимаем HTTP-сервер.
 
@@ -723,6 +724,7 @@ const realtimeHub = new RealtimeHub();
 const projectEventBroadcaster: ProjectEventBroadcaster = new ProjectEventBroadcaster({
   members: projectMemberRepo,
   publisher: realtimeHub,
+  currentTabId: () => requestTabContext.current(),
   // Общий проект (db/182): события задачи — только тем, кому она видна. taskRepo объявлен
   // ниже — берём через замыкание (к моменту событий уже инициализирован).
   taskAudience: async (projectId: string, taskId: string, userIds: readonly string[]): Promise<string[]> => {
@@ -853,7 +855,7 @@ const taskVersionRecorder = new TaskVersionRecorder({
   idGen: idGenerator,
   onRecorded: (event) => projectEventBroadcaster.broadcastTaskVersionCreated(event),
 });
-const taskRepo = new DrizzleTaskRepository(db, taskVersionRecorder);
+const taskRepo = new DrizzleTaskRepository(db, taskVersionRecorder, requestMemo);
 // Видимые человеку задачи общих проектов (db/182) — для пост-фильтра поиска.
 const visibleTaskIds = async (userId: string, taskIds: readonly string[]): Promise<ReadonlySet<string>> => {
   const list = await taskRepo.listByIds(taskIds);
@@ -2550,22 +2552,31 @@ const overviewProjects: typeof projectRepo = Object.assign(Object.create(Object.
 const overviewUsers: typeof userRepo = Object.assign(Object.create(Object.getPrototypeOf(userRepo)), userRepo, {
   getById: (id: string) => requestMemo.memoize(memoKey('users.getById', id), () => userRepo.getById(id)),
 });
+const overviewTaskCommits: typeof taskCommitRepo = Object.assign(Object.create(Object.getPrototypeOf(taskCommitRepo)), taskCommitRepo, {
+  countsByTasks: requestScopedCountsByTasks(requestMemo, 'commits', (ids) => taskCommitRepo.countsByTasks(ids)),
+});
+const overviewAttachments: typeof taskAttachmentRepo = Object.assign(Object.create(Object.getPrototypeOf(taskAttachmentRepo)), taskAttachmentRepo, {
+  countsByTasks: requestScopedCountsByTasks(requestMemo, 'attachments', (ids) => taskAttachmentRepo.countsByTasks(ids)),
+});
+const overviewComments: typeof taskCommentRepo = Object.assign(Object.create(Object.getPrototypeOf(taskCommentRepo)), taskCommentRepo, {
+  countsByTasks: requestScopedCountsByTasks(requestMemo, 'comments', (ids) => taskCommentRepo.countsByTasks(ids)),
+});
 const listAssignedToMe = new ListTasksAssignedToMe({
   projects: overviewProjects,
   members: projectMemberRepo,
   tasks: taskRepo,
-  taskCommits: taskCommitRepo,
-  attachments: taskAttachmentRepo,
-  comments: taskCommentRepo,
+  taskCommits: overviewTaskCommits,
+  attachments: overviewAttachments,
+  comments: overviewComments,
   resolveActiveWorkspace,
   users: overviewUsers,
 });
 const listAssignedToOthers = new ListTasksAssignedToOthers({
   members: projectMemberRepo,
   tasks: taskRepo,
-  taskCommits: taskCommitRepo,
-  attachments: taskAttachmentRepo,
-  comments: taskCommentRepo,
+  taskCommits: overviewTaskCommits,
+  attachments: overviewAttachments,
+  comments: overviewComments,
   resolveActiveWorkspace,
   users: overviewUsers,
 });
@@ -2573,9 +2584,9 @@ const listPersonalOfColleagues = new ListPersonalTasksOfColleagues({
   projects: overviewProjects,
   members: projectMemberRepo,
   tasks: taskRepo,
-  taskCommits: taskCommitRepo,
-  attachments: taskAttachmentRepo,
-  comments: taskCommentRepo,
+  taskCommits: overviewTaskCommits,
+  attachments: overviewAttachments,
+  comments: overviewComments,
   resolveActiveWorkspace,
 });
 const listApprovalQueue = new ListApprovalQueue({
@@ -2584,9 +2595,9 @@ const listApprovalQueue = new ListApprovalQueue({
   members: projectMemberRepo,
   workspaces: workspaceRepo,
   tasks: taskRepo,
-  taskCommits: taskCommitRepo,
-  attachments: taskAttachmentRepo,
-  comments: taskCommentRepo,
+  taskCommits: overviewTaskCommits,
+  attachments: overviewAttachments,
+  comments: overviewComments,
   resolveActiveWorkspace,
   users: overviewUsers,
 });
@@ -2594,9 +2605,9 @@ const listAwaitingMyReply = new ListTasksAwaitingMyReply({
   projects: overviewProjects,
   members: projectMemberRepo,
   tasks: taskRepo,
-  taskCommits: taskCommitRepo,
-  attachments: taskAttachmentRepo,
-  comments: taskCommentRepo,
+  taskCommits: overviewTaskCommits,
+  attachments: overviewAttachments,
+  comments: overviewComments,
   resolveActiveWorkspace,
   users: overviewUsers,
 });
