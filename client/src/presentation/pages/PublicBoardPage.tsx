@@ -397,7 +397,9 @@ function PublicTopBar({
             )}
             style={board ? { backgroundColor: board.appearance.accentColor } : undefined}
           >
-            Попробовать ProjectsFlow
+            {/* На телефоне короче: длинная кнопка оставляла названию доски одну букву («С..»). */}
+            <span className="sm:hidden">Попробовать</span>
+            <span className="max-sm:hidden">Попробовать ProjectsFlow</span>
           </a>
 
           <SearchModal open={searchOpen} onOpenChange={setSearchOpen} board={board} onOpenTask={onOpenTask} />

@@ -965,6 +965,10 @@ html[data-pf-modality='pointer'] :focus-visible {
       transparent calc(0.25rem + 0.5px)
     );
     background-repeat: no-repeat;
+    /* Место под точку: она стоит в правом верхнем углу (центр в 0.75rem от края, радиус
+       0.25rem), а текст карточки шёл до обычного отступа 0.625–0.75rem — точка закрывала
+       последнюю букву срока («сегодн●») и длинного заголовка (26.11). */
+    padding-inline-end: 1.375rem !important;
   }
   .dark .pf-unread {
     background-color: color-mix(in oklch, oklch(var(--primary)) 13%, oklch(var(--card))) !important;
