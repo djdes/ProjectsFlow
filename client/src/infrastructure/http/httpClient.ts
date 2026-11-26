@@ -3,7 +3,8 @@
 // `credentials: 'include'` — обязательно для cookie-сессий.
 
 import { HttpError, type HttpErrorBody } from '@/lib/HttpError';
-import { announceReadRefreshed } from '@/lib/readRefreshed';
+import { announceReadRefreshed, type ReadRefreshTopic } from '@/lib/readRefreshed';
+import { TAB_ID } from '@/lib/tabId';
 import { InFlightReads } from './InFlightReads';
 import { ReadCache, readCachePolicy, type ReadPolicy } from './ReadCache';
 import { fetchWithDeadline } from './fetchWithDeadline';
@@ -118,13 +119,18 @@ async function requestRaw(path: string, opts: Options = {}): Promise<Raw> {
   const sentAt = Date.now();
   const readSeq = cache.currentSeq();
   const workspace = opts.workspaceId ?? requestWorkspace;
+  const method = opts.method ?? 'GET';
   const init: RequestInit = {
-    method: opts.method ?? 'GET',
+    method,
     credentials: 'include',
     // Never let the browser HTTP cache serve stale mutable API JSON (ReadCache handles memory/SWR).
     cache: 'no-store',
     headers: { Accept: 'application/json',
       ...(workspace && !/^\/(auth|workspaces)(\/|$)/.test(path) ? { 'X-Workspace-Id': workspace } : {}),
+      // Tag own-tab mutations so our own SSE echo does not stale the fresh post-write read;
+      // exclude workspace chat endpoints whose AI assistant may create/modify tasks asynchronously
+      // without ReadCache.afterWrite dropping task lists.
+      ...(method !== 'GET' && !/^\/workspaces\/[^/]+\/chat(\/|$)/.test(path) ? { 'X-Tab-Id': TAB_ID } : {}),
     },
   };
 
@@ -242,6 +248,15 @@ function fetchRaw(path: string, options?: ReadOptions): Promise<Raw> {
   return reads.get(readKeyOf(path, options), () => requestRaw(path, options));
 }
 
+function refreshTopicOf(path: string): ReadRefreshTopic {
+  const bare = path.split('?')[0]!;
+  if (bare === '/inbox' || bare.startsWith('/assignees/')) return 'inbox';
+  if (bare === '/projects') return 'projects';
+  if (/^\/projects\/[^/]+\/tasks$/.test(bare)) return 'tasks';
+  if (bare === '/me/shared-members') return 'members';
+  return 'other';
+}
+
 /** Network read of a cacheable path, stored under the cache's rules (ReadCache.store). */
 async function loadAndStore(
   path: string,
@@ -274,7 +289,7 @@ async function loadAndStore(
     // re-read and get the error themselves. A server failure or a lost network keeps it.
     if (error instanceof HttpError && (error.status === 403 || error.status === 404)) {
       cache.drop((entryPath) => entryPath === path || parts.some((part) => part.path === entryPath));
-      announceReadRefreshed();
+      announceReadRefreshed(refreshTopicOf(path));
     }
     throw error;
   } finally {
@@ -288,7 +303,7 @@ function revalidate(path: string, options: ReadOptions | undefined, cacheKey: st
   if (revalidating.has(cacheKey)) return;
   const run = loadAndStore(path, options, cacheKey, policy)
     .then(({ raw, stored }) => {
-      if (!raw.offline && stored && raw.text !== shown) announceReadRefreshed();
+      if (!raw.offline && stored && raw.text !== shown) announceReadRefreshed(refreshTopicOf(path));
     })
     .catch(() => {
       /* The kept answer stays on screen; the next read tries again. */
@@ -345,7 +360,7 @@ function raceSaved(path: string, options: ReadOptions | undefined, cacheKey: str
     network.then(
       ({ raw, stored }) => {
         if (!shown) show(raw);
-        else if (!raw.offline && stored && raw.text !== shown.text) announceReadRefreshed();
+        else if (!raw.offline && stored && raw.text !== shown.text) announceReadRefreshed(refreshTopicOf(path));
       },
       (error: unknown) => {
         if (shown) return;
@@ -431,7 +446,7 @@ function peekAnswer<T>(path: string, options?: Pick<Options, 'workspaceId'>): An
 // Read on almost every start: their saved copies are pulled into memory as soon as the
 // workspace is known, so the first screen renders them synchronously (peek), not a skeleton.
 // Stored as stale so a reload still revalidates against the server in the background.
-const WARM_PATHS = ['/inbox', '/assignees/overview', '/me/ui-prefs', '/projects', '/me/shared-members'];
+const WARM_PATHS = ['/inbox', '/assignees/overview?excludeDone=1', '/assignees/overview', '/me/ui-prefs', '/projects', '/me/shared-members'];
 
 function warmPath(path: string, workspaceId: string): void {
   const policy = readCachePolicy(path);

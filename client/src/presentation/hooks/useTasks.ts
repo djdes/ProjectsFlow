@@ -192,7 +192,7 @@ export function useTasks(projectId: string): UseTasks {
     });
     void load(false, false);
   }, [load, projectId, taskRepository]);
-  useReadRefreshed(() => void load(false, false));
+  useReadRefreshed(() => void load(false, false), ['tasks']);
 
   // Live-обновление: рефетч при SSE-событии об изменении задач в этом проекте + при
   // возврате фокуса. void — refetch возвращает Promise, нам результат не нужен.

@@ -247,3 +247,21 @@ test('store with stale:true keeps an entry readable via peek while forcing reval
   assert.equal(cache.get('w:/projects'), undefined, 'strict readers still revalidate');
   assert.deepEqual(cache.peek('w:/projects'), { projects: ['saved'] }, 'first render may show it');
 });
+
+test('open-only overview is cached and dropped on task writes; own-tab SSE echo keeps fresh cache intact', () => {
+  const target = new EventTarget();
+  const cache = new ReadCache();
+  cache.listen(target as unknown as Window);
+  assert.ok((readCacheTtl('/assignees/overview?excludeDone=1') ?? 0) > 0);
+  put(cache, 'w:/assignees/overview?excludeDone=1', '/assignees/overview?excludeDone=1', { open: true }, 15_000);
+  // Own-tab echo must NOT re-expire the fresh post-write snapshot.
+  target.dispatchEvent(new CustomEvent('pf:task-changed', { detail: { projectId: 'p1', ownTab: true } }));
+  assert.deepEqual(cache.get('w:/assignees/overview?excludeDone=1'), { open: true });
+  // Another tab / colleague's change expires it.
+  target.dispatchEvent(new CustomEvent('pf:task-changed', { detail: { projectId: 'p1' } }));
+  assert.equal(cache.get('w:/assignees/overview?excludeDone=1'), undefined);
+  // Own write drops it completely.
+  put(cache, 'w:/assignees/overview?excludeDone=1', '/assignees/overview?excludeDone=1', { open: true }, 15_000);
+  cache.afterWrite('/projects/p1/tasks/t1/move');
+  assert.equal(cache.peek('w:/assignees/overview?excludeDone=1'), undefined);
+});

@@ -233,7 +233,7 @@ test('overview: each part is byte-for-byte the answer of its own endpoint', asyn
   const h = await harness(t);
   // No header falls back to the current workspace, like the separate endpoints.
   for (const ws of ['a', 'b', undefined]) {
-    for (const query of ['', '?fromGroups=1']) {
+    for (const query of ['', '?fromGroups=1', '?excludeDone=1', '?excludeDone=1&fromGroups=1']) {
       const overview = await h.request(`/overview${query}`, ws);
       assert.equal(overview.status, 200);
       const separate = await Promise.all(PARTS.map(([, path]) => h.request(path + query, ws)));
@@ -242,6 +242,12 @@ test('overview: each part is byte-for-byte the answer of its own endpoint', asyn
       assert.equal(overview.text, expected, `workspace ${ws ?? '(current)'} ${query}`);
     }
   }
+
+  // excludeDone=1 omits historical done tasks while keeping open ones.
+  const openOnly = JSON.parse((await h.request('/overview?excludeDone=1', 'a')).text);
+  assert.ok(openOnly.others.items.every((item: { task: { status: string } }) => item.task.status !== 'done'));
+  assert.ok(openOnly.mine.items.every((item: { task: { status: string } }) => item.task.status !== 'done'));
+  assert.ok(openOnly.others.items.length > 0);
 
   // The fixtures are not vacuous: workspace a fills every list.
   const body = JSON.parse((await h.request('/overview', 'a')).text);

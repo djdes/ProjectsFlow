@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, desc, eq, inArray, lt, max, min, sql, or } from 'drizzle-orm';
+import { aliasedTable, and, asc, desc, eq, inArray, lt, max, min, ne, sql, or } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import {
   taskDelegations,
@@ -27,11 +27,13 @@ import {
 } from '../../domain/task/Task.js';
 import type {
   CreateTaskInput,
+  TaskListOptions,
   TaskRecurrenceLedger,
   TaskRepository,
   TrashedTaskRef,
   UpdateTaskPatch,
 } from '../../application/task/TaskRepository.js';
+import { memoKey, type RequestMemo } from '../request/RequestMemo.js';
 import { parseTaskRecurrence, serializeTaskRecurrence } from '../../domain/task/TaskRecurrence.js';
 import type { TaskVersionRecorder } from '../../application/task/TaskVersionRecorder.js';
 import { activeTasks, taskDeleted } from './taskSoftDelete.js';
@@ -123,6 +125,7 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
   constructor(
     private readonly db: Database,
     private readonly history?: TaskVersionRecorder,
+    private readonly memo?: Pick<RequestMemo, 'memoize'>,
   ) {}
 
   // Базовый SELECT с LEFT JOIN users для display name запросившего cancel.
@@ -177,9 +180,12 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
       .leftJoin(creatorUser, eq(creatorUser.id, tasks.createdBy));
   }
 
-  async listByProject(projectId: string): Promise<Task[]> {
+  async listByProject(projectId: string, options?: TaskListOptions): Promise<Task[]> {
+    const cond = options?.excludeDone
+      ? and(eq(tasks.projectId, projectId), ne(tasks.status, 'done'))
+      : eq(tasks.projectId, projectId);
     const rows = await this.baseSelect()
-      .where(activeTasks(eq(tasks.projectId, projectId)))
+      .where(activeTasks(cond))
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
@@ -190,10 +196,13 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
-  async listByProjects(projectIds: readonly string[]): Promise<Task[]> {
+  async listByProjects(projectIds: readonly string[], options?: TaskListOptions): Promise<Task[]> {
     if (projectIds.length === 0) return [];
+    const cond = options?.excludeDone
+      ? and(inArray(tasks.projectId, [...projectIds]), ne(tasks.status, 'done'))
+      : inArray(tasks.projectId, [...projectIds]);
     const rows = await this.baseSelect()
-      .where(activeTasks(inArray(tasks.projectId, [...projectIds])))
+      .where(activeTasks(cond))
       .orderBy(asc(tasks.projectId), asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
@@ -205,18 +214,21 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
 
-  async listAssignedToInWorkspace(userId: string, workspaceId: string): Promise<Task[]> {
+  async listAssignedToInWorkspace(
+    userId: string,
+    workspaceId: string,
+    options?: TaskListOptions,
+  ): Promise<Task[]> {
     // Скоуп по пространству — через принадлежность проекта задачи: основное пространство
     // или подключённое (общий проект, db/182). Список id вместо join, чтобы не трогать
     // leftJoin-набор baseSelect.
     const projectIds = await this.workspaceProjectIds(workspaceId);
     if (projectIds.length === 0) return [];
+    const cond = options?.excludeDone
+      ? and(eq(tasks.assigneeUserId, userId), inArray(tasks.projectId, projectIds), ne(tasks.status, 'done'))
+      : and(eq(tasks.assigneeUserId, userId), inArray(tasks.projectId, projectIds));
     const rows = await this.baseSelect()
-      .where(
-        activeTasks(
-          and(eq(tasks.assigneeUserId, userId), inArray(tasks.projectId, projectIds)),
-        ),
-      )
+      .where(activeTasks(cond))
       .orderBy(asc(tasks.status), asc(tasks.position), asc(tasks.id));
     return rows.map((r) => toTask(r as TaskRowJoined));
   }
@@ -224,14 +236,17 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
   // Проекты пространства: основные и подключённые к нему (db/182). Сначала резолвим id —
   // OR двух IN-подзапросов не даёт MariaDB полусоединение и сканирует tasks целиком.
   private async workspaceProjectIds(workspaceId: string): Promise<string[]> {
-    const [home, linked] = await Promise.all([
-      this.db.select({ id: projects.id }).from(projects).where(eq(projects.workspaceId, workspaceId)),
-      this.db
-        .select({ id: projectWorkspaceAccess.projectId })
-        .from(projectWorkspaceAccess)
-        .where(eq(projectWorkspaceAccess.workspaceId, workspaceId)),
-    ]);
-    return [...new Set([...home, ...linked].map((row) => row.id))];
+    const load = async (): Promise<string[]> => {
+      const [home, linked] = await Promise.all([
+        this.db.select({ id: projects.id }).from(projects).where(eq(projects.workspaceId, workspaceId)),
+        this.db
+          .select({ id: projectWorkspaceAccess.projectId })
+          .from(projectWorkspaceAccess)
+          .where(eq(projectWorkspaceAccess.workspaceId, workspaceId)),
+      ]);
+      return [...new Set([...home, ...linked].map((row) => row.id))];
+    };
+    return this.memo ? this.memo.memoize(memoKey('tasks.workspaceProjectIds', workspaceId), load) : load();
   }
 
   async listByStatusInWorkspace(workspaceId: string, status: TaskStatus): Promise<Task[]> {

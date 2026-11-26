@@ -1,6 +1,7 @@
 import { createElement, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notificationTaskTarget } from '@/lib/notificationTaskTarget';
+import { TAB_ID } from '@/lib/tabId';
 import { plainDescription } from '@/lib/taskTitleBody';
 import { toast } from '@/components/ui/sonner';
 import { showAssignedTaskToast } from '@/presentation/components/tasks/AssignedTaskToast';
@@ -30,7 +31,8 @@ export const CHAT_CHANGED_EVENT = 'pf:chat-changed';
 type LiveSessionStatus = 'running' | 'completed' | 'failed' | 'timeout' | 'canceled';
 
 type RealtimeEvent =
-  | { kind: 'task_changed' | 'project_changed'; projectId: string }
+  | { kind: 'task_changed'; projectId: string; sourceTabId?: string }
+  | { kind: 'project_changed'; projectId: string }
   | {
       kind: 'task_version_created';
       projectId: string;
@@ -211,7 +213,12 @@ export function useNotificationStream(workspaceId: string, openNotification?: (t
           return;
         }
         const name = data.kind === 'project_changed' ? PROJECT_CHANGED_EVENT : TASK_CHANGED_EVENT;
-        window.dispatchEvent(new CustomEvent(name, { detail: { projectId: data.projectId } }));
+        const ownTab = data.kind === 'task_changed' && data.sourceTabId === TAB_ID;
+        window.dispatchEvent(
+          new CustomEvent(name, {
+            detail: ownTab ? { projectId: data.projectId, ownTab: true } : { projectId: data.projectId },
+          }),
+        );
       } catch {
         // битый payload — игнорируем.
       }

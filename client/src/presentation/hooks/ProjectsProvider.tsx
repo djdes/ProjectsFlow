@@ -72,7 +72,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }): React.R
   useEffect(() => {
     load(false);
   }, [load]);
-  useReadRefreshed(() => load(false));
+  useReadRefreshed(() => load(false), ['projects']);
 
   // Live-обновление списка проектов.
   useEffect(() => {

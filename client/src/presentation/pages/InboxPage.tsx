@@ -98,9 +98,10 @@ export function InboxPage({
   // First visit on this device (the inbox project is not known yet): start all initial screen
   // reads alongside `/inbox`, not after it — when AssignedToMeBlock mounts, they are already
   // in flight or cached (one round trip instead of two).
+  const initialHideDoneRef = useRef(hideDone);
   useEffect(() => {
     if (!known.project) {
-      void taskAssigneeRepository.loadInboxOverview().catch(() => undefined);
+      void taskAssigneeRepository.loadInboxOverview({ excludeDone: initialHideDoneRef.current }).catch(() => undefined);
       void userRepository.getUiPrefs().catch(() => undefined);
       void projectRepository.listSharedMembersForScreen().catch(() => undefined);
     }
@@ -114,8 +115,10 @@ export function InboxPage({
   // Unchanged data comes back as the same objects, so only what changed re-renders.
   useReadRefreshed(() => {
     void loadInbox();
+  }, ['inbox']);
+  useReadRefreshed(() => {
     if (projectId) void reloadInboxTasks(projectId, false);
-  });
+  }, ['tasks']);
 
   const handleHideDoneChange = (next: boolean): void => {
     setHideDone(next);

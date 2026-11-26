@@ -36,6 +36,16 @@ export class RequestMemo {
     });
     return value;
   }
+
+  /** Returns a per-request value synchronously when inside an active GET scope, or null outside. */
+  getOrCreateSync<T>(key: string, create: () => T): T | null {
+    const scope = this.storage.getStore();
+    if (!scope?.active()) return null;
+    if (scope.values.has(key)) return scope.values.get(key) as unknown as T;
+    const value = create();
+    scope.values.set(key, value as unknown as Promise<unknown>);
+    return value;
+  }
 }
 
 // Memo key from its parts: JSON keeps ids that contain separators from colliding.
@@ -51,4 +61,41 @@ export function requestScopedAdminCheck(
 ): (userId: string) => Promise<boolean> {
   return (userId) =>
     memo.memoize(memoKey('users.isAdmin', userId), async () => (await users.getById(userId))?.isAdmin ?? false);
+}
+
+/**
+ * Deduplicates `countsByTasks` across parallel lists within a single GET request (e.g. the five
+ * lists of `/api/assignees/overview`). Each unseen taskId is queried once; overlapping lists share
+ * the in-flight promise without any timer or cross-request caching.
+ */
+export function requestScopedCountsByTasks(
+  memo: Pick<RequestMemo, 'getOrCreateSync'>,
+  kind: string,
+  load: (taskIds: string[]) => Promise<ReadonlyMap<string, number>>,
+): (taskIds: readonly string[]) => Promise<Map<string, number>> {
+  const bucketKey = memoKey('countsByTasks', kind);
+  return async (taskIds: readonly string[]): Promise<Map<string, number>> => {
+    if (taskIds.length === 0) return new Map();
+    const unique = [...new Set(taskIds)];
+    const perTask = memo.getOrCreateSync<Map<string, Promise<number>>>(bucketKey, () => new Map());
+    if (!perTask) return new Map(await load(unique));
+
+    const missing = unique.filter((id) => !perTask.has(id));
+    if (missing.length > 0) {
+      const batch = load(missing);
+      for (const id of missing) {
+        const entry = batch.then((counts) => counts.get(id) ?? 0);
+        perTask.set(id, entry);
+        entry.catch(() => {
+          if (perTask.get(id) === entry) perTask.delete(id);
+        });
+      }
+    }
+    const entries = await Promise.all(unique.map(async (id) => [id, await perTask.get(id)!] as const));
+    const out = new Map<string, number>();
+    for (const [id, count] of entries) {
+      if (count > 0) out.set(id, count);
+    }
+    return out;
+  };
 }

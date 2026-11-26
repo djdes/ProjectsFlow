@@ -49,6 +49,9 @@ const awaitingReplyViewToDto = (v: AwaitingReplyView) => ({
   question: { ...v.question, askedAt: v.question.askedAt.toISOString() },
 });
 
+const excludeDoneOf = (query: Request['query']): { readonly excludeDone?: boolean } | undefined =>
+  query['excludeDone'] === '1' || query['excludeDone'] === 'true' ? { excludeDone: true } : undefined;
+
 export function taskAssigneesRouter(deps: Deps): Router {
   const r = Router();
   r.use(requireAuth);
@@ -61,7 +64,7 @@ export function taskAssigneesRouter(deps: Deps): Router {
   // Все задачи, где caller — текущий ответственный.
   r.get('/mine', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const items = await deps.listAssignedToMe.execute(req.user!.id);
+      const items = await deps.listAssignedToMe.execute(req.user!.id, excludeDoneOf(req.query));
       res.json({ items: onlyFromGroups(items, req.query, (v) => v.task).map(assignedViewToDto) });
     } catch (e) {
       next(e);
@@ -71,7 +74,7 @@ export function taskAssigneesRouter(deps: Deps): Router {
   // Все видимые задачи, где отвечает другой участник.
   r.get('/others', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const items = await deps.listAssignedToOthers.execute(req.user!.id);
+      const items = await deps.listAssignedToOthers.execute(req.user!.id, excludeDoneOf(req.query));
       res.json({ items: onlyFromGroups(items, req.query, (v) => v.task).map(assignedViewToDto) });
     } catch (e) {
       next(e);
@@ -83,7 +86,7 @@ export function taskAssigneesRouter(deps: Deps): Router {
   // запросить inbox произвольного пользователя.
   r.get('/personal', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const items = await deps.listPersonalOfColleagues.execute(req.user!.id);
+      const items = await deps.listPersonalOfColleagues.execute(req.user!.id, excludeDoneOf(req.query));
       res.json({ items: onlyFromGroups(items, req.query, (v) => v.task).map(assignedViewToDto) });
     } catch (e) {
       next(e);
@@ -131,7 +134,7 @@ export function taskAssigneesRouter(deps: Deps): Router {
   // share the request's memoized permission lookups.
   r.get('/overview', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const o = await deps.getInboxOverview.execute(req.user!.id);
+      const o = await deps.getInboxOverview.execute(req.user!.id, excludeDoneOf(req.query));
       res.json({
         mine: { items: onlyFromGroups(o.mine, req.query, (v) => v.task).map(assignedViewToDto) },
         others: { items: onlyFromGroups(o.others, req.query, (v) => v.task).map(assignedViewToDto) },
