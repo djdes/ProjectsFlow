@@ -371,6 +371,7 @@ import { llmGatewayRouter } from './llm/gatewayRoutes.js';
 import './types.js'; // глобальное расширение Express.Request
 import type { GetDeploymentStatus } from '../application/deployment/GetDeploymentStatus.js';
 import { deploymentRouter } from './deployment/routes.js';
+import { isSpaNotFound } from './spaRoutes.js';
 
 type AppDeps = {
   readonly deployment?: GetDeploymentStatus;
@@ -1722,6 +1723,12 @@ export function createApp(deps: AppDeps): CreatedApp {
       return;
     }
     if (hasClient) {
+      // Unknown path: the same SPA shell (it shows NotFoundPage), but a real 404 for
+      // search engines instead of a "soft 404" with status 200.
+      if (isSpaNotFound(req.path, req.get('host'))) {
+        res.status(404);
+        res.setHeader('X-Robots-Tag', 'noindex');
+      }
       sendClientIndex(res);
       return;
     }
