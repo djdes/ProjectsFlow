@@ -131,7 +131,7 @@ test('a fast swipe that closes the sheet leaves it where the finger let go (no g
 
 function SheetHarness(): React.ReactElement {
   const { ref } = useMobileSheetSurface(true);
-  return React.createElement('div', { ref, 'data-pf-mobile-sheet': 'true', 'data-state': 'open' });
+  return React.createElement('div', { ref, 'data-pf-mobile-sheet': 'true', 'data-state': 'open' }, React.createElement('input'));
 }
 
 test('opening on an untouched viewport writes nothing; the keyboard sets the variables and closing it clears them', async () => {
@@ -146,8 +146,14 @@ test('opening on an untouched viewport writes nothing; the keyboard sets the var
     assert.equal(sheet.style.getPropertyValue('--pf-sheet-viewport'), '');
     assert.equal(sheet.style.getPropertyValue('--pf-sheet-keyboard'), '');
     await setViewportHeight(full - 300);
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-keyboard'), '');
+    await act(async () => sheet.querySelector('input')!.focus());
     assert.equal(sheet.style.getPropertyValue('--pf-sheet-viewport'), `${full - 300}px`);
     assert.equal(sheet.style.getPropertyValue('--pf-sheet-keyboard'), '300px');
+    await act(async () => sheet.querySelector('input')!.blur());
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-viewport'), '');
+    assert.equal(sheet.style.getPropertyValue('--pf-sheet-keyboard'), '');
+    await act(async () => sheet.querySelector('input')!.focus());
     await setViewportHeight(full);
     assert.equal(sheet.style.getPropertyValue('--pf-sheet-viewport'), '');
     assert.equal(sheet.style.getPropertyValue('--pf-sheet-keyboard'), '');
@@ -162,6 +168,9 @@ test('a sheet opened while the keyboard is up sits above it from the first frame
   document.body.append(host);
   const root = createRoot(host);
   const full = window.innerHeight;
+  const field = document.createElement('input');
+  document.body.append(field);
+  field.focus();
   await setViewportHeight(full - 280);
   try {
     await act(async () => root.render(React.createElement(SheetHarness)));
@@ -170,6 +179,7 @@ test('a sheet opened while the keyboard is up sits above it from the first frame
     assert.equal(sheet.style.getPropertyValue('--pf-sheet-keyboard'), '280px');
   } finally {
     await setViewportHeight(full);
+    field.remove();
     await act(async () => root.unmount());
     host.remove();
   }

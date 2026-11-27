@@ -470,18 +470,17 @@ export const scenarios = [
         ready: () => page.locator(t.isMobile ? '[data-pf-inbox-section-switch]' : QUEUE),
         readyName: 'доска «Входящих» загрузилась',
       });
-      const filter = page.getByRole('checkbox', { name: 'Требуют ответа (1)', exact: true });
-      const filters = page.getByRole('button', { name: 'Фильтры', exact: true });
+      const filter = page.getByRole('button', { name: 'Требуют моего ответа: 1', exact: true });
       const todayChip = page.getByRole('group', { name: 'Срок' }).getByRole('button', { name: /^Сегодня/ });
+      await t.visible(filter, 'кнопка @ справа от сроков');
       await t.check('выбран срок «Сегодня», вопрос в просроченной задаче им скрыт', async () => {
         if (t.isMobile) await todayChip.tap();
         else await todayChip.click();
         await t.waitFor(async () => (await todayChip.getAttribute('aria-pressed')) === 'true', '«Сегодня» не выбран');
       });
       await t.check('фильтр «Требуют ответа» показывает число вопросов и сбрасывает срок', async () => {
-        await filters.click();
-        await filter.check();
-        await page.keyboard.press('Escape');
+        await filter.click();
+        await t.waitFor(async () => (await filter.getAttribute('aria-pressed')) === 'true', 'фильтр не нажат');
         await t.waitFor(async () => (await todayChip.getAttribute('aria-pressed')) === 'false', '«Сегодня» остался выбран вместе с «Ответить»');
         await expectCards(t, QUEUE, ['t-prices'], 'очередь с чипом «Ответить»');
         await t.visible(page.locator(`${QUEUE} [data-pf-awaiting-reply]`).filter({ visible: true }).first(), 'бейдж «Ответить» на карточке');
@@ -791,6 +790,16 @@ export const scenarios = [
         readyName: 'карточки «Входящих» видны',
       });
       await t.pageChecks('Входящие с большой командой');
+      await t.check('над аватаром видна общая нагрузка участника', async () => {
+        const vera = page.getByRole('button', { name: 'Вера Лебедева', exact: true });
+        const total = state.tasks.filter((task) =>
+          task.assignee.userId === 'u-vera' && task.status !== 'done' && task.status !== 'pending_approval',
+        ).length;
+        t.assert(total > 0, 'в фикстуре нет задач Веры');
+        const badge = vera.locator('[data-pf-who-load]');
+        await t.visible(badge, 'счётчик задач Веры');
+        t.assert(Number(await badge.textContent()) === total, 'счётчик отличается от общей нагрузки');
+      });
       const forward = page.getByRole('button', { name: /листать вперёд/ });
       const back = page.getByRole('button', { name: 'Листать назад' });
       // People whose chip reaches under the «+N ›» button or past the ribbon's edge.

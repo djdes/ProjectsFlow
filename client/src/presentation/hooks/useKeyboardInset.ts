@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { keyboardInset } from '@/lib/keyboardInset';
+import { hasKeyboardFocus, keyboardInset } from '@/lib/keyboardInset';
 
 /**
  * Publishes the on-screen keyboard as `--pf-keyboard` (px) and `data-pf-keyboard` on <html>.
@@ -15,17 +15,15 @@ export function useKeyboardInset(): void {
     // Android with interactive-widget=resizes-content shrinks the layout viewport itself, so
     // visualViewport matches innerHeight there: compare with the height before typing began.
     let baseline = window.innerHeight;
-    const editing = (): boolean =>
-      document.activeElement instanceof HTMLElement &&
-      document.activeElement.matches('input, textarea, select, [contenteditable="true"], [contenteditable="plaintext-only"]');
     const update = (): void => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        if (!editing()) baseline = window.innerHeight;
-        const inset = Math.max(
+        const editing = hasKeyboardFocus();
+        if (!editing) baseline = window.innerHeight;
+        const inset = editing && viewport.scale <= 1.01 ? Math.max(
           keyboardInset(window.innerHeight, viewport.height, viewport.offsetTop),
-          editing() ? keyboardInset(baseline, window.innerHeight, 0) : 0,
-        );
+          keyboardInset(baseline, window.innerHeight, 0),
+        ) : 0;
         root.style.setProperty('--pf-keyboard', `${inset}px`);
         if (inset > 0) root.dataset.pfKeyboard = '';
         else delete root.dataset.pfKeyboard;
@@ -35,12 +33,18 @@ export function useKeyboardInset(): void {
     viewport.addEventListener('resize', update);
     viewport.addEventListener('scroll', update);
     window.addEventListener('resize', update);
+    window.addEventListener('pageshow', update);
+    document.addEventListener('visibilitychange', update);
+    document.addEventListener('focusin', update);
     document.addEventListener('focusout', update);
     return () => {
       cancelAnimationFrame(frame);
       viewport.removeEventListener('resize', update);
       viewport.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
+      window.removeEventListener('pageshow', update);
+      document.removeEventListener('visibilitychange', update);
+      document.removeEventListener('focusin', update);
       document.removeEventListener('focusout', update);
       delete root.dataset.pfKeyboard;
     };

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { haptic } from '@/lib/haptics';
+import { hasKeyboardFocus, keyboardInset } from '@/lib/keyboardInset';
 import { canDragSheetFrom, sheetDismissDistance, shouldDismissSheet } from '@/lib/mobileSheetGesture';
 import { useMediaQuery } from '@/presentation/hooks/useMediaQuery';
 
@@ -20,7 +21,7 @@ export const MobileSurfaceContext = React.createContext(false);
  * variables then restyles the entire sheet a second time — together about a third of the
  * main-thread cost of opening a task on a phone.
  */
-type SheetViewport = { height: number; layoutHeight: number; keyboard: number };
+type SheetViewport = { height: number; keyboard: number };
 let sheetViewport: SheetViewport | null = null;
 const sheetViewportListeners = new Set<() => void>();
 
@@ -28,7 +29,10 @@ function measureSheetViewport(): SheetViewport {
   const viewport = window.visualViewport;
   const layoutHeight = window.innerHeight;
   const height = viewport?.height ?? layoutHeight;
-  return { height, layoutHeight, keyboard: Math.max(0, layoutHeight - height - (viewport?.offsetTop ?? 0)) };
+  const keyboard = hasKeyboardFocus() && (viewport?.scale ?? 1) <= 1.01
+    ? keyboardInset(layoutHeight, height, viewport?.offsetTop ?? 0)
+    : 0;
+  return { height, keyboard };
 }
 
 function watchSheetViewport(listener: () => void): () => void {
@@ -41,6 +45,10 @@ function watchSheetViewport(listener: () => void): () => void {
     window.visualViewport?.addEventListener('resize', update);
     window.visualViewport?.addEventListener('scroll', update);
     window.addEventListener('resize', update);
+    window.addEventListener('pageshow', update);
+    document.addEventListener('visibilitychange', update);
+    document.addEventListener('focusin', update);
+    document.addEventListener('focusout', () => queueMicrotask(update));
   }
   sheetViewportListeners.add(listener);
   return () => {
@@ -94,10 +102,10 @@ export function useMobileSheetSurface(
     if (!enabled || !node) return;
     let written: string | null = null;
     const resize = (): void => {
-      const { height, layoutHeight, keyboard } = sheetViewport!;
-      // An untouched viewport (no keyboard, no zoom) is exactly the CSS fallback (100dvh, 0px):
-      // the variables stay unset, and opening the sheet costs no extra restyle.
-      const key = keyboard < 1 && Math.abs(layoutHeight - height) < 1 ? '' : `${height}/${keyboard}`;
+      const { height, keyboard } = sheetViewport!;
+      // iOS can retain a reduced visual viewport after dismissal. Only a focused editor
+      // with a keyboard-sized inset should lift the sheet off the bottom.
+      const key = keyboard === 0 ? '' : `${height}/${keyboard}`;
       if (key === written) return;
       written = key;
       if (!key) {
