@@ -11,6 +11,7 @@ import Words from './Words.astro';
       <h2 id="features-title" class="h2 rw"><Words parts={[{ text: 'Больше, чем доска' }, { text: 'с задачами.', dim: true }]} /></h2>
     </div>
     <div class="duo">
+      <div class="halo duo__glow" aria-hidden="true"></div>
       {
         BIG_FEATURES.map((feature, i) => (
           <article class="big rb" style={`--d:${i * 120}ms`}>

@@ -24,17 +24,20 @@ const middle = (PLATFORMS.length - 1) / 2;
       <h2 id="platforms-title" class="h2 rw"><Words parts={[{ text: 'Работает там,' }, { text: 'где тебе удобно.', dim: true }]} /></h2>
       <p class="sub rb" style="--d:120ms">Браузер, iPhone, Telegram, Claude Code и GitHub: один проект везде.</p>
     </div>
-    <ul class="fan" aria-label="Где работает ProjectsFlow">
-      {
-        PLATFORMS.map((p, i) => (
-          <li class="pcard" style={`--k:${i - middle}`}>
-            <svg class="ico pcard__ic" viewBox="0 0 24 24" aria-hidden="true" set:html={icon[p.id]} />
-            <p class="pcard__t">{p.title}</p>
-            <p class="pcard__n">{p.note}</p>
-            <svg class="ico pcard__big" viewBox="0 0 24 24" aria-hidden="true" set:html={icon[p.id]} />
-          </li>
-        ))
-      }
-    </ul>
+    <div class="fan-stage">
+      <div class="halo fan__glow" aria-hidden="true"></div>
+      <ul class="fan" aria-label="Где работает ProjectsFlow">
+        {
+          PLATFORMS.map((p, i) => (
+            <li class="pcard" style={`--k:${i - middle}`}>
+              <svg class="ico pcard__ic" viewBox="0 0 24 24" aria-hidden="true" set:html={icon[p.id]} />
+              <p class="pcard__t">{p.title}</p>
+              <p class="pcard__n">{p.note}</p>
+              <svg class="ico pcard__big" viewBox="0 0 24 24" aria-hidden="true" set:html={icon[p.id]} />
+            </li>
+          ))
+        }
+      </ul>
+    </div>
   </div>
 </section>

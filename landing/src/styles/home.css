@@ -40,6 +40,9 @@
   --hero-h: max(600px, min(100vh, 920px));
   /* Статичное зерно (SVG feTurbulence) для свечения первого экрана, полосы фактов и веера. */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* Зерно-крапинки для свечения: видна только светлая часть шума, поэтому точки чёткие (как у
+     fluidvoice). */
+  --grain-speck: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.1 -0.42'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 @supports (height: 100svh) {
@@ -582,6 +585,22 @@ html:has(.pf) .skip-link {
   border-radius: 7px;
 }
 
+/* Знак (HomeLogo): белая молния на тёмной плитке с тонкой обводкой — монохром, как вся страница.
+   Синий бренда остаётся в приложении и favicon. */
+.logo__tile {
+  fill: oklch(19% 0.004 265);
+}
+
+.logo__edge {
+  fill: none;
+  stroke: oklch(var(--white) / 0.16);
+  stroke-width: 16px;
+}
+
+.logo__mark {
+  fill: oklch(var(--white));
+}
+
 .nav__links {
   display: flex;
   gap: 4px;
@@ -690,6 +709,27 @@ html:has(.pf) .skip-link {
   .nav__short {
     display: inline;
   }
+}
+
+/* ---------- зернистое свечение за картинками продукта (как у fluidvoice) ---------- */
+
+/* Белый свет и зерно-крапинки одним слоем; радиальная маска гасит оба к краям. Ставится первым
+   ребёнком контейнера с isolation: isolate (иначе z-index: -1 уйдёт под фон страницы) и
+   настраивается переменными: где свет (--halo-at), какой он (--halo-size), насколько сильный
+   (--halo-a) и какого цвета (--halo-c). Статичный: ни анимации, ни blur — перерисовок нет. */
+.halo {
+  --halo-at: 50% 30%;
+  --halo-size: 50% 50%;
+  --halo-a: 0.36;
+  --halo-c: var(--white);
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    var(--grain-speck) 0 0 / 160px 160px,
+    radial-gradient(var(--halo-size) at var(--halo-at), oklch(var(--halo-c) / var(--halo-a)), oklch(var(--halo-c) / calc(var(--halo-a) * 0.42)) 42%, oklch(var(--halo-c) / 0) 74%);
+  -webkit-mask-image: radial-gradient(var(--halo-size) at var(--halo-at), #000 0%, rgb(0 0 0 / 0.55) 46%, transparent 76%);
+  mask-image: radial-gradient(var(--halo-size) at var(--halo-at), #000 0%, rgb(0 0 0 / 0.55) 46%, transparent 76%);
 }
 
 /* ---------- первый экран: закреплён, окно доски наезжает ---------- */
@@ -812,24 +852,12 @@ html:not(.js) .pf .hero {
   isolation: isolate;
 }
 
-/* Зернистое белое свечение за окном доски: мягкий свет и статичное зерно поверх. */
+/* Свет из-за верхнего левого угла окна доски (как у fluidvoice): выше и левее окна. */
 .hero__glow {
-  position: absolute;
-  z-index: -1;
-  inset: -22% -12% -12% -18%;
-  pointer-events: none;
-  background: radial-gradient(46% 50% at 34% 30%, oklch(var(--white) / 0.2), oklch(var(--white) / 0.06) 55%, oklch(var(--white) / 0) 78%);
-}
-
-.hero__glow::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: var(--grain);
-  background-size: 180px 180px;
-  opacity: 0.22;
-  -webkit-mask-image: radial-gradient(46% 50% at 34% 30%, #000, transparent 78%);
-  mask-image: radial-gradient(46% 50% at 34% 30%, #000, transparent 78%);
+  --halo-at: 31% 27%;
+  --halo-size: 40% 26%;
+  --halo-a: 0.54;
+  inset: -36% -4% -4% -30%;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1477,10 +1505,20 @@ html:not(.js) .pf .hero {
 /* ---------- больше, чем доска ---------- */
 
 .duo {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr));
   gap: 16px;
   margin-block-start: 48px;
+}
+
+/* свет снизу, между карточками и под ними: над ними заголовок */
+.duo__glow {
+  --halo-at: 50% 60%;
+  --halo-size: 43% 46%;
+  --halo-a: 0.34;
+  inset: 30% 0 -40%;
 }
 
 .big {
@@ -2024,6 +2062,11 @@ html:not(.js) .pf .hero {
   padding-block: clamp(110px, 14vh, 140px) 40px;
 }
 
+.pin__stage {
+  position: relative;
+  isolation: isolate;
+}
+
 .pin__view {
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%);
   mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%);
@@ -2051,6 +2094,15 @@ html:not(.js) .pf .hero {
   scroll-snap-type: none;
   transform: translate3d(var(--x, 0px), 0, 0);
   will-change: transform;
+}
+
+/* свет за рядом карточек: в .pin__stage рядом с лентой (маска краёв у .pin__view обрезала бы
+   его по рамке ленты), виден в просветах и у краёв ряда */
+.pin__glow {
+  --halo-at: 50% 50%;
+  --halo-size: 40% 46%;
+  --halo-a: 0.46;
+  inset: -40% 0;
 }
 
 /* Без движения лента листается сама: полоса прокрутки видна, пустой полоски прогресса нет. */
@@ -2336,14 +2388,18 @@ html:not(.js) .pf .hero {
   margin-block-start: clamp(36px, 5vw, 64px);
 }
 
-/* бирюзовое свечение под веером */
-.fan::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 30% 8% -12%;
-  pointer-events: none;
-  background: radial-gradient(50% 50% at 50% 60%, oklch(46% 0.07 215 / 0.32), oklch(46% 0.07 215 / 0) 72%);
+/* бирюзовое зернистое свечение под веером (веер — список, поэтому свет рядом, в .fan-stage) */
+.fan-stage {
+  position: relative;
+  isolation: isolate;
+}
+
+.fan__glow {
+  --halo-c: 46% 0.07 215;
+  --halo-at: 50% 58%;
+  --halo-size: 40% 40%;
+  --halo-a: 0.5;
+  inset: 16% 0 -20%;
 }
 
 .pcard {
@@ -2463,6 +2519,19 @@ html:not(.js) .pf .hero {
 }
 
 /* ---------- тарифы: одна карточка на три колонки (как у fluidvoice) ---------- */
+
+/* свет над карточкой тарифов, там же, где радужная линия */
+.plans-stage {
+  position: relative;
+  isolation: isolate;
+}
+
+.plans__glow {
+  --halo-at: 50% 26%;
+  --halo-size: 46% 30%;
+  --halo-a: 0.32;
+  inset: -16% 0 40%;
+}
 
 .plans {
   position: relative;
@@ -2764,14 +2833,10 @@ html:not(.js) .pf .hero {
 }
 
 .final__glow {
-  position: absolute;
-  z-index: -1;
-  inset: 22% 14% 18%;
-  pointer-events: none;
-  background:
-    radial-gradient(40% 50% at 38% 50%, oklch(var(--cyan) / 0.24), oklch(var(--cyan) / 0) 70%),
-    radial-gradient(35% 45% at 62% 55%, oklch(var(--violet) / 0.22), oklch(var(--violet) / 0) 70%);
-  filter: blur(40px);
+  --halo-at: 50% 30%;
+  --halo-size: 24% 30%;
+  --halo-a: 0.38;
+  inset: 0 10% 30%;
 }
 
 .final__in {
@@ -2793,7 +2858,7 @@ html:not(.js) .pf .hero {
   inline-size: 80px;
   block-size: 80px;
   border-radius: 19px;
-  box-shadow: 0 0 0 1px oklch(var(--white) / 0.14), 0 20px 50px -12px oklch(var(--cyan) / 0.55);
+  box-shadow: 0 24px 60px -18px oklch(var(--white) / 0.28);
 }
 
 .final__title {
@@ -3004,6 +3069,14 @@ html:not(.js) .pf .hero {
 @media (max-width: 760px) {
   .hero {
     padding-block-start: clamp(124px, 16vh, 146px);
+  }
+
+  /* окно под кнопками и примечанием: свет ниже и короче, чтобы не лечь под текст */
+  .hero__glow {
+    --halo-at: 26% 24%;
+    --halo-size: 40% 22%;
+    --halo-a: 0.4;
+    inset: -14% -4% -4% -10%;
   }
 
   .hero__text {
@@ -3289,6 +3362,10 @@ html:not(.js) .pf .hero {
   }
 
   .pin__foot {
+    display: none;
+  }
+
+  .pf .halo {
     display: none;
   }
 }

@@ -29,43 +29,46 @@ const guaranteeIcon: Record<(typeof GUARANTEES)[number]['id'], string> = {
       <h2 id="pricing-title" class="h2 rw"><Words parts={[{ text: 'Простые тарифы.' }, { text: 'Старт бесплатно.', dim: true }]} /></h2>
       <p class="sub rb" style="--d:120ms">Цены в рублях. Платный тариф не подошёл, вернём деньги.</p>
     </div>
-    <div class="plans">
-      {
-        PLANS.map((plan, i) => (
-          <article class:list={['plan', 'rb', { 'plan--hi': plan.highlight }]} style={`--d:${i * 120}ms`}>
-            <div class="plan__top">
-              <h3 class="plan__name">{plan.name}</h3>
-              {plan.badge && <span class="badge">{plan.badge}</span>}
-              {plan.requestOnly && <span class="badge badge--muted">По запросу</span>}
-            </div>
-            <p class="plan__price">
-              <span class="plan__num">{formatRub(plan.priceRub)}&nbsp;₽</span>
-              <span class="plan__per">{plan.priceNote}</span>
-            </p>
-            <p class="plan__tag">{plan.tagline}</p>
-            <ul class="plan__list">
-              {plan.features.map((feature) => (
-                <li>{capitalize(feature)}</li>
-              ))}
-            </ul>
-            <div class="plan__cta">
-              <a class:list={['btn', plan.highlight ? 'btn--solid' : 'btn--line']} href={`${appBase}${plan.href}`} data-auth-anon>
-                {plan.cta}
-                <span class="btn__ic" aria-hidden="true"><HomeArrow /></span>
-              </a>
-              <a class:list={['btn', plan.highlight ? 'btn--solid' : 'btn--line']} href={`${appBase}/`} data-auth-authed>
-                Открыть приложение
-                <span class="btn__ic" aria-hidden="true"><HomeArrow /></span>
-              </a>
-              {plan.trialCta && (
-                <a class="plan__trial" href={`${appBase}${plan.href}`} data-auth-anon>
-                  {plan.trialCta}
+    <div class="plans-stage">
+      <div class="halo plans__glow" aria-hidden="true"></div>
+      <div class="plans">
+        {
+          PLANS.map((plan, i) => (
+            <article class:list={['plan', 'rb', { 'plan--hi': plan.highlight }]} style={`--d:${i * 120}ms`}>
+              <div class="plan__top">
+                <h3 class="plan__name">{plan.name}</h3>
+                {plan.badge && <span class="badge">{plan.badge}</span>}
+                {plan.requestOnly && <span class="badge badge--muted">По запросу</span>}
+              </div>
+              <p class="plan__price">
+                <span class="plan__num">{formatRub(plan.priceRub)}&nbsp;₽</span>
+                <span class="plan__per">{plan.priceNote}</span>
+              </p>
+              <p class="plan__tag">{plan.tagline}</p>
+              <ul class="plan__list">
+                {plan.features.map((feature) => (
+                  <li>{capitalize(feature)}</li>
+                ))}
+              </ul>
+              <div class="plan__cta">
+                <a class:list={['btn', plan.highlight ? 'btn--solid' : 'btn--line']} href={`${appBase}${plan.href}`} data-auth-anon>
+                  {plan.cta}
+                  <span class="btn__ic" aria-hidden="true"><HomeArrow /></span>
                 </a>
-              )}
-            </div>
-          </article>
-        ))
-      }
+                <a class:list={['btn', plan.highlight ? 'btn--solid' : 'btn--line']} href={`${appBase}/`} data-auth-authed>
+                  Открыть приложение
+                  <span class="btn__ic" aria-hidden="true"><HomeArrow /></span>
+                </a>
+                {plan.trialCta && (
+                  <a class="plan__trial" href={`${appBase}${plan.href}`} data-auth-anon>
+                    {plan.trialCta}
+                  </a>
+                )}
+              </div>
+            </article>
+          ))
+        }
+      </div>
     </div>
     <ul class="guar" aria-label="Гарантии">
       {
