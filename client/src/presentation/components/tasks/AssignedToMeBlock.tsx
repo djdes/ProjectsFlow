@@ -48,6 +48,7 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
+  AtSign,
   Filter,
   Flag,
   FolderKanban,
@@ -888,7 +889,7 @@ export function AssignedToMeBlock({
     [user?.id],
   );
   const byMeDisplayTasks = useMemo(() => applyPatches(byMeRaw, patches), [byMeRaw, patches]);
-  // Что горит у каждого участника (просрочено / на сегодня) — счётчик на его аватаре.
+  // Load includes both hand work and queued tasks, independently of the active section.
   const workload = useMemo(
     () => peopleWorkload(byMeDisplayTasks, ymd(startOfDay(new Date()))),
     [byMeDisplayTasks],
@@ -1965,11 +1966,6 @@ export function AssignedToMeBlock({
       onTo={setFilterTo}
       onProject={setFilterProject}
       taskFilters={[
-        ...(!focusedMemberId ? [{
-          label: `Требуют ответа (${awaitingReplyTasks.length})`,
-          active: replyFilterOn,
-          onToggle: toggleReplyOnly,
-        }] : []),
         { label: 'Из групп Telegram', active: groupOnly, onToggle: () => setGroupOnly((on) => !on) },
         { label: 'С файлами', active: filesOnly, onToggle: () => setFilesOnly((on) => !on) },
       ]}
@@ -2628,9 +2624,29 @@ export function AssignedToMeBlock({
   // закреплённая колонка «В работе» и очередь по проектам, которая листается вбок. На телефоне
   // вместо доски — переключатель разделов и один раздел на всю ширину.
   // На телефоне сроки прокручиваются внутри липкой полосы.
+  const replyFilter = !focusedMemberId && (
+    <button
+      type="button"
+      aria-pressed={replyFilterOn}
+      aria-label={`Требуют моего ответа: ${awaitingReplyTasks.length}`}
+      title="Задачи, где вам адресовали комментарий и ждут ответа"
+      onClick={toggleReplyOnly}
+      className={cn(
+        'inline-flex min-h-11 shrink-0 items-center justify-center gap-1 rounded-lg border px-2 text-meta tabular-nums transition-colors active:bg-active md:min-h-7 md:px-2.5',
+        replyFilterOn
+          ? 'border-primary bg-primary-soft text-foreground'
+          : 'border-border bg-panel text-muted-foreground hover:bg-hover hover:text-foreground',
+      )}
+    >
+      <AtSign aria-hidden className="size-3.5 text-approval-ink" />
+      {awaitingReplyTasks.length}
+      {replyFilterOn && <X aria-hidden className="size-3.5" />}
+    </button>
+  );
   const dueRowInner = (
     <div className={cn('flex items-center gap-x-2 gap-y-1.5', isWide ? 'flex-wrap' : 'w-max gap-x-1.5')}>
       <DueFilterChips value={due} onChange={changeDue} counts={dueCounts} wrap={isWide} />
+      {isWide && replyFilter}
       {isWide && hasLocalFilters && (
         <button
           type="button"
@@ -2650,7 +2666,12 @@ export function AssignedToMeBlock({
   );
   // Телефон: строка сроков — лента вбок с растворением у обрезанного края (EdgeFadeScroller):
   // каждый чип своей ширины, ничего не обрезается посреди подписи.
-  const dueRow = isWide ? dueRowInner : <EdgeFadeScroller className="min-w-0">{dueRowInner}</EdgeFadeScroller>;
+  const dueRow = isWide ? dueRowInner : (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <EdgeFadeScroller className="min-w-0 flex-1">{dueRowInner}</EdgeFadeScroller>
+      {replyFilter}
+    </div>
+  );
   const body = (
     // Телефон: запас снизу под плавающую кнопку «Новая задача», чтобы последняя карточка
     // прокручивалась выше неё.
@@ -4227,7 +4248,7 @@ function UserCube({
   hint,
 }: {
   member: SharedMember;
-  // Что у человека горит (просрочено / на сегодня) — счётчик на аватаре.
+  // All tasks the person is still responsible for completing.
   workload?: PersonWorkload;
   // Короткое имя для чипа (shortUserLabels); полное остаётся в aria-label и подсказке.
   shortLabel: string;
@@ -4247,18 +4268,17 @@ function UserCube({
   // описанием (aria-describedby) и в подсказке.
   const label = name;
   const loadId = useId();
-  const tooltip = load ? `${name}: ${load}` : name;
-  const burning = workload ? workload.late + workload.today : 0;
-  const burningTone =
-    workload && workload.late > 0 ? 'bg-destructive text-destructive-foreground' : 'bg-today text-background';
+  const tooltip = `${name} · ${load}`;
+  const total = workload?.total ?? 0;
+  const loadTone = 'bg-primary-soft text-primary-ink';
   if (dragging) {
     return (
       <div ref={setNodeRef} className={cn(DROP_TILE_CLASS, dropTileTone(isOver))}>
         <UserAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} className="size-6 text-2xs" />
         <span className="max-w-[8rem] truncate font-medium">{isOver ? 'Назначить' : name}</span>
-        {!isOver && burning > 0 && (
-          <span aria-hidden className={cn('grid h-4 min-w-4 place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums', burningTone)}>
-            {burning}
+        {!isOver && (
+          <span aria-hidden className={cn('grid h-4 min-w-4 place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums', loadTone)}>
+            {total}
           </span>
         )}
       </div>
@@ -4288,7 +4308,7 @@ function UserCube({
         ref={setNodeRef}
         {...interactiveProps}
         aria-label={label}
-        aria-describedby={load ? loadId : undefined}
+        aria-describedby={loadId}
         title={tooltip}
         data-pf-who-person
         // Вкладка-папка (как «Мои / Все»): выбранный человек — залитая вкладка, перетекающая
@@ -4308,19 +4328,17 @@ function UserCube({
           {hasApproval && (
             <span aria-hidden className={cn('absolute -end-0.5 -inset-be-0.5 size-3 rounded-full bg-approval ring-2', filterActive ? 'ring-folder' : 'ring-background')} />
           )}
-          {burning > 0 && (
-            <span
-              aria-hidden
-              data-pf-who-load
-              className={cn(
-                'absolute -end-1.5 -inset-bs-1.5 grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums ring-2',
-                filterActive ? 'ring-folder' : 'ring-background',
-                burningTone,
-              )}
-            >
-              {burning}
-            </span>
-          )}
+          <span
+            aria-hidden
+            data-pf-who-load
+            className={cn(
+              'absolute -end-1.5 -inset-bs-1.5 grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums ring-2',
+              filterActive ? 'ring-folder' : 'ring-background',
+              loadTone,
+            )}
+          >
+            {total}
+          </span>
         </span>
         <span
           data-pf-who-name
@@ -4331,7 +4349,7 @@ function UserCube({
         >
           {shortLabel}
         </span>
-        {load && <span id={loadId} className="sr-only">{load}</span>}
+        <span id={loadId} className="sr-only">{load}</span>
       </div>
     );
   }
@@ -4343,7 +4361,7 @@ function UserCube({
       tabIndex={clickable ? 0 : undefined}
       aria-pressed={clickable ? filterActive : undefined}
       aria-label={label}
-      aria-describedby={load ? loadId : undefined}
+      aria-describedby={loadId}
       title={tooltip}
       onClick={clickable ? onToggleFilter : undefined}
       onKeyDown={
@@ -4390,20 +4408,18 @@ function UserCube({
         )}
       </span>
       {named && <span className="max-w-[7rem] truncate">{shortLabel}</span>}
-      {burning > 0 && (
-        <span
-          aria-hidden
-          data-pf-who-load
-          className={cn(
-            'grid h-4 min-w-4 shrink-0 place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums',
-            !named && 'absolute -end-1 -inset-bs-1',
-            burningTone,
-          )}
-        >
-          {burning}
-        </span>
-      )}
-      {load && <span id={loadId} className="sr-only">{load}</span>}
+      <span
+        aria-hidden
+        data-pf-who-load
+        className={cn(
+          'grid h-4 min-w-4 shrink-0 place-items-center rounded-full px-1 text-2xs font-semibold leading-none tabular-nums',
+          !named && 'absolute -end-1 -inset-bs-1',
+          loadTone,
+        )}
+      >
+        {total}
+      </span>
+      <span id={loadId} className="sr-only">{load}</span>
     </div>
   );
 }
