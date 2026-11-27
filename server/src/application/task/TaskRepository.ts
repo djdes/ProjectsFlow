@@ -162,6 +162,7 @@ export interface TaskRepository {
     taskId: string,
     patch: UpdateTaskPatch,
     actorUserId?: string | null,
+    expected?: { readonly projectId: string; readonly status: TaskStatus },
   ): Promise<Task | null>;
   /**
    * Мягкое удаление (db/134): проставляет deleted_at/deleted_by, строка и все её

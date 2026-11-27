@@ -25,7 +25,7 @@ export interface TaskAttachmentRepository {
   listByCommentIds(commentIds: string[]): Promise<Map<string, TaskAttachment[]>>;
   // Возвращает map taskId → counts для отдачи в `ListTasks` (бейдж в карточке).
   // Считаем только вложения задачи (comment_id IS NULL).
-  countsByTasks(taskIds: string[]): Promise<Map<string, number>>;
+  countsByTasks(taskIds: string[], options?: { readonly includeCommentAttachments: boolean }): Promise<Map<string, number>>;
   delete(attachmentId: string): Promise<boolean>;
   deleteByTask(taskId: string): Promise<number>;
   // Storage-ключи всех аттачей проекта (через JOIN с tasks). Use-case вызывает ДО

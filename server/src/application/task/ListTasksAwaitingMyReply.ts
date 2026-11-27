@@ -126,7 +126,7 @@ export class ListTasksAwaitingMyReply {
     ];
     const [commitCounts, attachmentCounts, commentCounts, users] = await Promise.all([
       this.deps.taskCommits.countsByTasks(ids),
-      this.deps.attachments.countsByTasks(ids),
+      this.deps.attachments.countsByTasks(ids, { includeCommentAttachments: true }),
       this.deps.comments.countsByTasks(ids),
       Promise.all(userIds.map((id) => this.deps.users.getById(id))),
     ]);

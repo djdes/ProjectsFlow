@@ -65,7 +65,7 @@ export class ListTasksAssignedToOthers {
     const ids = flat.map(({ task }) => task.id);
     const [commitCounts, attachmentCounts, commentCounts] = await Promise.all([
       this.deps.taskCommits.countsByTasks(ids),
-      this.deps.attachments.countsByTasks(ids),
+      this.deps.attachments.countsByTasks(ids, { includeCommentAttachments: true }),
       this.deps.comments.countsByTasks(ids),
     ]);
 

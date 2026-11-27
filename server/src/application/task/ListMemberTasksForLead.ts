@@ -95,7 +95,7 @@ export class ListMemberTasksForLead {
     ];
     const [commitCounts, attachmentCounts, commentCounts, inboxOwners] = await Promise.all([
       this.deps.taskCommits.countsByTasks(ids),
-      this.deps.attachments.countsByTasks(ids),
+      this.deps.attachments.countsByTasks(ids, { includeCommentAttachments: true }),
       this.deps.comments.countsByTasks(ids),
       Promise.all(inboxOwnerIds.map((id) => this.deps.users.getById(id))),
     ]);

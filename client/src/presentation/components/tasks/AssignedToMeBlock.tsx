@@ -1,7 +1,7 @@
 import { selectInboxView } from './inbox/selectInboxView';
 import { useHideOnScroll } from '@/presentation/hooks/useHideOnScroll';
 import { EmptyState } from '@/presentation/components/empty/EmptyState';
-import { filterFromGroups, isFromGroup } from '@/domain/task/groupOriginFilter';
+import { isFromGroup } from '@/domain/task/groupOriginFilter';
 import { WorkerActivityBadge } from './WorkerActivityBadge';
 import { useWorkerEnabled } from '@/presentation/hooks/useWorkerEnabled';
 import { BoardSkeleton, InboxLoadingLayout } from '@/presentation/components/loading/LoadingLayouts';
@@ -69,7 +69,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -98,6 +99,9 @@ import { useWorkspaces } from '@/presentation/hooks/useWorkspaces';
 import type { Task, RalphMode, RunMode, TaskPriority, TaskStatus } from '@/domain/task/Task';
 import type { MoveTaskInput } from '@/application/task/TaskRepository';
 import type { AssignedTask } from '@/domain/task/AssignedTask';
+import type { TaskComment } from '@/domain/task/TaskComment';
+import { CommentBody } from './CommentBody';
+import { isRalphConversationComment } from './RalphQuestionControls';
 import type { InboxOverview } from '@/domain/task/InboxOverview';
 import {
   ASSIGNED_GROUPING_LABELS,
@@ -125,8 +129,6 @@ import {
 } from './assignedGrouping';
 import {
   DueFilterChips,
-  ReplyFilterChip,
-  GroupFilterChip,
   InboxSearch,
   InboxSectionSwitch,
   ManualIcon,
@@ -469,6 +471,7 @@ export function AssignedToMeBlock({
   const [replyOnly, setReplyOnly] = useState(false);
   // «Только из групп» (groupOrigin, db/190) — поверх вкладки, как поиск.
   const [groupOnly, setGroupOnly] = useState(false);
+  const [filesOnly, setFilesOnly] = useState(false);
   useEffect(() => {
     setCreationFilters({ projectId: filterProject, due: due === 'today' || due === 'none' ? due : null });
     return () => setCreationFilters({ projectId: null, due: null });
@@ -1003,14 +1006,15 @@ export function AssignedToMeBlock({
   // (без учёта самого срока), иначе выбранный чип обнулял бы соседние.
   const today = ymd(startOfDay(new Date()));
   const normalizedQuery = query.trim().toLowerCase();
-  const groupTaskCount = useMemo(() => visibleTasks.filter(isFromGroup).length, [visibleTasks]);
+  const matchesContentFilters = useCallback(
+    (task: InboxBlockTask) => matchesInboxQuery(task, normalizedQuery)
+      && (!groupOnly || isFromGroup(task))
+      && (!filesOnly || (task.attachmentCount ?? 0) > 0),
+    [normalizedQuery, groupOnly, filesOnly],
+  );
   const queriedTasks = useMemo(
-    () =>
-      filterFromGroups(
-        normalizedQuery ? visibleTasks.filter((t) => matchesInboxQuery(t, normalizedQuery)) : visibleTasks,
-        groupOnly,
-      ) as InboxBlockTask[],
-    [visibleTasks, normalizedQuery, groupOnly],
+    () => visibleTasks.filter(matchesContentFilters),
+    [visibleTasks, matchesContentFilters],
   );
   // Приёмка руководителем (db/150). Состав полки зависит от роли, и это не косметика:
   //
@@ -1031,11 +1035,11 @@ export function AssignedToMeBlock({
     [toMeTasks, byMeDisplayTasks, focusedTasks, approvalQueueTasks, focusedMemberId, isApprover],
   );
   const approvalQueried = useMemo(
-    () => filterFromGroups(replyFilterOn
-      ? awaitingReplyTasks.filter((task) => task.status === 'pending_approval' && matchesInboxQuery(task, normalizedQuery))
-      : approvalTasksAll.filter((task) => matchesInboxQuery(task, normalizedQuery)
-        && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !isColleaguePersonal(task))))), groupOnly) as InboxBlockTask[],
-    [groupOnly, replyFilterOn, awaitingReplyTasks, approvalTasksAll, normalizedQuery, focusedMemberId, tab, matchesByMeFilters, hidePersonal, isColleaguePersonal],
+    () => replyFilterOn
+      ? awaitingReplyTasks.filter((task) => task.status === 'pending_approval' && matchesContentFilters(task))
+      : approvalTasksAll.filter((task) => matchesContentFilters(task)
+        && (focusedMemberId !== null || tab !== 'byMe' || (matchesByMeFilters(task) && (!hidePersonal || !isColleaguePersonal(task))))),
+    [replyFilterOn, awaitingReplyTasks, approvalTasksAll, matchesContentFilters, focusedMemberId, tab, matchesByMeFilters, hidePersonal, isColleaguePersonal],
   );
   const { section, dueCounts, manual: inProgressTasks, approvals: approvalTasks, queue: groupedTasks } = useMemo(
     () => selectInboxView({ tasks: queriedTasks, approvals: approvalQueried, today, due, section: mobileSection, wide: isWide, workerEnabled }),
@@ -1641,23 +1645,26 @@ export function AssignedToMeBlock({
     item: InboxBlockTask,
     comment: string,
     files: readonly File[],
+    replyToCommentId: string | null,
   ): Promise<void> => {
     try {
-      const { commentId } = await taskRepository.rejectApproval(item.projectId, item.id, comment);
+      const result = await taskRepository.rejectApproval(item.projectId, item.id, comment, { replyToCommentId });
       // Вложения — в ТОТ ЖЕ комментарий, что создал возврат: причина и скриншот приходят
       // исполнителю одним сообщением. Падение загрузки не откатывает сам возврат — задача
       // уже вернулась в работу, и молча «отменить» это было бы хуже, чем сказать про файл.
       for (const file of files) {
         try {
-          await taskRepository.uploadCommentAttachment(item.projectId, item.id, commentId, file);
+          await taskRepository.uploadCommentAttachment(item.projectId, item.id, result.comment.id, file);
         } catch (err) {
           toast.error(`Не удалось приложить ${file.name}: ${(err as Error).message}`);
         }
       }
-      // Возврат снимает задачу с рейтинга исполнителя, а у принимающего она и не
-      // считалась: цифру всё равно пересчитываем с сервера — она общая на сессию.
-      forget(item.id);
-      toast.success('Возвращена в работу — комментарий добавлен');
+      if (result.returned) {
+        forget(item.id);
+        toast.success('Задача возвращена исполнителю');
+      } else {
+        toast.error('Комментарий отправлен, но задачу вернуть не удалось');
+      }
       setRejectTarget(null);
       await refresh();
       onChanged?.(item.projectId);
@@ -1906,11 +1913,8 @@ export function AssignedToMeBlock({
   // Единая кнопка «Фильтры»: сортировка (когда есть задачи) + скрыть-выполненные (всегда) +
   // фильтры ответственного/проекта (только вкладка «Для всех»).
   const hasLocalFilters =
-    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null || replyFilterOn || groupOnly;
-  // «Ответить» и чипы срока — взаимоисключающие быстрые срезы. Раньше «@» включался поверх
-  // выбранного «Просрочено»: вопрос в непросроченной задаче прятался сроком, а чип честно
-  // показывал «1» — «ответить нужно, а отвечать некому». Теперь «@» сбрасывает срок, а на
-  // телефоне открывает раздел, где эти задачи лежат; выбор срока выключает «@».
+    normalizedQuery !== '' || due !== null || filterTo !== null || filterProject !== null || replyFilterOn || groupOnly || filesOnly;
+  // «Требуют ответа» сбрасывает срок и открывает раздел, где лежат эти задачи.
   const toggleReplyOnly = (): void => {
     if (replyOnly) {
       setReplyOnly(false);
@@ -1919,8 +1923,9 @@ export function AssignedToMeBlock({
     setReplyOnly(true);
     setDue(null);
     if (isWide) return;
-    const inNow = awaitingReplyTasks.some((t) => t.status === 'pending_approval' || isHandWork(t, workerEnabled));
-    const inQueue = awaitingReplyTasks.some((t) => t.status !== 'pending_approval' && !isHandWork(t, workerEnabled));
+    const matchingReplies = awaitingReplyTasks.filter(matchesContentFilters);
+    const inNow = matchingReplies.some((t) => t.status === 'pending_approval' || isHandWork(t, workerEnabled));
+    const inQueue = matchingReplies.some((t) => t.status !== 'pending_approval' && !isHandWork(t, workerEnabled));
     if (section === 'now' && !inNow && inQueue) setMobileSection('queue');
     else if (section === 'queue' && !inQueue && inNow) setMobileSection('now');
   };
@@ -1934,6 +1939,7 @@ export function AssignedToMeBlock({
     setDue(null);
     setReplyOnly(false);
     setGroupOnly(false);
+    setFilesOnly(false);
     setFilterTo(null);
     setFilterProject(null);
   };
@@ -1958,6 +1964,15 @@ export function AssignedToMeBlock({
       project={filterProject}
       onTo={setFilterTo}
       onProject={setFilterProject}
+      taskFilters={[
+        ...(!focusedMemberId ? [{
+          label: `Требуют ответа (${awaitingReplyTasks.length})`,
+          active: replyFilterOn,
+          onToggle: toggleReplyOnly,
+        }] : []),
+        { label: 'Из групп Telegram', active: groupOnly, onToggle: () => setGroupOnly((on) => !on) },
+        { label: 'С файлами', active: filesOnly, onToggle: () => setFilesOnly((on) => !on) },
+      ]}
       onResetFilters={() => {
         setFilterTo(null);
         setFilterProject(null);
@@ -2612,21 +2627,10 @@ export function AssignedToMeBlock({
   // Тело блока (дизайн C4 «Одна доска»): строка управления, строка сроков, затем доска —
   // закреплённая колонка «В работе» и очередь по проектам, которая листается вбок. На телефоне
   // вместо доски — переключатель разделов и один раздел на всю ширину.
-  // Сроки (и «Ответить»). Телефон: три равные колонки внутри липкой полосы; десктоп — строка
-  // сроков с поиском и действиями у правого края.
+  // На телефоне сроки прокручиваются внутри липкой полосы.
   const dueRowInner = (
     <div className={cn('flex items-center gap-x-2 gap-y-1.5', isWide ? 'flex-wrap' : 'w-max gap-x-1.5')}>
       <DueFilterChips value={due} onChange={changeDue} counts={dueCounts} wrap={isWide} />
-      {!focusedMemberId && (replyFilterOn || awaitingReplyTasks.length > 0) && (
-        <ReplyFilterChip
-          active={replyFilterOn}
-          count={awaitingReplyTasks.length}
-          onToggle={toggleReplyOnly}
-        />
-      )}
-      {(groupOnly || groupTaskCount > 0) && (
-        <GroupFilterChip active={groupOnly} count={groupTaskCount} onToggle={() => setGroupOnly((on) => !on)} />
-      )}
       {isWide && hasLocalFilters && (
         <button
           type="button"
@@ -2837,10 +2841,12 @@ export function AssignedToMeBlock({
       {/* Возврат работы (db/150): без объяснения исполнитель не знает, что доделать, —
           поэтому комментарий обязателен и здесь, и на сервере. */}
       <RejectApprovalDialog
+        key={rejectTarget?.id}
         task={rejectTarget}
+        members={members}
         onCancel={() => setRejectTarget(null)}
-        onSubmit={(comment, files) => {
-          if (rejectTarget) void rejectApproval(rejectTarget, comment, files);
+        onSubmit={async (comment, files, replyToCommentId) => {
+          if (rejectTarget) await rejectApproval(rejectTarget, comment, files, replyToCommentId);
         }}
       />
 
@@ -3466,50 +3472,61 @@ type RejectFile = { id: string; file: File; previewUrl: string | null };
 
 function RejectApprovalDialog({
   task,
+  members,
   onCancel,
   onSubmit,
 }: {
   task: InboxBlockTask | null;
+  members: readonly SharedMember[];
   onCancel: () => void;
-  onSubmit: (comment: string, files: readonly File[]) => void;
+  onSubmit: (comment: string, files: readonly File[], replyToCommentId: string | null) => Promise<void>;
 }): React.ReactElement {
+  const { taskRepository } = useContainer();
   const [comment, setComment] = useState('');
   const [files, setFiles] = useState<RejectFile[]>([]);
+  const [recent, setRecent] = useState<readonly TaskComment[] | null>(null);
+  const [historyError, setHistoryError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const saving = useRef(false);
+  const previewUrls = useRef(new Set<string>());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
+  const messageId = useId();
+  const taskId = task?.id;
+  const projectId = task?.projectId;
 
-  const clearFiles = useCallback((): void => {
-    setFiles((prev) => {
-      prev.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
-      return [];
+  useEffect(() => {
+    if (!taskId || !projectId) return;
+    let cancelled = false;
+    void taskRepository.listComments(projectId, taskId).then((comments) => {
+      if (!cancelled) setRecent(comments.filter((c) => !isRalphConversationComment(c)).slice(-3));
+    }).catch(() => {
+      if (!cancelled) setHistoryError(true);
     });
+    return () => { cancelled = true; };
+  }, [projectId, taskId, taskRepository]);
+
+  useEffect(() => {
+    const urls = previewUrls.current;
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
   }, []);
 
-  // Сбрасываем поле и вложения при смене задачи, иначе прошлый текст и чужой скриншот
-  // «переезжают» на следующую.
-  useEffect(() => {
-    setComment('');
-    clearFiles();
-  }, [task?.id, clearFiles]);
-
   const addFiles = (list: FileList | readonly File[]): void => {
-    const picked = [...list];
-    if (picked.length === 0) return;
-    setFiles((prev) => [
-      ...prev,
-      ...picked.map((file) => ({
-        id: `${file.name}:${file.size}:${file.lastModified}:${prev.length}`,
-        file,
-        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
-      })),
-    ]);
+    const picked = [...list].map((file) => {
+      const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+      if (previewUrl) previewUrls.current.add(previewUrl);
+      return { id: crypto.randomUUID(), file, previewUrl };
+    });
+    setFiles((prev) => [...prev, ...picked]);
   };
 
   const removeFile = (id: string): void => {
-    setFiles((prev) => {
-      const target = prev.find((f) => f.id === id);
-      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((f) => f.id !== id);
-    });
+    const url = files.find((file) => file.id === id)?.previewUrl;
+    if (url) {
+      URL.revokeObjectURL(url);
+      previewUrls.current.delete(url);
+    }
+    setFiles((prev) => prev.filter((file) => file.id !== id));
   };
 
   // Ctrl+V со скриншотом: главный способ приложить картинку — прицельно берём только
@@ -3522,26 +3539,77 @@ function RejectApprovalDialog({
   };
 
   const trimmed = comment.trim();
+  const submit = async (): Promise<void> => {
+    if (saving.current || !trimmed) return;
+    saving.current = true;
+    setSubmitting(true);
+    try {
+      await onSubmit(trimmed, files.map((file) => file.file), recent?.at(-1)?.id ?? null);
+    } finally {
+      saving.current = false;
+      setSubmitting(false);
+    }
+  };
   return (
-    <Dialog open={task !== null} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+    <Dialog open={task !== null} onOpenChange={(open) => !open && !saving.current && onCancel()}>
+      <DialogContent
+        className="sm:max-w-lg"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          document.getElementById(titleId)?.focus();
+        }}
+      >
+        <DialogHeader id={titleId} tabIndex={-1} className="outline-none">
           <DialogTitle>Вернуть в работу</DialogTitle>
+          <DialogDescription>Ответственный получит комментарий и уведомление о возврате.</DialogDescription>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          Напишите, что доделать. Комментарий появится в задаче, и ответственный получит
-          уведомление. Скриншот можно вставить из буфера (Ctrl+V).
-        </p>
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          onPaste={handlePaste}
-          autoFocus
-          rows={4}
-          maxLength={4000}
-          placeholder="Например: не хватает адаптива на мобиле"
-          className="w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2"
-        />
+        <section aria-label="Последняя переписка" className="space-y-2">
+          <h3 className="text-sm font-medium">Последняя переписка</h3>
+          {recent?.length ? (
+            <ol className="max-h-[24dvh] space-y-1.5 overflow-y-auto overscroll-contain">
+              {[...recent].reverse().map((entry) => {
+                const author = entry.actorKind === 'user'
+                  ? members.find((member) => member.id === entry.ownerUserId)?.displayName
+                    ?? (task?.assignee.userId === entry.ownerUserId ? task.assignee.displayName : 'Участник')
+                  : entry.agentName ?? 'Система';
+                return (
+                  <li key={entry.id} className="min-w-0 rounded-lg bg-muted px-3 py-2">
+                    <div className="flex flex-wrap items-baseline gap-x-2 text-xs">
+                      <span className="font-medium">{author}</span>
+                      <time dateTime={entry.createdAt.toISOString()} className="text-muted-foreground">
+                        {entry.createdAt.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </time>
+                    </div>
+                    {entry.body && <CommentBody body={entry.body} className="text-sm [overflow-wrap:anywhere]" />}
+                    {entry.attachments.map((file) => (
+                      <a key={file.id} href={file.url} target="_blank" rel="noreferrer" className="block text-sm text-primary-ink underline [overflow-wrap:anywhere]">
+                        {file.filename}
+                      </a>
+                    ))}
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
+            <p className="text-sm text-muted-foreground" role="status">
+              {historyError ? 'Не удалось загрузить переписку' : recent ? 'Комментариев пока нет' : 'Загружаем переписку…'}
+            </p>
+          )}
+        </section>
+        <div className="space-y-1.5">
+          <label htmlFor={messageId} className="block text-sm font-medium">Сообщение о возврате</label>
+          <textarea
+            id={messageId}
+            value={comment}
+            disabled={submitting}
+            onChange={(e) => setComment(e.target.value)}
+            onPaste={handlePaste}
+            rows={3}
+            maxLength={4000}
+            placeholder="Что нужно доделать?"
+            className="block w-full resize-none rounded-md border border-input bg-field px-3 py-2 text-base outline-none ring-primary/40 placeholder:text-muted-foreground/60 focus:ring-2 sm:text-sm"
+          />
+        </div>
 
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -3561,6 +3629,7 @@ function RejectApprovalDialog({
                 <button
                   type="button"
                   onClick={() => removeFile(f.id)}
+                  disabled={submitting}
                   aria-label={`Убрать ${f.file.name}`}
                   className="absolute -end-1.5 -inset-bs-1.5 grid size-5 place-items-center rounded-full border bg-card text-muted-foreground shadow-sm transition-opacity hover:text-foreground"
                 >
@@ -3571,23 +3640,25 @@ function RejectApprovalDialog({
           </div>
         )}
 
-        <DialogFooter className="sm:justify-between">
+        <DialogFooter className="flex-row flex-wrap items-center justify-between gap-2">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => fileInputRef.current?.click()}
+            disabled={submitting}
             className="gap-1.5"
           >
             <Paperclip className="size-4" />
             Файл
           </Button>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={onCancel}>
+            <Button variant="ghost" onClick={onCancel} disabled={submitting}>
               Отмена
             </Button>
             <Button
               disabled={trimmed.length === 0}
-              onClick={() => onSubmit(trimmed, files.map((f) => f.file))}
+              loading={submitting}
+              onClick={() => void submit()}
             >
               Вернуть в работу
             </Button>
@@ -4693,6 +4764,7 @@ function InboxFiltersPopover({
   project,
   onTo,
   onProject,
+  taskFilters,
   onResetFilters,
 }: {
   showSort: boolean;
@@ -4712,6 +4784,7 @@ function InboxFiltersPopover({
   project: string | null;
   onTo: (v: string | null) => void;
   onProject: (v: string | null) => void;
+  taskFilters: readonly { label: string; active: boolean; onToggle: () => void }[];
   onResetFilters: () => void;
 }): React.ReactElement {
   const activeFilterCount = showFilters ? [to, project].filter((v) => v !== null).length : 0;
@@ -4719,7 +4792,8 @@ function InboxFiltersPopover({
   // чтобы было видно активность, не открывая поповер. Скрытые выполненные — умолчание
   // (lib/inboxDonePreference), их не считаем. Сортировка — выбор, не «активный фильтр».
   const badgeCount =
-    activeFilterCount + (hideDone ? 0 : 1) + (showHidePersonal && hidePersonal ? 1 : 0);
+    activeFilterCount + taskFilters.filter((filter) => filter.active).length
+    + (hideDone ? 0 : 1) + (showHidePersonal && hidePersonal ? 1 : 0);
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -4732,7 +4806,7 @@ function InboxFiltersPopover({
           )}
         >
           <Filter className="size-3.5" />
-          <span className="hidden sm:inline">Фильтры</span>
+          <span className="max-[399px]:sr-only">Фильтры</span>
           {badgeCount > 0 && (
             <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-soft px-1 text-[10px] font-semibold tabular-nums text-primary-ink">
               {badgeCount}
@@ -4741,9 +4815,17 @@ function InboxFiltersPopover({
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-0">
-        <div className="max-h-[70vh] overflow-y-auto py-1">
+        <div className="max-h-[70dvh] overflow-y-auto py-1">
+          <div className="px-1 pbe-1">
+            {taskFilters.map((filter) => (
+              <label key={filter.label} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-hover md:min-h-8">
+                <Checkbox checked={filter.active} onCheckedChange={filter.onToggle} />
+                {filter.label}
+              </label>
+            ))}
+          </div>
           {/* Скрыть выполненные — всегда (действует и на доску ниже). */}
-          <div className="px-1">
+          <div className="border-bs px-1 pbs-1">
             <HideDoneRow value={hideDone} onChange={onHideDoneChange} />
             {/* Скрыть личные — только вкладка «Другим» (личные доски коллег). */}
             {showHidePersonal && (

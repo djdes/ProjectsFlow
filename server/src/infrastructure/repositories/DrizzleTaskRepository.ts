@@ -345,6 +345,7 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
     taskId: string,
     patch: UpdateTaskPatch,
     actorUserId: string | null = null,
+    expected?: { readonly projectId: string; readonly status: TaskStatus },
   ): Promise<Task | null> {
     const before = this.history ? await this.getById(taskId) : null;
     const set: Partial<
@@ -396,7 +397,12 @@ export class DrizzleTaskRepository implements TaskRepository, TaskRecurrenceLedg
     if (patch.recurrence !== undefined) set.recurrence = serializeTaskRecurrence(patch.recurrence);
 
     if (Object.keys(set).length > 0) {
-      await this.db.update(tasks).set(set).where(activeTasks(eq(tasks.id, taskId)));
+      const result = await this.db.update(tasks).set(set).where(activeTasks(
+        eq(tasks.id, taskId),
+        expected && eq(tasks.projectId, expected.projectId),
+        expected && eq(tasks.status, expected.status),
+      ));
+      if (expected && result[0].affectedRows === 0) return null;
     }
     const updated = await this.getById(taskId);
     if (updated && before) await this.history?.record(updated, actorUserId, before);

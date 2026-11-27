@@ -128,6 +128,13 @@ export class NotTaskApproverError extends Error {
   }
 }
 
+export class TaskNotPendingApprovalError extends Error {
+  constructor() {
+    super('Задача уже снята с утверждения');
+    this.name = 'TaskNotPendingApprovalError';
+  }
+}
+
 // Отозвать задачу из очереди приёмки может только тот, кто её туда отправил — текущий
 // ответственный. Остальным доступен возврат с комментарием (RejectTaskApproval).
 export class NotTaskAssigneeError extends Error {

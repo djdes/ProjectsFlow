@@ -92,12 +92,12 @@ export class DrizzleTaskAttachmentRepository implements TaskAttachmentRepository
     return out;
   }
 
-  async countsByTasks(taskIds: string[]): Promise<Map<string, number>> {
+  async countsByTasks(taskIds: string[], options?: { readonly includeCommentAttachments: boolean }): Promise<Map<string, number>> {
     if (taskIds.length === 0) return new Map();
     const rows = await this.db
       .select({ taskId: taskAttachments.taskId, count: sql<number>`COUNT(*)` })
       .from(taskAttachments)
-      .where(and(inArray(taskAttachments.taskId, taskIds), isNull(taskAttachments.commentId)))
+      .where(and(inArray(taskAttachments.taskId, taskIds), options?.includeCommentAttachments ? undefined : isNull(taskAttachments.commentId)))
       .groupBy(taskAttachments.taskId);
     const out = new Map<string, number>();
     for (const r of rows) out.set(r.taskId, Number(r.count));

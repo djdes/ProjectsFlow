@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLiquidIndicator } from '@/presentation/components/motion/useLiquidIndicator';
 import { RollingNumber } from '@/presentation/components/motion/RollingNumber';
-import { AtSign, CalendarClock, Check, ChevronLeft, ChevronRight, MessagesSquare, Play, Search, ShieldCheck, X, Loader2 } from 'lucide-react';
+import { CalendarClock, Check, ChevronLeft, ChevronRight, Play, Search, ShieldCheck, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCardSwipe } from '@/presentation/hooks/useCardSwipe';
 import { useMotion } from '@/presentation/components/motion/MotionProvider';
@@ -97,17 +97,12 @@ export function InboxSearch({
   );
 }
 
-// tint — подложка чипа, когда в нём есть задачи: просроченные красным, на сегодня — цветом
-// срока «сегодня» (цвет = смысл). Раньше три одинаковых серых рамки с точкой-пикселем:
-// «Просрочено 3» читалось так же спокойно, как «Без срока 0».
-const DUE_CHIPS: ReadonlyArray<{ key: Exclude<DueKind, 'future'>; label: string; dot: string; tint: string | null }> = [
-  { key: 'late', label: 'Просрочено', dot: 'bg-destructive', tint: 'border-transparent bg-destructive-soft text-destructive' },
-  { key: 'today', label: 'Сегодня', dot: 'bg-today', tint: 'border-transparent bg-today/[0.12] text-today' },
-  { key: 'none', label: 'Без срока', dot: 'bg-muted-foreground/60', tint: null },
-];
+const DUE_CHIPS = [
+  { key: 'late', label: 'Просрочено' },
+  { key: 'today', label: 'Сегодня' },
+  { key: 'none', label: 'Без срока' },
+] as const;
 
-// Чипы срока: один выбранный за раз, повторный клик снимает. Точка — смысл срока, тем же
-// цветом, что и срок на карточке; число — сколько задач подпадёт (уже с учётом поиска).
 export function DueFilterChips({
   value,
   onChange,
@@ -117,117 +112,32 @@ export function DueFilterChips({
   value: DueKind | null;
   onChange: (value: DueKind | null) => void;
   counts: Readonly<Record<Exclude<DueKind, 'future'>, number>>;
-  // false — одна строка (на телефоне лента листается вбок, а не переносится).
   wrap?: boolean;
 }): React.ReactElement {
   return (
-    <div
-      role="group"
-      aria-label="Срок"
-      // Телефон (wrap=false): чипы своей ширины в ленте, которая листается вбок. Три равные
-      // колонки рядом с «@» и «комментариями» не вмещали «Просрочено 11» — подпись вылезала
-      // за край чипа и обрезалась (жалоба владельца 22.11).
-      className={cn('items-center gap-1.5', wrap ? 'flex flex-wrap' : 'flex w-max')}
-    >
+    <div role="group" aria-label="Срок" className={cn('flex items-center gap-1.5', wrap ? 'flex-wrap' : 'w-max')}>
       {DUE_CHIPS.map((chip) => {
         const on = value === chip.key;
-        const count = counts[chip.key];
-        const tinted = !on && count > 0 && chip.tint !== null;
         return (
           <button
             key={chip.key}
             type="button"
             aria-pressed={on}
             onClick={() => onChange(on ? null : chip.key)}
-            data-pf-due-tinted={tinted ? '' : undefined}
             className={cn(
-              'inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-meta transition-colors active:bg-active md:min-h-7 md:gap-1 md:px-2.5',
+              'inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-meta transition-colors active:bg-active md:min-h-7 md:px-2.5',
               on
                 ? 'border-primary bg-primary-soft text-foreground'
-                : tinted
-                  ? cn(chip.tint, 'font-medium')
-                  : cn(
-                      // Телефон — мягкая подложка без рамки: рамок в шапке и так четыре ряда.
-                      'border-border text-muted-foreground hover:bg-hover hover:text-foreground max-md:border-transparent max-md:bg-panel',
-                      count === 0 && 'text-muted-foreground/75',
-                    ),
+                : 'border-border bg-panel text-muted-foreground hover:bg-hover hover:text-foreground',
             )}
           >
-            <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', chip.dot, count === 0 && !on && 'opacity-50')} />
             {chip.label}
-            <span
-              className={cn('shrink-0 tabular-nums', tinted ? 'font-semibold' : 'text-muted-foreground')}
-              data-pf-due-count={chip.key}
-            >
-              {count}
-            </span>
+            <span className="shrink-0 tabular-nums" data-pf-due-count={chip.key}>{counts[chip.key]}</span>
+            {on && <X aria-hidden className="size-3.5 shrink-0" />}
           </button>
         );
       })}
     </div>
-  );
-}
-
-// «Ответить»: только задачи, где мне адресовали комментарий, а я ещё не ответил. Отдельно
-// от чипов срока — это другой вопрос к списку («кто меня ждёт», а не «что горит»).
-export function ReplyFilterChip({
-  active,
-  count,
-  onToggle,
-}: {
-  active: boolean;
-  count: number;
-  onToggle: () => void;
-}): React.ReactElement {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      aria-label={`Ответить: ${count}`}
-      title="Задачи, где вам адресовали комментарий, а вы ещё не ответили"
-      onClick={onToggle}
-      className={cn(
-        'inline-flex min-h-11 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2 text-meta transition-colors active:bg-active md:min-h-7 md:px-2.5',
-        active
-          ? 'border-approval bg-approval-soft text-foreground'
-          : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
-      )}
-    >
-      <AtSign aria-hidden className="size-3.5 shrink-0 text-approval-ink" />
-      <span className="max-sm:hidden">Ответить</span>
-      <span className="shrink-0 tabular-nums text-muted-foreground" data-pf-reply-count>{count}</span>
-    </button>
-  );
-}
-
-// «Только из групп»: задачи, поставленные в рабочих Telegram-группах (groupOrigin, db/190).
-export function GroupFilterChip({
-  active,
-  count,
-  onToggle,
-}: {
-  active: boolean;
-  count: number;
-  onToggle: () => void;
-}): React.ReactElement {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      aria-label={`Только из групп: ${count}`}
-      title="Только задачи, поставленные в рабочих Telegram-группах"
-      onClick={onToggle}
-      className={cn(
-        'inline-flex min-h-11 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2 text-meta transition-colors active:bg-active md:min-h-7 md:px-2.5',
-        active
-          ? 'border-primary bg-accent text-foreground'
-          : 'border-border text-muted-foreground hover:bg-hover hover:text-foreground',
-      )}
-    >
-      <MessagesSquare aria-hidden className="size-3.5 shrink-0" />
-      <span className="max-sm:hidden">Только из групп</span>
-      <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
-    </button>
   );
 }
 

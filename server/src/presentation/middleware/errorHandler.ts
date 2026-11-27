@@ -88,6 +88,7 @@ import {
   TaskDescriptionEmptyError,
   ApprovalCommentRequiredError,
   TaskAwaitingApprovalError,
+  TaskNotPendingApprovalError,
   NotTaskApproverError,
   NotTaskAssigneeError,
   AssigneeNotProjectMemberError,
@@ -565,6 +566,10 @@ export function errorHandler(
   if (err instanceof TaskAwaitingApprovalError) {
     // 409: состояние задачи не позволяет операцию (не про права — про этап).
     res.status(409).json({ error: 'task_awaiting_approval', message: err.message });
+    return;
+  }
+  if (err instanceof TaskNotPendingApprovalError) {
+    res.status(409).json({ error: 'task_not_pending_approval', message: err.message });
     return;
   }
   if (err instanceof ApprovalCommentRequiredError) {

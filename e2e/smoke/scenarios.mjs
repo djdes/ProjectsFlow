@@ -470,20 +470,18 @@ export const scenarios = [
         ready: () => page.locator(t.isMobile ? '[data-pf-inbox-section-switch]' : QUEUE),
         readyName: 'доска «Входящих» загрузилась',
       });
-      const chip = page.getByRole('button', { name: 'Ответить: 1' });
-      await t.check('чип «Ответить» показывает число вопросов', () => t.visible(chip, 'чип «Ответить: 1»'));
-      // Bug 22.11: «@ 1» switched on over a due chip that hid the question (the task is
-      // overdue, «Сегодня» was selected) showed nothing while still counting 1.
+      const filter = page.getByRole('checkbox', { name: 'Требуют ответа (1)', exact: true });
+      const filters = page.getByRole('button', { name: 'Фильтры', exact: true });
       const todayChip = page.getByRole('group', { name: 'Срок' }).getByRole('button', { name: /^Сегодня/ });
       await t.check('выбран срок «Сегодня», вопрос в просроченной задаче им скрыт', async () => {
         if (t.isMobile) await todayChip.tap();
         else await todayChip.click();
         await t.waitFor(async () => (await todayChip.getAttribute('aria-pressed')) === 'true', '«Сегодня» не выбран');
       });
-      await t.check('чип оставляет только задачи с вопросом, срок сброшен, на карточке бейдж «Ответить»', async () => {
-        if (t.isMobile) await chip.tap();
-        else await chip.click();
-        await t.waitFor(async () => (await chip.getAttribute('aria-pressed')) === 'true', 'чип не нажат');
+      await t.check('фильтр «Требуют ответа» показывает число вопросов и сбрасывает срок', async () => {
+        await filters.click();
+        await filter.check();
+        await page.keyboard.press('Escape');
         await t.waitFor(async () => (await todayChip.getAttribute('aria-pressed')) === 'false', '«Сегодня» остался выбран вместе с «Ответить»');
         await expectCards(t, QUEUE, ['t-prices'], 'очередь с чипом «Ответить»');
         await t.visible(page.locator(`${QUEUE} [data-pf-awaiting-reply]`).filter({ visible: true }).first(), 'бейдж «Ответить» на карточке');
@@ -498,6 +496,7 @@ export const scenarios = [
     matrix: [['desktop', 'light']],
     async run(t) {
       const { page, state } = t;
+      state.comments = { 't-pay': [{ attachments: [{ id: 'a-payment' }] }] };
       await t.goto('/', { ready: () => page.locator(QUEUE), readyName: 'доска «Входящих» загрузилась' });
       const all = myQueueTasks(state).map((x) => x.id);
       const search = page.getByRole('searchbox', { name: 'Поиск по проектам и задачам' });
@@ -525,24 +524,16 @@ export const scenarios = [
       });
 
       const chip = page.getByRole('group', { name: 'Срок' }).getByRole('button', { name: /^Просрочено/ });
-      // Colour is meaning: a due chip with tasks is tinted (overdue red), an empty one is not.
-      await t.check('чип «Просрочено» с задачами подсвечен, пустой «Без срока» — нет', async () => {
-        const counts = await page.getByRole('group', { name: 'Срок' }).getByRole('button').evaluateAll((els) =>
-          els.map((el) => ({
-            label: el.textContent.trim(),
-            count: Number(el.querySelector('[data-pf-due-count]')?.textContent ?? '0'),
-            tinted: el.hasAttribute('data-pf-due-tinted'),
-          })),
+      await t.check('все три невыбранных срока одного цвета', async () => {
+        const styles = await page.getByRole('group', { name: 'Срок' }).getByRole('button').evaluateAll((els) =>
+          els.map((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).color].join(' ')),
         );
-        const late = counts.find((c) => c.label.startsWith('Просрочено'));
-        t.assert(late && late.count > 0, 'в фикстуре нет просроченных задач');
-        t.assert(late.tinted, '«Просрочено» с задачами не подсвечен');
-        const none = counts.find((c) => c.label.startsWith('Без срока'));
-        t.assert(none && !none.tinted, '«Без срока» подсвечен, хотя срок не горит');
+        t.assert(styles.length === 3 && new Set(styles).size === 1, 'стили чипов различаются');
       });
       await t.check('чип «Просрочено» оставляет только просроченные', async () => {
         await chip.click();
         await t.waitFor(async () => (await chip.getAttribute('aria-pressed')) === 'true', 'чип не нажат');
+        await t.visible(chip.locator('svg'), 'крестик на выбранном сроке');
         const overdue = myQueueTasks(state).filter((x) => x.deadline && x.deadline < state.today);
         t.assert(overdue.length > 0, 'в фикстуре нет просроченных задач');
         await expectCards(t, QUEUE, overdue.map((x) => x.id), 'очередь с чипом «Просрочено»');
@@ -552,7 +543,81 @@ export const scenarios = [
         await expectCards(t, QUEUE, all, 'очередь после сброса');
         t.assert((await chip.getAttribute('aria-pressed')) === 'false', 'чип остался нажатым');
       });
+      await t.check('фильтр «С файлами» учитывает вложения обсуждения', async () => {
+        const filters = page.getByRole('button', { name: 'Фильтры', exact: true });
+        await filters.click();
+        await page.getByRole('checkbox', { name: 'С файлами', exact: true }).check();
+        await page.keyboard.press('Escape');
+        await expectCards(t, QUEUE, ['t-pay'], 'задачи с файлами');
+      });
       await t.pageChecks('Входящие с фильтрами');
+    },
+  },
+
+  {
+    id: 'inbox-approval-return',
+    title: 'Возврат с утверждения из списка и из обсуждения',
+    matrix: [['desktop', 'light'], ['phone', 'light']],
+    async run(t) {
+      const { page, state } = t;
+      const at = new Date().toISOString();
+      state.comments = { 't-doctors': [{
+        id: 'c-review', taskId: 't-doctors', ownerUserId: 'u-boris', body: 'Карточки готовы к проверке.',
+        actorKind: 'user', agentName: null, notifyMode: 'all', replyToCommentId: null, quotedText: null,
+        createdAt: at, updatedAt: at, attachments: [], acknowledgements: [],
+      }] };
+      const task = state.tasks.find((item) => item.id === 't-doctors');
+      const otherTask = state.tasks.find((item) => item.id === 't-brands');
+      task.statusBeforeDone = 'backlog';
+      otherTask.statusBeforeDone = 'backlog';
+      const approvalCard = page.locator(`${NOW} ${card(task.id)}`);
+      await t.goto('/', { ready: () => approvalCard });
+      await t.check('диалог показывает переписку и сохраняет сообщение о возврате как ответ', async () => {
+        await approvalCard.getByRole('button', { name: 'Вернуть', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Вернуть в работу' });
+        await t.visible(dialog.getByText('Карточки готовы к проверке.', { exact: true }), 'последний комментарий');
+        await dialog.getByRole('textbox', { name: 'Сообщение о возврате' }).fill('Добавьте фотографии.');
+        await dialog.getByRole('button', { name: 'Вернуть в работу', exact: true }).click();
+        await t.waitForMutation(
+          (m) => m.path.endsWith('/t-doctors/approval/reject') && m.body?.replyToCommentId === 'c-review',
+          'возврат не ссылается на комментарий',
+        );
+        await expectGone(t, `${NOW} ${card(task.id)}`, 'задача осталась на утверждении');
+        t.assert(task.status === 'backlog', 'задача не вернулась в черновики');
+      });
+      const composer = page.locator('[data-pf-comment-composer]:visible');
+      await t.goto(`/projects/${otherTask.projectId}/tasks/${otherTask.id}`, { ready: () => composer });
+      const toggle = composer.getByRole('checkbox', { name: 'Вернуть исполнителю' });
+      const editor = composer.locator('[contenteditable="true"]');
+      const send = composer.getByRole('button', { name: /^Отправить/ }).first();
+      await t.check('галочка включена по умолчанию, снятая галочка сохраняет утверждение', async () => {
+        t.assert(await toggle.isChecked(), 'галочка выключена по умолчанию');
+        await toggle.uncheck();
+        await editor.fill('Проверяю фильтр.');
+        await send.click();
+        await t.waitForMutation(
+          (m) => m.path.endsWith('/t-brands/comments') && m.body?.body?.includes('Проверяю фильтр.'),
+          'обычный комментарий не отправлен',
+        );
+        t.assert(otherTask.status === 'pending_approval', 'статус изменился без галочки');
+      });
+      await t.check('галочка отправляет сообщение с вложением и возвращает в прежнюю колонку', async () => {
+        await toggle.check();
+        await editor.fill('Проверьте пустой результат.');
+        await composer.locator('input[type="file"]').setInputFiles({
+          name: 'screenshot.png', mimeType: 'image/png', buffer: Buffer.from(SMOKE_PNG_BASE64, 'base64'),
+        });
+        await send.click();
+        await t.waitForMutation(
+          (m) => m.path.endsWith('/t-brands/approval/reject') && m.body?.comment?.includes('Проверьте пустой результат.'),
+          'комментарий не отправлен через возврат',
+        );
+        await t.waitForMutation((m) => /\/t-brands\/comments\/[^/]+\/attachments$/.test(m.path), 'файл не добавлен к комментарию');
+        await t.waitFor(async () => await toggle.count() === 0, 'окно всё ещё показывает статус утверждения');
+        t.assert(otherTask.status === 'backlog', 'задача не вернулась в черновики');
+        t.assert(state.comments[otherTask.id].length === 2, 'число комментариев отличается от числа отправок');
+      });
+      await t.pageChecks('задача после возврата');
     },
   },
 

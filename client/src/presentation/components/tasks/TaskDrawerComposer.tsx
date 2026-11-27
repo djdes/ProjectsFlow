@@ -1,6 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CornerDownRight, FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/sonner';
 import type { Task } from '@/domain/task/Task';
 import { workerSessionPrompt, type WorkerSessionMode } from '@/domain/task/WorkerSessionMode';
@@ -63,6 +64,7 @@ type Props = {
   todoTail: { readonly id: string } | null;
   onCommentCreated: (created: TaskComment) => void;
   onTaskChanged: () => void;
+  onApprovalReturned?: (updated: Task) => void;
   defaultTarget?: ComposerTarget;
   // Сообщает подтверждённую сервером задачу в статусе «Воркер».
   onWorkerQueued?: (updated: Task) => void;
@@ -87,7 +89,7 @@ export function TaskDrawerComposer(props: Props): React.ReactElement | null {
   const { user } = useCurrentUser();
   if (!user) return null;
   const draftKey = commentDraftKey(user.id, props.task.projectId, props.task.id);
-  return <TaskDrawerComposerForm key={draftKey} {...props} draftKey={draftKey} />;
+  return <TaskDrawerComposerForm key={`${draftKey}:${props.task.status === 'pending_approval'}`} {...props} draftKey={draftKey} />;
 }
 
 function TaskDrawerComposerForm({
@@ -96,6 +98,7 @@ function TaskDrawerComposerForm({
   todoTail,
   onCommentCreated,
   onTaskChanged,
+  onApprovalReturned,
   replyDraft: incomingReply,
   draftKey,
   onClearReply,
@@ -110,6 +113,11 @@ function TaskDrawerComposerForm({
   const getSnapshot = useCallback(() => readCommentDraft(draftKey), [draftKey]);
   const draft = useSyncExternalStore(subscribe, getSnapshot);
   const { body, files: pending, reply: replyDraft, sending: submitting } = draft;
+  const awaitingApproval = task.status === 'pending_approval';
+  const canReturn = awaitingApproval && onApprovalReturned !== undefined;
+  const [returnChecked, setReturnChecked] = useState(true);
+  const returnCheckboxId = useId();
+  const returnOnSend = canReturn && returnChecked;
   // Кого можно уведомить и кто по умолчанию (руководитель) — решает сервер.
   const notifyCandidates = useCommentNotifyCandidates(task.projectId, task.id);
   const defaultAudience = defaultCommentAudience(
@@ -244,23 +252,29 @@ function TaskDrawerComposerForm({
   };
 
   const submit = async (): Promise<void> => {
+    if (!canSubmit) return;
     const sent = beginCommentSend(draftKey);
     if (!sent) return;
     let created: TaskComment;
+    let returnedTask: Task | null = null;
     const text = sent.body.trim();
+    const notify = sent.notify ?? defaultAudience;
+    const reply = { replyToCommentId: sent.reply?.commentId, quotedText: sent.reply?.quotedText };
     try {
-      created = await taskRepository.createComment(
-        task.projectId,
-        task.id,
-        effectiveTarget === 'worker' ? workerSessionPrompt(text, sessionMode) : text,
-        sent.notify ?? defaultAudience,
-        {
-          replyToCommentId: sent.reply?.commentId ?? null,
-          quotedText: sent.reply?.quotedText ?? null,
-          // Текст может быть пустым: комментарий из одних вложений.
-          attachmentCount: sent.files.length,
-        },
-      );
+      if (returnOnSend) {
+        const result = await taskRepository.rejectApproval(task.projectId, task.id, text, { notify, ...reply });
+        created = result.comment;
+        if (result.returned) returnedTask = result.task;
+        else toast.error('Комментарий отправлен, но задачу вернуть не удалось');
+      } else {
+        created = await taskRepository.createComment(
+          task.projectId,
+          task.id,
+          !awaitingApproval && effectiveTarget === 'worker' ? workerSessionPrompt(text, sessionMode) : text,
+          notify,
+          { ...reply, attachmentCount: sent.files.length },
+        );
+      }
     } catch (error) {
       toast.error(`Не удалось отправить: ${(error as Error).message}`);
       updateCommentDraft(draftKey, (current) => ({ ...current, sending: false }));
@@ -292,7 +306,7 @@ function TaskDrawerComposerForm({
         setPreview(null);
         onCommentCreated({ ...created, attachments: uploaded });
       }
-      const moveTo = task.canEdit !== false && shouldAutoMoveAfterComment(task, currentUser?.id ?? null)
+      const moveTo = !awaitingApproval && task.canEdit !== false && shouldAutoMoveAfterComment(task, currentUser?.id ?? null)
         ? resolveMoveTarget(task.status, effectiveTarget)
         : null;
       if (moveTo !== null) {
@@ -309,6 +323,10 @@ function TaskDrawerComposerForm({
         }
       }
       if (moveTo === null && effectiveTarget === 'worker' && task.status === 'todo') onWorkerQueued?.(task);
+      if (returnedTask) {
+        toast.success('Задача возвращена исполнителю');
+        if (mountedRef.current) onApprovalReturned?.(returnedTask);
+      }
       if (mountedRef.current) onTaskChanged();
     } finally {
       if (mountedRef.current) refocusAfterSendRef.current = true;
@@ -316,7 +334,7 @@ function TaskDrawerComposerForm({
     }
   };
 
-  const canSubmit = (body.trim().length > 0 || pending.length > 0) && !submitting;
+  const canSubmit = (body.trim().length > 0 || (!returnOnSend && pending.length > 0)) && !submitting;
 
   // Notion-style: композер — отдельная «карточка» со скруглением и мягким фокус-рингом,
   // а не плоский футер на всю ширину. БЕЗ backdrop-blur: filter создаёт containing-block
@@ -434,6 +452,17 @@ function TaskDrawerComposerForm({
 
         {/* nowrap: кнопка отправки НЕ переносится на отдельную строку на узких экранах —
             левая группа (скрепка + «кому уведомить») сжимается, send всегда справа. */}
+        {canReturn && (
+          <label htmlFor={returnCheckboxId} className="flex min-h-9 w-fit cursor-pointer items-center gap-2 px-3.5 text-sm">
+            <Checkbox
+              id={returnCheckboxId}
+              checked={returnChecked}
+              onCheckedChange={(checked) => setReturnChecked(checked === true)}
+              disabled={submitting}
+            />
+            Вернуть исполнителю
+          </label>
+        )}
         <div className="flex items-center gap-2 pbe-1.5 pbs-0.5 pe-1.5 ps-2">
           <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
             <Button
@@ -459,7 +488,7 @@ function TaskDrawerComposerForm({
           </div>
 
           <div className="shrink-0">
-            {task.canEdit !== false && canChooseSendTarget(task.status) ? (
+            {!awaitingApproval && task.canEdit !== false && canChooseSendTarget(task.status) ? (
               <SendTargetButton
                 size="lg"
                 options={workerEnabled ? DRAWER_TARGETS : DRAWER_TARGETS_NO_WORKER}
