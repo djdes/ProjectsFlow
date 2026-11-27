@@ -238,7 +238,11 @@ function assignedItem(state, task) {
     ? 'u-vera'
     : state.projects.find((p) => p.id === task.projectId)?.ownerId ?? ME.id;
   return {
-    task,
+    task: {
+      ...task,
+      attachmentCount: (task.attachmentCount ?? 0)
+        + (state.comments?.[task.id] ?? []).reduce((count, comment) => count + (comment.attachments?.length ?? 0), 0),
+    },
     projectId: task.projectId,
     projectName: projectNameOf(state, task.projectId),
     isInbox: inbox,
@@ -922,21 +926,23 @@ function mutate(state, method, path, body) {
     if (method === 'PUT' && rest === '/assignee') {
       return touch({ assignee: assigneeRef(body?.assigneeUserId ?? ME.id) });
     }
-    if (method === 'POST' && rest === '/approval/reject') {
-      const res = touch({ status: 'in_progress' });
-      return json({ task: res.body.task, commentId: `c-${Date.now()}` });
-    }
     if (method === 'POST' && rest === '/approval/withdraw') return touch({ status: 'manual' });
-    if (method === 'POST' && rest === '/comments') {
+    if (method === 'POST' && (rest === '/comments' || rest === '/approval/reject')) {
+      const returning = rest === '/approval/reject';
+      if (returning && task.status !== 'pending_approval') return json({ error: 'task_not_pending_approval' }, 409);
       const now = new Date().toISOString();
       const comment = {
         id: `c-smoke-${Object.values(state.comments ?? {}).flat().length + 1}`,
-        taskId, ownerUserId: ME.id, body: body?.body ?? '', actorKind: 'user', agentName: null,
-        notifyMode: body?.notify?.mode ?? 'all', replyToCommentId: null, quotedText: null,
+        taskId, ownerUserId: ME.id, body: (returning ? body?.comment : body?.body) ?? '', actorKind: 'user', agentName: null,
+        notifyMode: body?.notify?.mode ?? 'all', replyToCommentId: body?.replyToCommentId ?? null, quotedText: body?.quotedText ?? null,
         createdAt: now, updatedAt: now, attachments: [], acknowledgements: [],
       };
       state.comments ??= {};
       state.comments[taskId] = [...(state.comments[taskId] ?? []), comment];
+      if (returning) {
+        const res = touch({ status: task.statusBeforeDone ?? 'in_progress' });
+        return json({ task: res.body.task, commentId: comment.id, comment, returned: true });
+      }
       return json({ comment }, 201);
     }
     const commentUpload = rest.match(/^\/comments\/([^/]+)\/attachments$/);

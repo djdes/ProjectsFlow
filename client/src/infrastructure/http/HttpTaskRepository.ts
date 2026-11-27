@@ -341,12 +341,13 @@ export class HttpTaskRepository implements TaskRepository {
     projectId: string,
     taskId: string,
     comment: string,
-  ): Promise<{ task: Task; commentId: string }> {
-    const { task, commentId } = await this.client.post<{ task: TaskDto; commentId: string }>(
+    options?: { notify?: NotifyAudience; replyToCommentId?: string | null; quotedText?: string | null },
+  ): Promise<{ task: Task; comment: TaskComment; returned: boolean }> {
+    const result = await this.client.post<{ task: TaskDto; comment: CommentDto; returned: boolean }>(
       `/projects/${projectId}/tasks/${taskId}/approval/reject`,
-      { comment },
+      { comment, ...options },
     );
-    return { task: fromDto(task), commentId };
+    return { task: fromDto(result.task), comment: commentFromDto(result.comment), returned: result.returned };
   }
   async withdrawApproval(projectId: string, taskId: string): Promise<Task> {
     const { task } = await this.client.post<{ task: TaskDto }>(

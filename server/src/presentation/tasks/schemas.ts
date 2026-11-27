@@ -196,6 +196,10 @@ export type CreateAgentTaskCommentBody = z.infer<typeof createAgentTaskCommentSc
 export type UpdateTaskCommentBody = z.infer<typeof updateTaskCommentSchema>;
 
 // Возврат работы из приёмки (db/150): объяснение обязательно и непустое.
-export const rejectApprovalSchema = z.object({
-  comment: z.string().trim().min(1).max(4000),
+export const rejectApprovalSchema = createTaskCommentSchema.pick({
+  notify: true,
+  replyToCommentId: true,
+  quotedText: true,
+}).extend({
+  comment: z.string().trim().min(1).max(10000),
 });

@@ -1,4 +1,4 @@
-import { TaskNotFoundError } from '../../domain/task/errors.js';
+import { TaskNotFoundError, TaskNotPendingApprovalError } from '../../domain/task/errors.js';
 import { TASK_STATUSES, type Task, type TaskStatus } from '../../domain/task/Task.js';
 import { taskExcerpt } from '../../domain/task/taskExcerpt.js';
 import type { ProjectMemberRepository } from '../project/ProjectMemberRepository.js';
@@ -38,6 +38,7 @@ export type MoveTaskCommand = {
   // (status_before_done), а не в переданный targetStatus. Сервер сам резолвит цель —
   // не доверяем клиентскому (возможно устаревшему) чтению. См. db/055.
   readonly restore?: boolean;
+  readonly requirePendingApproval?: boolean;
 };
 
 const POSITION_STEP = 1024;
@@ -80,6 +81,9 @@ export class MoveTask {
 
     const task = await this.deps.tasks.getById(input.taskId);
     if (!task || task.projectId !== input.projectId) throw new TaskNotFoundError(input.taskId);
+    if (input.requirePendingApproval && task.status !== 'pending_approval') {
+      throw new TaskNotPendingApprovalError();
+    }
 
     // Резолвим фактический целевой статус + патч снапшота status_before_done.
     // undefined-патч = поле не трогаем.
@@ -156,14 +160,18 @@ export class MoveTask {
       );
     }
 
+    const leavesApproval = task.status === 'pending_approval' && targetStatus !== task.status;
     const updated = await this.deps.tasks.update(input.taskId, {
       status: targetStatus,
       position: newPosition,
       ...(statusBeforeDonePatch !== undefined
         ? { statusBeforeDone: statusBeforeDonePatch }
         : {}),
-    }, input.ownerUserId);
-    if (!updated) throw new TaskNotFoundError(input.taskId);
+    }, input.ownerUserId, leavesApproval ? { projectId: input.projectId, status: 'pending_approval' } : undefined);
+    if (!updated) {
+      if (leavesApproval) throw new TaskNotPendingApprovalError();
+      throw new TaskNotFoundError(input.taskId);
+    }
 
     // Лента действий: только при реальной смене статуса (не при reorder внутри колонки).
     if (updated.status !== task.status) {

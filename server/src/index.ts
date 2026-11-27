@@ -1399,6 +1399,7 @@ const withdrawTaskApprovalUseCase = new WithdrawTaskApproval({
 // перенос делаем тем же MoveTask, что и остальные пути — политика приёмки внутри него.
 const rejectTaskApprovalUseCase = new RejectTaskApproval({
   projects: projectRepo,
+  members: projectMemberRepo,
   tasks: taskRepo,
   approval: taskApprovalService,
   createComment: createTaskCommentUseCase,

@@ -1625,6 +1625,10 @@ export function TaskDrawer({
   // откатывается.
   const frozenByApproval = useApprovalFreeze(task?.status);
   const { forget: forgetCompleted } = useCompletedToday();
+  const applyApprovalReturn = (updated: Task): void => {
+    setStatusResult(updated);
+    forgetCompleted(updated.id);
+  };
   // Отзыв задачи с утверждения самим исполнителем.
   const [withdrawing, setWithdrawing] = useState(false);
   const withdrawApproval = useCallback(async (): Promise<void> => {
@@ -2312,6 +2316,7 @@ export function TaskDrawer({
                 <LiveTab
                   task={task}
                   onTaskUpdated={setModeResult}
+                  onApprovalReturned={canEdit ? applyApprovalReturn : undefined}
                   fillHeight={isSplit}
                   canEdit={canEdit}
                   active={activeTab === 'live'}
@@ -2367,6 +2372,7 @@ export function TaskDrawer({
                         replyDraft={replyDraft?.taskId === task.id && replyDraft.userId === currentUser?.id ? replyDraft : null}
                         onClearReply={() => setReplyDraft((current) => current === replyDraft ? null : current)}
                         onNavigateToComment={flashComment}
+                        onApprovalReturned={canEdit ? applyApprovalReturn : undefined}
                         onCommentCreated={(c) => {
                           onCommentCreatedRef.current?.(c);
                           // Свой комментарий — сразу на виду: докручиваем тот контейнер, что

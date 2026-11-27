@@ -410,20 +410,24 @@ export function tasksRouter(deps: Deps): Router {
         const projectId = req.params['projectId'] as string;
         const taskId = req.params['taskId'] as string;
         const body = rejectApprovalSchema.parse(req.body);
-        const before = await deps.tasks.getById(taskId);
-        const { task, commentId } = await deps.rejectTaskApproval.execute({
+        const { task, comment, returned } = await deps.rejectTaskApproval.execute({
           projectId,
           taskId,
           actorUserId: req.user!.id,
           comment: body.comment,
+          notifyMode: body.notify?.mode,
+          notifyUserIds: body.notify?.userIds,
+          replyToCommentId: body.replyToCommentId,
+          quotedText: body.quotedText,
         });
         deps.notifyTaskChanged(projectId, [task.assignee.userId]);
-        if (before && before.status !== task.status) {
-          deps.notifyStatusChanged(projectId, taskId, before.status, task.status, req.user!.id);
+        deps.notifyCommentAdded(projectId, taskId, comment.id, req.user!.id, comment.actorKind, comment.agentName);
+        if (returned) {
+          deps.notifyStatusChanged(projectId, taskId, 'pending_approval', task.status, req.user!.id);
         }
         // commentId наружу: клиент догружает в этот комментарий вложения («что доделать»
         // скриншотом) отдельными multipart-запросами.
-        res.json({ task: toDto(task), commentId });
+        res.json({ task: toDto(task), comment: commentToDto(comment), commentId: comment.id, returned });
       } catch (e) {
         next(e);
       }

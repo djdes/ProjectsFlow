@@ -110,6 +110,7 @@ type Props = {
   onTaskChanged?: () => void;
   // Ответ PATCH из LIVE (смена режима запуска) — окно задачи обновляет свой снимок.
   onTaskUpdated?: (updated: Task) => void;
+  onApprovalReturned?: (updated: Task) => void;
 };
 
 // LIVE-вкладка: живая лента действий воркера в стиле IDE Cursor, но в теме сайта
@@ -131,6 +132,7 @@ function TaskLiveChat({
   onCommentCreated,
   onTaskChanged,
   onTaskUpdated,
+  onApprovalReturned,
 }: Props): React.ReactElement {
   // Подтверждённый сервером ответ (отмена, постановка в очередь, смена режима) живёт,
   // пока родитель не прислал свежую задачу; дальше правда — серверный статус из пропса.
@@ -471,6 +473,7 @@ function TaskLiveChat({
             backlogTail={backlogTail}
             todoTail={todoTail}
             onCommentCreated={handleChatComment}
+            onApprovalReturned={onApprovalReturned}
               defaultTarget="worker"
               onWorkerQueued={handleQueued}
             onTaskChanged={() => onTaskChanged?.()}

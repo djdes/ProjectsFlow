@@ -70,7 +70,7 @@ export class ListPersonalTasksOfColleagues {
     const ids = visible.map((t) => t.id);
     const [commitCounts, attachmentCounts, commentCounts] = await Promise.all([
       this.deps.taskCommits.countsByTasks(ids),
-      this.deps.attachments.countsByTasks(ids),
+      this.deps.attachments.countsByTasks(ids, { includeCommentAttachments: true }),
       this.deps.comments.countsByTasks(ids),
     ]);
 
