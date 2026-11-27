@@ -688,7 +688,27 @@ function TaskDrawerComposerForm({
         </div>
       </div>
 
-      <AttachmentLightbox attachment={preview} onClose={() => setPreview(null)} />
+      <AttachmentLightbox
+        attachment={preview}
+        onClose={() => setPreview(null)}
+        attachActionLabel="Сохранить пометки"
+        onAttachToDraft={
+          preview
+            ? (annotatedFile) => {
+                const targetId = preview.id;
+                const nextUrl = URL.createObjectURL(annotatedFile);
+                updateCommentDraft(draftKey, (current) => ({
+                  ...current,
+                  files: current.files.map((entry) =>
+                    entry.id === targetId
+                      ? { id: crypto.randomUUID(), file: annotatedFile, previewUrl: nextUrl }
+                      : entry,
+                  ),
+                }));
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

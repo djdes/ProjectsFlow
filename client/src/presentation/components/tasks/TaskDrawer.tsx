@@ -2892,6 +2892,7 @@ function TaskCommentsSection({
               taskId={taskId}
               comment={c}
               members={members}
+              onCreated={handleCreated}
               onUpdated={handleUpdated}
               onDeleted={handleDeleted}
               onReply={frozen ? undefined : onReply}
@@ -3257,6 +3258,7 @@ function CommentItem({
   taskId,
   comment,
   members,
+  onCreated,
   onUpdated,
   onDeleted,
   onReply,
@@ -3269,6 +3271,7 @@ function CommentItem({
   comment: TaskComment;
   // Участники проекта — для резолва автора комментария по ownerUserId (имя + аватар).
   members: readonly ProjectMember[];
+  onCreated?: (created: TaskComment) => void;
   onUpdated: (updated: TaskComment) => void;
   onDeleted: (id: string) => void;
   // Ответ/цитата (db/080).
@@ -3545,7 +3548,77 @@ function CommentItem({
         <CommentAcknowledgement projectId={projectId} comment={comment} />
         <CommentAttachments attachments={comment.attachments} onPreview={setPreview} />
       </div>
-      <AttachmentLightbox attachment={preview} attachments={comment.attachments} onClose={() => setPreview(null)} />
+      <AttachmentLightbox
+        attachment={preview}
+        attachments={comment.attachments}
+        onClose={() => setPreview(null)}
+        replyAuthorName={displayName !== '—' ? displayName : undefined}
+        onAttachToDraft={
+          !frozen && user
+            ? (annotatedFile) => {
+                onReply?.(comment.id, displayName, null);
+                appendCommentDraftFiles(
+                  commentDraftKey(user.id, projectId, taskId),
+                  [annotatedFile],
+                );
+              }
+            : undefined
+        }
+        onReplyWithImage={
+          !frozen
+            ? async (annotatedFile, commentText) => {
+                const notify: NotifyAudience =
+                  comment.ownerUserId && comment.ownerUserId !== user?.id
+                    ? { mode: 'selected', userIds: [comment.ownerUserId] }
+                    : { mode: 'none' };
+                const created = await taskRepository.createComment(
+                  projectId,
+                  taskId,
+                  commentText.trim(),
+                  notify,
+                  {
+                    replyToCommentId: comment.id,
+                    quotedText: null,
+                    attachmentCount: 1,
+                  },
+                );
+                const tempId = crypto.randomUUID();
+                const previewUrl = URL.createObjectURL(annotatedFile);
+                const tempAtt: TaskAttachment = {
+                  ...localPreviewAttachment({
+                    id: tempId,
+                    filename: annotatedFile.name,
+                    mimeType: annotatedFile.type,
+                    sizeBytes: annotatedFile.size,
+                    url: previewUrl,
+                  }),
+                  taskId,
+                  uploading: true,
+                  uploadProgress: 0,
+                };
+                onCreated?.({ ...created, attachments: [tempAtt] });
+                try {
+                  const saved = await taskRepository.uploadCommentAttachment(
+                    projectId,
+                    taskId,
+                    created.id,
+                    annotatedFile,
+                    (loaded, total) => {
+                      const progress = total > 0 ? Math.round((loaded / total) * 100) : 0;
+                      onUpdated({
+                        ...created,
+                        attachments: [{ ...tempAtt, uploadProgress: progress }],
+                      });
+                    },
+                  );
+                  onUpdated({ ...created, attachments: [saved] });
+                } finally {
+                  URL.revokeObjectURL(previewUrl);
+                }
+              }
+            : undefined
+        }
+      />
     </li>
   );
 }

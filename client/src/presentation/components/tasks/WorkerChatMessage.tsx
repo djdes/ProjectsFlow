@@ -7,6 +7,7 @@ import { AttachmentLightbox } from '@/presentation/components/attachments/Attach
 import { CommentBody } from './CommentBody';
 import { CommentAcknowledgement } from './CommentAcknowledgement';
 import { CommentAttachments } from './CommentAttachments';
+import { appendCommentDraftFiles, commentDraftKey } from './commentDraft';
 
 export function WorkerChatMessage({ comment, authorName, projectId }: { comment: TaskComment; authorName: string; projectId: string }): React.ReactElement {
   const { user } = useCurrentUser();
@@ -21,6 +22,19 @@ export function WorkerChatMessage({ comment, authorName, projectId }: { comment:
     <CommentBody body={startsNewSession ? comment.body.slice(NEW_WORKER_SESSION_MARKER.length).trimStart() : comment.body} />
     <CommentAttachments attachments={comment.attachments} onPreview={setPreview} className="mbs-0" />
     <CommentAcknowledgement projectId={projectId} comment={comment} />
-    <AttachmentLightbox attachment={preview} attachments={comment.attachments} onClose={() => setPreview(null)} />
+    <AttachmentLightbox
+      attachment={preview}
+      attachments={comment.attachments}
+      onClose={() => setPreview(null)}
+      onAttachToDraft={
+        user
+          ? (annotatedFile) =>
+              appendCommentDraftFiles(
+                commentDraftKey(user.id, projectId, comment.taskId),
+                [annotatedFile],
+              )
+          : undefined
+      }
+    />
   </article>;
 }
