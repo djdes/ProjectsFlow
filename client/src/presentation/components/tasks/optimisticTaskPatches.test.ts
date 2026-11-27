@@ -53,6 +53,15 @@ test('settledPatchIds: status-правка на исчезнувшую зада�
   assert.deepEqual(settledPatchIds(patches, []), ['a']);
 });
 
+test('settledPatchIds: если один из источников ещё держит старый статус, правку НЕ снимаем (защита от мигания выполненной задачи)', () => {
+  const patches: PatchMap = new Map([['a', { kind: 'status', status: 'done' as never }]]);
+  // boardTasks уже обновился до done, а overview.mine ещё держит backlog — снимать рано.
+  assert.deepEqual(settledPatchIds(patches, [t('a', 'backlog'), t('a', 'done')]), []);
+  assert.deepEqual(settledPatchIds(patches, [t('a', 'done'), t('a', 'backlog')]), []);
+  // Когда оба источника догнали done — правка отработала.
+  assert.deepEqual(settledPatchIds(patches, [t('a', 'done'), t('a', 'done')]), ['a']);
+});
+
 test('withPatch / withoutPatches: иммутабельность и no-op при отсутствии ключей', () => {
   const empty: PatchMap = new Map();
   const one = withPatch(empty, 'a', { kind: 'hidden' });

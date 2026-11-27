@@ -80,10 +80,16 @@ function visibleCards(id: string): HTMLElement[] {
 // a stack with a gap.
 function collapseTargetOf(card: HTMLElement): HTMLElement {
   let node = card;
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < 10; i += 1) {
     const parent = node.parentElement;
     if (!parent || parent === document.body || parent.hasAttribute('data-pf-main')) break;
-    if (parent.childElementCount !== 1) break;
+    if (parent.childElementCount !== 1) {
+      // SwipeToAct / KanbanCard may render an absolute aria-hidden overlay alongside the flow child.
+      const flowChildren = Array.from(parent.children).filter(
+        (c) => c === node || getComputedStyle(c).position !== 'absolute',
+      );
+      if (flowChildren.length !== 1) break;
+    }
     const cs = getComputedStyle(parent);
     if ((parseFloat(cs.rowGap) || 0) > 0) break;
     if (cs.overflowY === 'auto' || cs.overflowY === 'scroll') break;

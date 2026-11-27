@@ -12,7 +12,7 @@ import {
   type DragEvent,
   type FormEvent,
 } from 'react';
-import { Activity, AppWindow, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, Download, ExternalLink, FileText, Flag, FolderKanban, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Repeat, Reply, Rocket, RotateCcw, Send, Link2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
+import { Activity, AppWindow, Bot, CalendarClock, Check, ChevronDown, ChevronsLeftRight, ChevronsRight, ChevronsRightLeft, ChevronUp, Clock, CornerDownRight, ExternalLink, FileText, Flag, FolderKanban, Loader2, Lock, Maximize2, MessageSquare, Minimize2, MoreHorizontal, PanelRight, Paperclip, Pencil, Plus, Repeat, Reply, Rocket, RotateCcw, Send, Link2, ShieldCheck, Tag, Trash2, UploadCloud, UserPlus, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { TaskPropertyKey } from '@/domain/user/UiPrefs';
 import { TaskProperties, type TaskProperty } from './TaskProperties';
@@ -61,7 +61,6 @@ import { ClaudeIcon } from './ClaudeIcon';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
 import {
   extractClipboardFiles,
-  formatBytes,
   isImageFile,
 } from '@/presentation/components/attachments/files';
 import { paceAppend, runFilesLimited } from '@/presentation/components/attachments/pace';
@@ -88,6 +87,9 @@ import { PlanTaskButton } from './PlanTaskButton';
 import { formatTaskCreated } from '@/lib/datetime';
 import type { TaskPriority } from '@/domain/task/Task';
 import { TaskDrawerComposer } from './TaskDrawerComposer';
+import { CommentAttachments } from './CommentAttachments';
+import { appendCommentDraftFiles, commentDraftKey } from './commentDraft';
+import { localPreviewAttachment } from '@/presentation/components/attachments/files';
 import { CommentsEmptyState } from './CommentsEmptyState';
 import { TaskBodyEditor } from './TaskBodyEditor';
 import { useTaskDescriptionDraft } from './useTaskDescriptionDraft';
@@ -755,6 +757,7 @@ export function TaskDrawer({
   // «Перетащите сюда файл» рендерится на уровне видимой коробки окна (см. DrawerShell),
   // поэтому покрывает ровно то, что юзер видит, при любом размере/скролле.
   const [dragActive, setDragActive] = useState(false);
+  const [dragTarget, setDragTarget] = useState<'task' | 'comment' | null>(null);
   // Счётчик dragenter/dragleave (вложенные элементы шлют события) — оверлей гаснет
   // только когда курсор реально покинул окно, а не при наведении на дочерний элемент.
   const dragDepth = useRef(0);
@@ -784,6 +787,8 @@ export function TaskDrawer({
   // Ref-канал для footer-композера → TaskCommentsSection: после создания комментария
   // композер дёргает текущий handler чтобы вставить созданный коммент в список.
   const onCommentCreatedRef = useRef<((c: TaskComment) => void) | null>(null);
+  const onCommentUpdatedRef = useRef<((c: TaskComment) => void) | null>(null);
+  const onCommentDeletedRef = useRef<((id: string) => void) | null>(null);
   // Ref на scrollable body — нужен чтобы скроллнуть вниз при открытии (комментарии
   // сверху-вниз, новые внизу — пользователь хочет видеть свежие сразу).
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1262,31 +1267,56 @@ export function TaskDrawer({
   // видимую область (не скролл-контент). Реагируем только на файлы (types includes
   // 'Files'), чтобы внутренний drag текста/блоков редактора не триггерил оверлей.
   // dragenter/leave считаем глубину — вложенные элементы шлют свои события, иначе мигает.
+  // Если курсор над зоной обсуждения/композера — файлы идут в черновик комментария.
   const hasFiles = (e: DragEvent<HTMLElement>): boolean =>
     Array.from(e.dataTransfer?.types ?? []).includes('Files');
+  const isCommentDropZone = (target: EventTarget | null): boolean =>
+    state?.mode === 'edit' &&
+    !frozenByApproval &&
+    Boolean(currentUser) &&
+    target instanceof Element &&
+    Boolean(target.closest('[data-pf-comment-dropzone], [data-pf-comment-composer]'));
   const handleDragEnter = (e: DragEvent<HTMLElement>): void => {
     if (!hasFiles(e)) return;
     e.preventDefault();
     dragDepth.current += 1;
     setDragActive(true);
+    setDragTarget(isCommentDropZone(e.target) ? 'comment' : 'task');
   };
   const handleDragOver = (e: DragEvent<HTMLElement>): void => {
     if (!hasFiles(e)) return;
     e.preventDefault();
+    const nextTarget = isCommentDropZone(e.target) ? 'comment' : 'task';
+    if (dragTarget !== nextTarget) setDragTarget(nextTarget);
   };
   const handleDragLeave = (): void => {
     dragDepth.current -= 1;
     if (dragDepth.current <= 0) {
       dragDepth.current = 0;
       setDragActive(false);
+      setDragTarget(null);
     }
+  };
+  const handleDropCapture = (): void => {
+    dragDepth.current = 0;
+    setDragActive(false);
+    setDragTarget(null);
   };
   const handleDrop = (e: DragEvent<HTMLElement>): void => {
     e.preventDefault();
+    const toComment = isCommentDropZone(e.target) || dragTarget === 'comment';
     dragDepth.current = 0;
     setDragActive(false);
+    setDragTarget(null);
     const files = Array.from(e.dataTransfer?.files ?? []);
     if (files.length === 0) return;
+    if (toComment && state?.mode === 'edit' && currentUser) {
+      appendCommentDraftFiles(
+        commentDraftKey(currentUser.id, state.task.projectId, state.task.id),
+        files,
+      );
+      return;
+    }
     if (state?.mode === 'create') addPendingFiles(files);
     else void uploadFilesDirectly(files);
   };
@@ -1294,11 +1324,12 @@ export function TaskDrawer({
     onDragEnter: handleDragEnter,
     onDragOver: handleDragOver,
     onDragLeave: handleDragLeave,
+    onDropCapture: handleDropCapture,
     onDrop: handleDrop,
   };
-  // Большой оверлей-зона. Рендерится в DrawerShell поверх видимой коробки окна
-  // (absolute inset-0), pointer-events-none — чтобы не перехватывать drop/dragleave.
-  const dragOverlay = dragActive ? (
+  // Большой оверлей-зона задачи. Когда курсор над колонкой обсуждения, свой оверлей
+  // рисует сама зона обсуждения («Прикрепятся к комментарию»).
+  const dragOverlay = dragActive && dragTarget !== 'comment' ? (
     <div
       className={cn(
         'pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-primary/60 bg-background/85 backdrop-blur-sm',
@@ -2216,13 +2247,30 @@ export function TaskDrawer({
                 вкладок — бейдж 🔴 живёт в фоне). В стеке — нижняя grid-строка (1fr);
                 в split — правая колонка фикс-доли с собственным скроллом и футером. */}
             <div
+              data-pf-comment-dropzone
               className={cn(
-                'flex flex-col',
+                'relative flex flex-col',
                 // split — отдельная колонка со своим скроллом; narrow — натуральная
                 // высота внутри общего скролла окна.
                 isSplit ? 'min-h-0 w-[44%] shrink-0 overflow-hidden' : 'shrink-0',
               )}
             >
+              {dragActive && dragTarget === 'comment' && (
+                <div
+                  className={cn(
+                    'pointer-events-none absolute inset-2 z-40 flex flex-col items-center justify-center gap-2.5 rounded-2xl bg-background/90 ring-2 ring-primary backdrop-blur-xs',
+                    animations && 'duration-150 animate-in fade-in-0',
+                  )}
+                >
+                  <UploadCloud className="size-9 text-primary" />
+                  <span className="text-sm font-medium text-foreground">
+                    Перетащите сюда файлы или фото
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Прикрепятся к комментарию
+                  </span>
+                </div>
+              )}
               {frameReady && (<>
               {/* === SCROLLABLE BODY — вкладки Обсуждение | LIVE === */}
               {/* Tabs тянется flex-1; каждая вкладка — свой scroll-контейнер. forceMount
@@ -2290,6 +2338,8 @@ export function TaskDrawer({
                     taskId={task.id}
                     canReadProject={task.context?.canReadProject}
                     onCommentCreatedRef={onCommentCreatedRef}
+                    onCommentUpdatedRef={onCommentUpdatedRef}
+                    onCommentDeletedRef={onCommentDeletedRef}
                     onFirstLoad={scrollBodyToBottom}
                     onCountChange={setCommentCount}
                     onCommentDeleted={notifyChanged}
@@ -2379,6 +2429,12 @@ export function TaskDrawer({
                           // реально скроллится (на телефоне это окно целиком, а не тело).
                           revealNewItem(`comment-${c.id}`, bodyRef.current);
                           notifyChanged();
+                        }}
+                        onCommentUpdated={(c) => {
+                          onCommentUpdatedRef.current?.(c);
+                        }}
+                        onCommentDeleted={(id) => {
+                          onCommentDeletedRef.current?.(id);
                         }}
                         onTaskChanged={() => notifyChanged()}
                       />
@@ -2640,6 +2696,8 @@ function TaskCommentsSection({
   // skips the inline `CommentComposer` and exposes `handleCreated` via this
   // ref so the parent's composer can push newly created comments into the list.
   onCommentCreatedRef,
+  onCommentUpdatedRef,
+  onCommentDeletedRef,
   canReadProject = true,
   // Дёргается один раз после первой успешной загрузки комментариев — drawer
   // использует это, чтобы скроллнуть body вниз (к последнему сообщению).
@@ -2660,6 +2718,8 @@ function TaskCommentsSection({
   taskId: string;
   canReadProject?: boolean;
   onCommentCreatedRef?: React.MutableRefObject<((c: TaskComment) => void) | null>;
+  onCommentUpdatedRef?: React.MutableRefObject<((c: TaskComment) => void) | null>;
+  onCommentDeletedRef?: React.MutableRefObject<((id: string) => void) | null>;
   onFirstLoad?: () => void;
   onCountChange?: (count: number) => void;
   scrollToCommentId?: string;
@@ -2689,7 +2749,23 @@ function TaskCommentsSection({
       const request = ++sequence;
       void taskRepository.listComments(projectId, taskId).then(list => {
         if (cancelled || request !== sequence) return;
-        setComments(list);
+        setComments((prev) => {
+          // Сохраняем локальные вложения (uploading: true), которые ещё догружаются в фоне,
+          // чтобы SSE-эхо от createComment/uploadCommentAttachment не скрывало превью до конца загрузки.
+          const uploadingByComment = new Map<string, TaskAttachment[]>();
+          for (const c of prev) {
+            const pendingAtts = c.attachments.filter((a) => a.uploading);
+            if (pendingAtts.length > 0) uploadingByComment.set(c.id, pendingAtts);
+          }
+          if (uploadingByComment.size === 0) return list;
+          return list.map((c) => {
+            const pendingAtts = uploadingByComment.get(c.id);
+            if (!pendingAtts) return c;
+            const uploadedNames = new Set(c.attachments.map((a) => a.filename));
+            const remaining = pendingAtts.filter((a) => !uploadedNames.has(a.filename));
+            return remaining.length > 0 ? { ...c, attachments: [...c.attachments, ...remaining] } : c;
+          });
+        });
         if (!firstLoaded) { firstLoaded = true; onFirstLoadRef.current?.(); }
       }).catch((e: unknown) => {
         if (!cancelled && request === sequence && !firstLoaded) toast.error(`Не удалось загрузить комментарии: ${(e as Error).message}`);
@@ -2753,7 +2829,11 @@ function TaskCommentsSection({
   };
 
   const handleCreated = (created: TaskComment): void => {
-    setComments((prev) => [...prev, created]);
+    setComments((prev) =>
+      prev.some((c) => c.id === created.id)
+        ? prev.map((c) => (c.id === created.id ? created : c))
+        : [...prev, created],
+    );
     // Ответ или комментарий из встроенного композера — тоже сразу на виду.
     revealNewItem(`comment-${created.id}`);
   };
@@ -2768,6 +2848,24 @@ function TaskCommentsSection({
     }
     return undefined;
   }, [onCommentCreatedRef]);
+  useEffect(() => {
+    if (onCommentUpdatedRef) {
+      onCommentUpdatedRef.current = handleUpdated;
+      return () => {
+        onCommentUpdatedRef.current = null;
+      };
+    }
+    return undefined;
+  });
+  useEffect(() => {
+    if (onCommentDeletedRef) {
+      onCommentDeletedRef.current = handleDeleted;
+      return () => {
+        onCommentDeletedRef.current = null;
+      };
+    }
+    return undefined;
+  });
 
   // Вопросы диспетчера и служебные ответы живут во вкладке LIVE. В обсуждении
   // остаются только человеческие комментарии, поэтому системный Q&A не дублируется.
@@ -2794,6 +2892,7 @@ function TaskCommentsSection({
               taskId={taskId}
               comment={c}
               members={members}
+              onCreated={handleCreated}
               onUpdated={handleUpdated}
               onDeleted={handleDeleted}
               onReply={frozen ? undefined : onReply}
@@ -2816,6 +2915,7 @@ function TaskCommentsSection({
           taskId={taskId}
           members={members}
           onCreated={handleCreated}
+          onUpdated={handleUpdated}
         />
       )}
     </div>
@@ -2834,11 +2934,13 @@ function CommentComposer({
   taskId,
   members,
   onCreated,
+  onUpdated,
 }: {
   projectId: string;
   taskId: string;
   members: readonly ProjectMember[];
   onCreated: (created: TaskComment) => void;
+  onUpdated?: (updated: TaskComment) => void;
 }): React.ReactElement {
   const { taskRepository } = useContainer();
   const { markAnswered } = useAwaitingReply();
@@ -2846,6 +2948,8 @@ function CommentComposer({
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepthRef = useRef(0);
   // Адресация уведомления: пока автор не выбрал сам — дефолт сервера (руководитель).
   const notifyCandidates = useCommentNotifyCandidates(projectId, taskId);
   const defaultAudience = defaultCommentAudience(notifyCandidates.candidates, null, currentUser?.id ?? null);
@@ -2878,39 +2982,127 @@ function CommentComposer({
     });
   };
 
+  const hasDragFiles = (e: DragEvent<HTMLElement>): boolean =>
+    Array.from(e.dataTransfer?.types ?? []).includes('Files');
+  const handleDragEnter = (e: DragEvent<HTMLElement>): void => {
+    if (!hasDragFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current += 1;
+    setDragOver(true);
+  };
+  const handleDragOver = (e: DragEvent<HTMLElement>): void => {
+    if (!hasDragFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragOver) setDragOver(true);
+  };
+  const handleDragLeave = (e: DragEvent<HTMLElement>): void => {
+    if (!hasDragFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current -= 1;
+    if (dragDepthRef.current <= 0) {
+      dragDepthRef.current = 0;
+      setDragOver(false);
+    }
+  };
+  const handleDrop = (e: DragEvent<HTMLElement>): void => {
+    if (!hasDragFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current = 0;
+    setDragOver(false);
+    const dropped = Array.from(e.dataTransfer?.files ?? []);
+    if (dropped.length > 0) addFiles(dropped);
+  };
+
   const submit = async (): Promise<void> => {
     const trimmed = body.trim();
+    const sentFiles = pending;
     // Разрешаем отправку, если есть текст ИЛИ вложения.
-    if ((trimmed.length === 0 && pending.length === 0) || submitting) return;
+    if ((trimmed.length === 0 && sentFiles.length === 0) || submitting) return;
     setSubmitting(true);
+    let created: TaskComment;
     try {
-      const created = await taskRepository.createComment(projectId, taskId, trimmed, notify, {
-        attachmentCount: pending.length,
+      created = await taskRepository.createComment(projectId, taskId, trimmed, notify, {
+        attachmentCount: sentFiles.length,
       });
-      markAnswered(taskId);
-      const uploaded: TaskAttachment[] = [];
-      for (const pf of pending) {
-        try {
-          uploaded.push(
-            await taskRepository.uploadCommentAttachment(projectId, taskId, created.id, pf.file),
-          );
-        } catch (err) {
-          toast.error(`Не удалось загрузить ${pf.file.name}: ${(err as Error).message}`);
-        }
-      }
-      onCreated({ ...created, attachments: uploaded });
-      setBody('');
-      pending.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
-      setPending([]);
     } catch (e) {
       toast.error(`Не удалось отправить: ${(e as Error).message}`);
-    } finally {
       setSubmitting(false);
+      return;
+    }
+
+    markAnswered(taskId);
+    setBody('');
+    setPending([]);
+    setSubmitting(false);
+
+    const attachmentMap = new Map<string, TaskAttachment>(
+      sentFiles.map((pf) => [
+        pf.id,
+        {
+          ...localPreviewAttachment({
+            id: pf.id,
+            filename: pf.file.name,
+            mimeType: pf.file.type,
+            sizeBytes: pf.file.size,
+            url: pf.previewUrl,
+          }),
+          taskId,
+          uploading: true,
+          uploadProgress: 0,
+        },
+      ]),
+    );
+    onCreated({ ...created, attachments: [...attachmentMap.values()] });
+
+    const publish = (): void => {
+      onUpdated?.({ ...created, attachments: [...attachmentMap.values()] });
+    };
+
+    if (sentFiles.length > 0) {
+      await runFilesLimited(sentFiles, async (pf) => {
+        try {
+          const saved = await taskRepository.uploadCommentAttachment(
+            projectId,
+            taskId,
+            created.id,
+            pf.file,
+            (loaded, total) => {
+              const cur = attachmentMap.get(pf.id);
+              if (!cur) return;
+              const progress = total > 0 ? Math.round((loaded / total) * 100) : 0;
+              attachmentMap.set(pf.id, { ...cur, uploadProgress: progress });
+              publish();
+            },
+          );
+          attachmentMap.set(pf.id, saved);
+          if (pf.previewUrl) URL.revokeObjectURL(pf.previewUrl);
+          publish();
+        } catch (err) {
+          attachmentMap.delete(pf.id);
+          publish();
+          setPending((prev) => [...prev, pf]);
+          toast.error(`Не удалось загрузить ${pf.file.name}: ${(err as Error).message}`);
+        }
+      });
     }
   };
 
   return (
-    <div className="pf-field-capsule relative rounded-2xl bg-muted transition-shadow focus-within:ring-2 focus-within:ring-ring/25">
+    <div
+      data-pf-comment-composer
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={cn(
+        'pf-field-capsule relative rounded-2xl bg-muted transition-shadow focus-within:ring-2 focus-within:ring-ring/25',
+        dragOver && 'ring-2 ring-primary bg-primary/[0.05]',
+      )}
+    >
       {preview ? (
         <div className="min-h-[2.75rem] px-3 py-2">
           {body.trim().length > 0 ? (
@@ -3066,6 +3258,7 @@ function CommentItem({
   taskId,
   comment,
   members,
+  onCreated,
   onUpdated,
   onDeleted,
   onReply,
@@ -3078,6 +3271,7 @@ function CommentItem({
   comment: TaskComment;
   // Участники проекта — для резолва автора комментария по ownerUserId (имя + аватар).
   members: readonly ProjectMember[];
+  onCreated?: (created: TaskComment) => void;
   onUpdated: (updated: TaskComment) => void;
   onDeleted: (id: string) => void;
   // Ответ/цитата (db/080).
@@ -3352,37 +3546,79 @@ function CommentItem({
           </div>
         )}
         <CommentAcknowledgement projectId={projectId} comment={comment} />
-        {comment.attachments.length > 0 && (
-          <div className="mbs-1.5 flex flex-wrap gap-1.5">
-            {comment.attachments.map((att) =>
-              isImageFile(att.mimeType, att.filename) ? (
-                <button
-                  key={att.id}
-                  type="button"
-                  onClick={() => setPreview(att)}
-                  className="size-14 overflow-clip rounded-lg bg-muted"
-                  aria-label={`Открыть ${att.filename}`}
-                >
-                  <img src={att.url} alt={att.filename} loading="lazy" className="size-full object-cover" />
-                </button>
-              ) : (
-                <a
-                  key={att.id}
-                  href={att.url}
-                  download={att.filename}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-muted/70 px-2 py-1 text-2xs hover:bg-muted"
-                >
-                  <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="max-w-[140px] truncate">{att.filename}</span>
-                  <span className="text-muted-foreground">{formatBytes(att.sizeBytes)}</span>
-                  <Download className="size-3 shrink-0 text-muted-foreground" />
-                </a>
-              ),
-            )}
-          </div>
-        )}
+        <CommentAttachments attachments={comment.attachments} onPreview={setPreview} />
       </div>
-      <AttachmentLightbox attachment={preview} attachments={comment.attachments} onClose={() => setPreview(null)} />
+      <AttachmentLightbox
+        attachment={preview}
+        attachments={comment.attachments}
+        onClose={() => setPreview(null)}
+        replyAuthorName={displayName !== '—' ? displayName : undefined}
+        onAttachToDraft={
+          !frozen && user
+            ? (annotatedFile) => {
+                onReply?.(comment.id, displayName, null);
+                appendCommentDraftFiles(
+                  commentDraftKey(user.id, projectId, taskId),
+                  [annotatedFile],
+                );
+              }
+            : undefined
+        }
+        onReplyWithImage={
+          !frozen
+            ? async (annotatedFile, commentText) => {
+                const notify: NotifyAudience =
+                  comment.ownerUserId && comment.ownerUserId !== user?.id
+                    ? { mode: 'selected', userIds: [comment.ownerUserId] }
+                    : { mode: 'none' };
+                const created = await taskRepository.createComment(
+                  projectId,
+                  taskId,
+                  commentText.trim(),
+                  notify,
+                  {
+                    replyToCommentId: comment.id,
+                    quotedText: null,
+                    attachmentCount: 1,
+                  },
+                );
+                const tempId = crypto.randomUUID();
+                const previewUrl = URL.createObjectURL(annotatedFile);
+                const tempAtt: TaskAttachment = {
+                  ...localPreviewAttachment({
+                    id: tempId,
+                    filename: annotatedFile.name,
+                    mimeType: annotatedFile.type,
+                    sizeBytes: annotatedFile.size,
+                    url: previewUrl,
+                  }),
+                  taskId,
+                  uploading: true,
+                  uploadProgress: 0,
+                };
+                onCreated?.({ ...created, attachments: [tempAtt] });
+                try {
+                  const saved = await taskRepository.uploadCommentAttachment(
+                    projectId,
+                    taskId,
+                    created.id,
+                    annotatedFile,
+                    (loaded, total) => {
+                      const progress = total > 0 ? Math.round((loaded / total) * 100) : 0;
+                      onUpdated({
+                        ...created,
+                        attachments: [{ ...tempAtt, uploadProgress: progress }],
+                      });
+                    },
+                  );
+                  onUpdated({ ...created, attachments: [saved] });
+                } finally {
+                  URL.revokeObjectURL(previewUrl);
+                }
+              }
+            : undefined
+        }
+      />
     </li>
   );
 }

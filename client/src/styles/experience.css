@@ -118,15 +118,18 @@ html.pf-no-motion .pf-pull-refresh {
 .pf-gallery-stage {
   position: relative;
   min-height: 120px;
-  height: min(60dvh, 640px);
-  max-height: calc(92dvh - 175px);
-  flex-shrink: 1;
+  flex: 1 1 0%;
+  width: 100%;
   overflow: hidden;
-  background: oklch(var(--muted) / 0.5);
+  background: transparent;
 }
-/* Документ (.docx) читают, а не разглядывают: сцена во всю доступную высоту окна. */
+/* Документ (.docx) читают, а не разглядывают: сцена во всю доступную высоту окна на листе. */
 .pf-gallery-stage[data-kind='document'] {
-  height: calc(92dvh - 175px);
+  height: calc(92dvh - 140px);
+  max-width: 64rem;
+  margin-inline: auto;
+  border-radius: 1rem;
+  background: oklch(var(--background));
 }
 /* Страницы docx-preview — на фоне сцены, без серой подложки библиотеки. */
 .pf-docx .docx-wrapper {

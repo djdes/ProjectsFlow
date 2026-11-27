@@ -286,3 +286,63 @@ test('deselecting the last recipient silences notifications and self-assignees c
     assert.deepEqual(view.calls[0][3], { mode: 'selected', userIds: ['executor'] });
   } finally { await view.close(); }
 });
+
+test('comment with attachments appears immediately before file uploads finish and supports drag-and-drop onto composer', async () => {
+  const uploadDeferred = deferred<{ id: string; taskId: string; filename: string; mimeType: string; sizeBytes: number; url: string; uploadedAt: Date }>();
+  const a = task('instant-upload');
+  const updated: TaskComment[] = [];
+  const view = await harness(a, {
+    upload: () => uploadDeferred.promise,
+  });
+  try {
+    await view.render(a, { onCommentUpdated: (c) => updated.push(c) });
+    // Drag-and-drop file directly onto the composer root
+    const composerRoot = view.host.querySelector<HTMLElement>('[data-pf-comment-composer]')!;
+    const photo = new File(['pixels'], 'photo.png', { type: 'image/png' });
+    await act(async () => {
+      const dropEvent = new Event('drop', { bubbles: true, cancelable: true }) as Event & {
+        dataTransfer: { types: string[]; files: File[] };
+      };
+      Object.defineProperty(dropEvent, 'dataTransfer', {
+        value: { types: ['Files'], files: [photo] },
+      });
+      composerRoot.dispatchEvent(dropEvent);
+    });
+    assert.match(view.host.textContent!, /photo\.png/);
+
+    await view.type('С фото');
+    // Click send while upload is still pending!
+    await act(async () => {
+      view.send().click();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    // The comment is ALREADY created in the thread with local uploading attachment preview,
+    // and the composer is cleared and unlocked before upload finishes.
+    assert.equal(view.created.length, 1);
+    assert.equal(view.created[0]?.attachments.length, 1);
+    assert.equal(view.created[0]?.attachments[0]?.filename, 'photo.png');
+    assert.equal(view.created[0]?.attachments[0]?.uploading, true);
+    assert.equal(view.editable().textContent, '');
+    assert.doesNotMatch(view.host.textContent!, /photo\.png/);
+
+    // Now finish the background upload
+    await act(async () => {
+      uploadDeferred.resolve({
+        id: 'server-att-1',
+        taskId: a.id,
+        filename: 'photo.png',
+        mimeType: 'image/png',
+        sizeBytes: 6,
+        url: '/api/attachments/server-att-1',
+        uploadedAt: new Date(),
+      });
+      await uploadDeferred.promise;
+    });
+    assert.ok(updated.length >= 1);
+    const lastUpdated = updated[updated.length - 1]!;
+    assert.equal(lastUpdated.attachments[0]?.id, 'server-att-1');
+    assert.equal(lastUpdated.attachments[0]?.uploading, undefined);
+  } finally {
+    await view.close();
+  }
+});

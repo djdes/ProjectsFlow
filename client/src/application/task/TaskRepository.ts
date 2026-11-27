@@ -161,6 +161,8 @@ export interface TaskRepository {
     taskId: string,
     commentId: string,
     file: File,
+    onProgress?: (loaded: number, total: number) => void,
+    signal?: AbortSignal,
   ): Promise<TaskAttachment>;
   deleteCommentAttachment(
     projectId: string,

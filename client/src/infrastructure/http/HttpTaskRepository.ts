@@ -425,10 +425,14 @@ export class HttpTaskRepository implements TaskRepository {
     taskId: string,
     commentId: string,
     file: File,
+    onProgress?: (loaded: number, total: number) => void,
+    signal?: AbortSignal,
   ): Promise<TaskAttachment> {
     return uploadFile(
       `/api/projects/${projectId}/tasks/${taskId}/comments/${commentId}/attachments`,
       file,
+      onProgress,
+      signal,
     );
   }
   async deleteCommentAttachment(

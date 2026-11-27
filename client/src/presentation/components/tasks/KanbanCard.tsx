@@ -103,8 +103,6 @@ const DND_TRANSITION = {
 // Тач-устройство? Считаем ОДИН раз при загрузке модуля (тип указателя не меняется в рантайме).
 // На тач-девайсах (телефон/PWA) полностью отключаем framer-motion layout-обёртку карточек:
 // пер-карточный layout-пересчёт 200+ элементов — главный источник лагов при скролле доски.
-const doneExitMode = (): 'leave' | 'pulse' => (isBoardColumnOnScreen('done') ? 'pulse' : 'leave');
-
 const IS_COARSE_POINTER =
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
@@ -283,6 +281,10 @@ function KanbanCardImpl({
   // а залитый треугольник соседствовал с тонкой галкой.
   const renderActions = (big: boolean): React.ReactNode => {
     if (!showActions) return null;
+    const effectiveDoneTarget: TaskStatus =
+      !awaitingApproval && currentWorkspace?.requireTaskApproval && !canApproveWork
+        ? 'pending_approval'
+        : 'done';
     const complete = checkboxVisible ? (
       <InboxCheckbox
         key="complete"
@@ -295,10 +297,21 @@ function KanbanCardImpl({
         onChanged={onMove && !task.recurrence ? undefined : onTaskChanged}
         variant="toolbar"
         doneTitle={awaitingApproval ? 'Принять работу' : undefined}
-        // Колонка «Готово» видна рядом — карточка переезжает туда сама, только отметка.
-        // Не видна (телефон: соседняя вкладка; десктоп: за краем) — карточка уходит.
-        exit={doneExitMode}
-        move={onMove ? (input) => onMove(task.id, input) : undefined}
+        // Колонка назначения («Готово» или «На утверждении») видна рядом — карточка переезжает
+        // туда сама, только отметка. Не видна — карточка уходит.
+        exit={() => (isBoardColumnOnScreen(effectiveDoneTarget) ? 'pulse' : 'leave')}
+        move={
+          onMove
+            ? (input) =>
+                onMove(task.id, {
+                  ...input,
+                  targetStatus:
+                    input.targetStatus === 'done' && !input.restore
+                      ? effectiveDoneTarget
+                      : input.targetStatus,
+                })
+            : undefined
+        }
       />
     ) : null;
     const promote =

@@ -240,3 +240,29 @@ test('canSendToApproval: личную inbox-задачу тоже можно с�
   const t = { ...assigned('t5'), isInbox: true };
   assert.equal(canSendToApproval(asAssignedInboxBlockTask(t), 'me'), true);
 });
+
+test('buildToMeInboxBlockTasks: берёт более свежий статус из boardTasks, если локальное зеркало обновилось раньше overview', () => {
+  const olderAssigned: AssignedTask = {
+    ...task('personal-done', {
+      projectId: 'inbox-me',
+      status: 'backlog',
+      updatedAt: new Date('2026-07-14T09:00:00.000Z'),
+    }),
+    projectName: 'Личные',
+    isInbox: true,
+    canModify: true,
+  };
+  const fresherBoard = task('personal-done', {
+    projectId: 'inbox-me',
+    status: 'done',
+    updatedAt: new Date('2026-07-14T09:00:05.000Z'),
+  });
+  const result = buildToMeInboxBlockTasks({
+    assignedTasks: [olderAssigned],
+    boardTasks: [fresherBoard],
+    inboxProjectId: 'inbox-me',
+    owner: { id: 'me', displayName: 'Ярослав' },
+  });
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.status, 'done');
+});
