@@ -34,12 +34,27 @@ export function buildToMeInboxBlockTasks(input: {
   inboxProjectId: string;
   owner: { id: string; displayName: string } | null;
 }): InboxBlockTask[] {
+  const boardById = new Map<string, Task>();
+  if (input.owner) {
+    for (const task of input.boardTasks) {
+      if (task.projectId === input.inboxProjectId && task.assignee.userId === input.owner.id) {
+        boardById.set(task.id, task);
+      }
+    }
+  }
   const seen = new Set<string>();
   const assigned: AssignedInboxBlockTask[] = [];
   for (const task of input.assignedTasks) {
     if (seen.has(task.id)) continue;
     seen.add(task.id);
-    assigned.push(asAssignedInboxBlockTask(task));
+    // Если локальное зеркало инбокса (boardTasks) уже получило более свежий ответ после
+    // мутации, чем общий overview (/assignees/overview), берём актуальные статус и поля.
+    const mirror = boardById.get(task.id);
+    const fresher =
+      mirror && mirror.updatedAt.getTime() > task.updatedAt.getTime()
+        ? { ...task, ...mirror }
+        : task;
+    assigned.push(asAssignedInboxBlockTask(fresher));
   }
   if (!input.owner) return assigned;
 

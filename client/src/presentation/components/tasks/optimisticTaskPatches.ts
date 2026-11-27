@@ -55,15 +55,24 @@ export function settledPatchIds(
   live: readonly HasIdAndStatus[],
 ): string[] {
   if (patches.size === 0) return [];
-  const liveStatusById = new Map(live.map((t) => [t.id, t.status]));
+  // Одна задача может приходить сразу из нескольких источников (например, overview.mine и
+  // локальное зеркало boardTasks, или toMeRaw и approvalQueue/focusedRaw). Снимать правку можно
+  // только тогда, когда ВСЕ источники, где задача ещё присутствует, уже подтвердили новый
+  // статус (или задача ушла из всех источников, напр. при excludeDone=1 / удалении).
+  const liveStatusesById = new Map<string, TaskStatus[]>();
+  for (const t of live) {
+    const list = liveStatusesById.get(t.id);
+    if (list) list.push(t.status);
+    else liveStatusesById.set(t.id, [t.status]);
+  }
   const settled: string[] = [];
   for (const [id, patch] of patches) {
-    const liveStatus = liveStatusById.get(id);
+    const statuses = liveStatusesById.get(id);
     if (patch.kind === 'hidden') {
-      if (liveStatus === undefined) settled.push(id);
+      if (!statuses) settled.push(id);
       continue;
     }
-    if (liveStatus === undefined || liveStatus === patch.status) settled.push(id);
+    if (!statuses || statuses.every((s) => s === patch.status)) settled.push(id);
   }
   return settled;
 }

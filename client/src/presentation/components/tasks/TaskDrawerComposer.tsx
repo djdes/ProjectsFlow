@@ -1,14 +1,16 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { CornerDownRight, FileText, Paperclip, X } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type DragEvent } from 'react';
+import { CornerDownRight, Paperclip, UploadCloud, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/sonner';
+import { cn } from '@/lib/utils';
 import type { Task } from '@/domain/task/Task';
 import { workerSessionPrompt, type WorkerSessionMode } from '@/domain/task/WorkerSessionMode';
 import type { NotifyAudience, TaskComment } from '@/domain/task/TaskComment';
 import { defaultCommentAudience } from '@/domain/task/defaultCommentAudience';
 import {
   acknowledgeComment,
+  appendCommentDraftFiles,
   beginCommentSend,
   commentDraftKey,
   readCommentDraft,
@@ -25,8 +27,9 @@ import { useCommentNotifyCandidates } from '@/presentation/hooks/useCommentNotif
 import { NotifyAudienceControl } from '@/presentation/components/tasks/NotifyAudienceControl';
 import { SendTargetButton } from '@/presentation/components/tasks/SendTargetButton';
 import { AttachmentLightbox } from '@/presentation/components/attachments/AttachmentLightbox';
-import { isImageFile, localPreviewAttachment } from '@/presentation/components/attachments/files';
-import { paceAppend } from '@/presentation/components/attachments/pace';
+import { formatBytes, localPreviewAttachment } from '@/presentation/components/attachments/files';
+import { runFilesLimited } from '@/presentation/components/attachments/pace';
+import { fileKindMeta } from '@/presentation/components/tasks/CommentAttachments';
 import type { TaskAttachment } from '@/domain/task/TaskAttachment';
 import type {
   MentionMember,
@@ -63,6 +66,8 @@ type Props = {
   backlogTail: { readonly id: string } | null;
   todoTail: { readonly id: string } | null;
   onCommentCreated: (created: TaskComment) => void;
+  onCommentUpdated?: (updated: TaskComment) => void;
+  onCommentDeleted?: (commentId: string) => void;
   onTaskChanged: () => void;
   onApprovalReturned?: (updated: Task) => void;
   defaultTarget?: ComposerTarget;
@@ -97,6 +102,8 @@ function TaskDrawerComposerForm({
   backlogTail,
   todoTail,
   onCommentCreated,
+  onCommentUpdated,
+  onCommentDeleted,
   onTaskChanged,
   onApprovalReturned,
   replyDraft: incomingReply,
@@ -227,22 +234,50 @@ function TaskDrawerComposerForm({
     .map((m) => ({ userId: m.userId, displayName: m.user.displayName }));
 
   const addFiles = (raw: FileList | File[]): void => {
-    const list = Array.from(raw);
-    if (list.length === 0) return;
-    // Мало файлов — разом (как раньше); от порога — порциями, чтобы декод пачки превью
-    // не фризил UI (см. pace.ts).
-    paceAppend(list, (chunk) => {
-      updateCommentDraft(draftKey, (current) => ({ ...current, files: [
-        ...current.files,
-        ...chunk.map((file) => ({
-          id: crypto.randomUUID(),
-          file,
-          // По MIME И по расширению: из мессенджеров/буфера файл нередко приходит с пустым
-          // type, а превью (и просмотр по клику) всё равно должны работать.
-          previewUrl: isImageFile(file.type, file.name) ? URL.createObjectURL(file) : '',
-        })),
-      ] }));
-    });
+    appendCommentDraftFiles(draftKey, raw);
+  };
+
+  // Файлы, которые уже ушли в созданный комментарий и сейчас догружаются фоном:
+  // в самом композере их чипы скрываем, чтобы поле сразу освобождалось для следующего сообщения.
+  const [uploadingIds, setUploadingIds] = useState<ReadonlySet<string>>(() => new Set());
+  const visiblePending = pending.filter((pf) => !uploadingIds.has(pf.id));
+
+  // Прямой drag & drop файлов/фото прямо в карточку композера комментария.
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepthRef = useRef(0);
+  const hasDragFiles = (e: DragEvent<HTMLElement>): boolean =>
+    Array.from(e.dataTransfer?.types ?? []).includes('Files');
+  const handleDragEnter = (e: DragEvent<HTMLElement>): void => {
+    if (!hasDragFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current += 1;
+    setDragOver(true);
+  };
+  const handleDragOver = (e: DragEvent<HTMLElement>): void => {
+    if (!hasDragFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragOver) setDragOver(true);
+  };
+  const handleDragLeave = (e: DragEvent<HTMLElement>): void => {
+    if (!hasDragFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current -= 1;
+    if (dragDepthRef.current <= 0) {
+      dragDepthRef.current = 0;
+      setDragOver(false);
+    }
+  };
+  const handleDrop = (e: DragEvent<HTMLElement>): void => {
+    if (!hasDragFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current = 0;
+    setDragOver(false);
+    const dropped = Array.from(e.dataTransfer?.files ?? []);
+    if (dropped.length > 0) addFiles(dropped);
   };
 
   const removeFile = (id: string): void => {
@@ -285,27 +320,104 @@ function TaskDrawerComposerForm({
     acknowledgeComment(draftKey, sent);
     markAnswered(task.id);
     setSessionMode('continue');
+    onClearReply?.();
+
+    // Комментарий появляется в ленте СРАЗУ после ответа createComment, не дожидаясь
+    // многомегабайтной загрузки файлов: фото уже видны по локальным blob-превью, а
+    // композер тут же разблокируется для следующего сообщения.
+    const attachmentMap = new Map<string, TaskAttachment>(
+      sent.files.map((file) => [
+        file.id,
+        {
+          ...localPreviewAttachment({
+            id: file.id,
+            filename: file.file.name,
+            mimeType: file.file.type,
+            sizeBytes: file.file.size,
+            url: file.previewUrl,
+          }),
+          taskId: task.id,
+          uploading: true,
+          uploadProgress: 0,
+        },
+      ]),
+    );
+    let notifiedCreated = false;
+    if (mountedRef.current) {
+      setPreview(null);
+      onCommentCreated({ ...created, attachments: [...attachmentMap.values()] });
+      notifiedCreated = true;
+    }
+    if (sent.files.length > 0 && mountedRef.current) {
+      setUploadingIds((prev) => {
+        const next = new Set(prev);
+        for (const f of sent.files) next.add(f.id);
+        return next;
+      });
+    }
+    if (mountedRef.current) refocusAfterSendRef.current = true;
+    updateCommentDraft(draftKey, (current) => ({ ...current, sending: false }));
+
+    const publishAttachments = (): void => {
+      if (!mountedRef.current) return;
+      const snapshot = { ...created, attachments: [...attachmentMap.values()] };
+      if (!notifiedCreated) {
+        notifiedCreated = true;
+        onCommentCreated(snapshot);
+      } else {
+        onCommentUpdated?.(snapshot);
+      }
+    };
+
     try {
-      onClearReply?.();
       const uploaded: TaskAttachment[] = [];
-      for (const file of sent.files) {
-        try {
-          uploaded.push(await taskRepository.uploadCommentAttachment(task.projectId, task.id, created.id, file.file));
-          updateCommentDraft(draftKey, (current) => ({ ...current, files: current.files.filter((entry) => entry.id !== file.id) }));
-        } catch (error) {
-          toast.error(`Не удалось загрузить ${file.file.name}: ${(error as Error).message}`);
-        }
+      if (sent.files.length > 0) {
+        await runFilesLimited(sent.files, async (file) => {
+          try {
+            const saved = await taskRepository.uploadCommentAttachment(
+              task.projectId,
+              task.id,
+              created.id,
+              file.file,
+              (loaded, total) => {
+                const cur = attachmentMap.get(file.id);
+                if (!cur) return;
+                const progress = total > 0 ? Math.round((loaded / total) * 100) : 0;
+                attachmentMap.set(file.id, { ...cur, uploadProgress: progress });
+                publishAttachments();
+              },
+            );
+            uploaded.push(saved);
+            attachmentMap.set(file.id, saved);
+            updateCommentDraft(draftKey, (current) => ({
+              ...current,
+              files: current.files.filter((entry) => entry.id !== file.id),
+            }));
+            publishAttachments();
+          } catch (error) {
+            attachmentMap.delete(file.id);
+            publishAttachments();
+            toast.error(`Не удалось загрузить ${file.file.name}: ${(error as Error).message}`);
+          } finally {
+            if (mountedRef.current) {
+              setUploadingIds((prev) => {
+                if (!prev.has(file.id)) return prev;
+                const next = new Set(prev);
+                next.delete(file.id);
+                return next;
+              });
+            }
+          }
+        });
       }
       // Комментарий без текста держался на вложениях. Не загрузилось ни одно — убираем
       // пустой комментарий; файлы остаются в черновике для повторной отправки.
       if (text.length === 0 && sent.files.length > 0 && uploaded.length === 0) {
+        if (mountedRef.current) onCommentDeleted?.(created.id);
         await taskRepository.deleteComment(task.projectId, task.id, created.id).catch(() => undefined);
         return;
       }
-      if (mountedRef.current) {
-        setPreview(null);
-        onCommentCreated({ ...created, attachments: uploaded });
-      }
+      publishAttachments();
       const moveTo = !awaitingApproval && task.canEdit !== false && shouldAutoMoveAfterComment(task, currentUser?.id ?? null)
         ? resolveMoveTarget(task.status, effectiveTarget)
         : null;
@@ -329,23 +441,40 @@ function TaskDrawerComposerForm({
       }
       if (mountedRef.current) onTaskChanged();
     } finally {
-      if (mountedRef.current) refocusAfterSendRef.current = true;
-      updateCommentDraft(draftKey, (current) => ({ ...current, sending: false }));
+      updateCommentDraft(draftKey, (current) => (current.sending ? { ...current, sending: false } : current));
     }
   };
 
-  const canSubmit = (body.trim().length > 0 || (!returnOnSend && pending.length > 0)) && !submitting;
+  const canSubmit = (body.trim().length > 0 || (!returnOnSend && visiblePending.length > 0)) && !submitting;
 
   // Notion-style: композер — отдельная «карточка» со скруглением и мягким фокус-рингом,
   // а не плоский футер на всю ширину. БЕЗ backdrop-blur: filter создаёт containing-block
   // для position:fixed и зажимал бы плавающее меню форматирования внутри overflow-hidden
   // карточки композера.
   return (
-    <div ref={rootRef} data-pf-comment-composer className="bg-background/95 px-3 pbe-3 pbs-2">
+    <div
+      ref={rootRef}
+      data-pf-comment-composer
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="bg-background/95 px-3 pbe-3 pbs-2"
+    >
       <div
         data-replying={replyDraft ? '' : undefined}
-        className="pf-comment-composer-card overflow-clip rounded-3xl"
+        data-drag-over={dragOver ? '' : undefined}
+        className={cn(
+          'pf-comment-composer-card relative overflow-clip rounded-3xl transition-shadow',
+          dragOver && 'ring-2 ring-primary bg-primary/[0.05]',
+        )}
       >
+        {dragOver && (
+          <div className="pointer-events-none flex items-center justify-center gap-2 bg-primary/[0.1] px-3 py-2 text-xs font-medium text-primary">
+            <UploadCloud className="size-4 shrink-0" />
+            <span>Отпустите файлы или фото, чтобы прикрепить к комментарию</span>
+          </div>
+        )}
         {replyDraft && (
           <div
             key={replyDraft.commentId}
@@ -374,48 +503,84 @@ function TaskDrawerComposerForm({
             </button>
           </div>
         )}
-        {pending.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 px-3 pbs-2">
-            {pending.map((pf) => (
-              <span
-                key={pf.id}
-                className="pf-comment-chip inline-flex items-center gap-1.5 rounded-lg bg-background py-1 ps-1.5 pe-1 text-2xs"
-                title={pf.file.name}
-              >
-                {/* Картинку можно рассмотреть ДО отправки — клик открывает лайтбокс на
-                    blob-превью. Не-картинки остаются просто чипом (открывать нечего). */}
-                {pf.previewUrl ? (
+        {visiblePending.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-3 pbs-2.5">
+            {visiblePending.map((pf) => {
+              const meta = fileKindMeta(pf.file.name, pf.file.type);
+              const Icon = meta.Icon;
+              return (
+                <span
+                  key={pf.id}
+                  className="pf-comment-chip group/chip inline-flex max-w-[230px] items-center gap-2 rounded-2xl bg-background/90 py-1.5 ps-1.5 pe-2 text-xs"
+                  title={pf.file.name}
+                >
+                  {/* Картинку можно рассмотреть ДО отправки — клик открывает лайтбокс на
+                      blob-превью. */}
+                  {pf.previewUrl ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreview(
+                          localPreviewAttachment({
+                            id: pf.id,
+                            filename: pf.file.name,
+                            mimeType: pf.file.type,
+                            sizeBytes: pf.file.size,
+                            url: pf.previewUrl,
+                          }),
+                        )
+                      }
+                      className="flex min-w-0 flex-1 items-center gap-2 text-start"
+                      aria-label={`Открыть ${pf.file.name}`}
+                    >
+                      <img
+                        src={pf.previewUrl}
+                        alt=""
+                        decoding="async"
+                        loading="lazy"
+                        className="size-10 shrink-0 rounded-xl object-cover"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-foreground">
+                          {pf.file.name}
+                        </span>
+                        <span className="block text-2xs text-muted-foreground tabular-nums">
+                          Фото · {formatBytes(pf.file.size)}
+                        </span>
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                      <span
+                        className={cn(
+                          'flex size-9 shrink-0 flex-col items-center justify-center rounded-xl',
+                          meta.badgeClass,
+                        )}
+                      >
+                        <Icon className="size-3.5 shrink-0" />
+                        <span className="text-[8px] font-bold leading-none">{meta.ext}</span>
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-foreground">
+                          {pf.file.name}
+                        </span>
+                        <span className="block text-2xs text-muted-foreground tabular-nums">
+                          {formatBytes(pf.file.size)}
+                        </span>
+                      </span>
+                    </span>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setPreview(localPreviewAttachment({
-                      id: pf.id,
-                      filename: pf.file.name,
-                      mimeType: pf.file.type,
-                      sizeBytes: pf.file.size,
-                      url: pf.previewUrl,
-                    }))}
-                    className="flex min-w-0 items-center gap-1.5"
-                    aria-label={`Открыть ${pf.file.name}`}
+                    onClick={() => removeFile(pf.id)}
+                    className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
+                    aria-label="Убрать"
                   >
-                    <img src={pf.previewUrl} alt="" decoding="async" loading="lazy" className="size-4 rounded object-cover" />
-                    <span className="max-w-[140px] truncate">{pf.file.name}</span>
+                    <X className="size-3" />
                   </button>
-                ) : (
-                  <>
-                    <FileText className="size-3.5 text-muted-foreground" />
-                    <span className="max-w-[140px] truncate">{pf.file.name}</span>
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={() => removeFile(pf.id)}
-                  className="grid size-4 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
-                  aria-label="Убрать"
-                >
-                  <X className="size-2.5" />
-                </button>
-              </span>
-            ))}
+                </span>
+              );
+            })}
           </div>
         )}
 

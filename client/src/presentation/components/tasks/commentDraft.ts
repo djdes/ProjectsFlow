@@ -1,4 +1,6 @@
 import type { NotifyAudience } from '@/domain/task/TaskComment';
+import { isImageFile } from '@/presentation/components/attachments/files';
+import { paceAppend } from '@/presentation/components/attachments/pace';
 
 export type CommentReplyDraft = {
   readonly commentId: string;
@@ -113,4 +115,23 @@ export function acknowledgeComment(key: string, sent: CommentDraft): void {
     ...(current.reply === sent.reply ? { reply: null } : {}),
     // Keep an explicit recipient choice for the next comment in this task.
   }));
+}
+
+/** Добавляет файлы (из пикера, буфера или drag-and-drop) в черновик комментария. */
+export function appendCommentDraftFiles(key: string, raw: FileList | File[]): void {
+  const list = Array.from(raw);
+  if (list.length === 0) return;
+  paceAppend(list, (chunk) => {
+    updateCommentDraft(key, (current) => ({
+      ...current,
+      files: [
+        ...current.files,
+        ...chunk.map((file) => ({
+          id: crypto.randomUUID(),
+          file,
+          previewUrl: isImageFile(file.type, file.name) ? URL.createObjectURL(file) : '',
+        })),
+      ],
+    }));
+  });
 }

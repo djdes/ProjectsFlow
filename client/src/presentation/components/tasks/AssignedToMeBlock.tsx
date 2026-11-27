@@ -814,6 +814,9 @@ export function AssignedToMeBlock({
     setDeleteTarget(null);
     setDeleting(true);
     const fx = await playTaskExit(target.id, 'delete', { delay: DIALOG_CLOSE_MS });
+    ++refreshGeneration.current;
+    ++focusedGeneration.current;
+    beginPendingPatch(target.id);
     setPatches((prev) => withPatch(prev, target.id, { kind: 'hidden' }));
     try {
       // projectId берём у самой задачи: в блоке лежат задачи из РАЗНЫХ проектов,
@@ -827,6 +830,7 @@ export function AssignedToMeBlock({
       dropPatch(target.id);
       toast.error(`Не удалось удалить: ${(err as Error).message}`);
     } finally {
+      endPendingPatch(target.id);
       setDeleting(false);
     }
   };
@@ -855,6 +859,17 @@ export function AssignedToMeBlock({
   // источника ниже; снимаются, когда сервер подтвердил (settledPatchIds) или когда
   // действие упало — тогда вызывающий снимает правку сам и показывает тост.
   const [patches, setPatches] = useState<PatchMap>(() => new Map());
+  // Задачи, по которым прямо сейчас летит мутация: пока запрос не завершился, их оптимистичную
+  // правку нельзя снимать при побочных ререндерах соседних списков.
+  const pendingPatchCountsRef = useRef(new Map<string, number>());
+  const beginPendingPatch = useCallback((id: string): void => {
+    pendingPatchCountsRef.current.set(id, (pendingPatchCountsRef.current.get(id) ?? 0) + 1);
+  }, []);
+  const endPendingPatch = useCallback((id: string): void => {
+    const next = (pendingPatchCountsRef.current.get(id) ?? 1) - 1;
+    if (next > 0) pendingPatchCountsRef.current.set(id, next);
+    else pendingPatchCountsRef.current.delete(id);
+  }, []);
   const dropPatch = useCallback((id: string): void => {
     setPatches((prev) => withoutPatches(prev, [id]));
   }, []);
@@ -928,16 +943,32 @@ export function AssignedToMeBlock({
 
   // Снимаем отработавшие правки, когда подъехали живые данные. Без этого оверрайд навсегда
   // затеняет реальный статус и прячет чужие изменения (ловушка InboxCheckbox.optimistic).
+  // Проверяем ВСЕ сырые источники (включая tasks и boardTasks по отдельности): пока хотя бы
+  // один из них ещё держит старый статус до завершения своего GET-запроса или пока идёт
+  // сама мутация/refresh, правку не снимаем — иначе карточка на миг всплывёт обратно.
+  const { tasks: awaitingReplyList } = useAwaitingReply();
   useEffect(() => {
-    setPatches((prev) => withoutPatches(prev, settledPatchIds(prev, [...toMeRaw, ...byMeRaw, ...focusedRaw, ...approvalQueueRaw])));
-  }, [toMeRaw, byMeRaw, focusedRaw, approvalQueueRaw]);
+    if (latestRefreshInFlight.current > 0) return;
+    setPatches((prev) => {
+      if (prev.size === 0) return prev;
+      const candidateIds = settledPatchIds(prev, [
+        ...tasks,
+        ...(boardTasks ?? []),
+        ...toMeRaw,
+        ...byMeRaw,
+        ...focusedRaw,
+        ...approvalQueueRaw,
+        ...awaitingReplyList,
+      ]).filter((id) => !pendingPatchCountsRef.current.has(id));
+      return withoutPatches(prev, candidateIds);
+    });
+  }, [tasks, boardTasks, toMeRaw, byMeRaw, focusedRaw, approvalQueueRaw, awaitingReplyList]);
   const focusedVisible = useMemo(
     () => (hideDone ? focusedTasks.filter(notDone) : focusedTasks),
     [focusedTasks, hideDone],
   );
   // Вопросы мне без ответа — свой источник: вопрос руководителю часто задают в чужой задаче,
   // которой нет ни в «Моих», ни в «Для всех».
-  const { tasks: awaitingReplyList } = useAwaitingReply();
   const awaitingReplyTasks = useMemo(
     () => applyPatches(awaitingReplyList.map(asAssignedInboxBlockTask), patches),
     [awaitingReplyList, patches],
@@ -1407,6 +1438,9 @@ export function AssignedToMeBlock({
   // Вернуть задаче прежний статус — действие «Отменить» в тосте после жеста.
   const restoreStatus = useCallback(
     async (item: InboxBlockTask, status: TaskStatus): Promise<void> => {
+      ++refreshGeneration.current;
+      ++focusedGeneration.current;
+      beginPendingPatch(item.id);
       setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status }));
       try {
         await taskRepository.move(item.projectId, item.id, {
@@ -1419,9 +1453,11 @@ export function AssignedToMeBlock({
       } catch (e) {
         dropPatch(item.id);
         toast.error(`Не удалось отменить: ${(e as Error).message}`);
+      } finally {
+        endPendingPatch(item.id);
       }
     },
-    [taskRepository, refresh, onChanged, dropPatch],
+    [taskRepository, refresh, onChanged, dropPatch, beginPendingPatch, endPendingPatch],
   );
 
   // Отметка «готово» с кнопки/чекбокса/ПКМ на карточке: оптимистично патчим статус СРАЗУ,
@@ -1431,6 +1467,9 @@ export function AssignedToMeBlock({
   // может отличаться от текущего пространства).
   const moveTaskDone = useCallback(
     async (item: InboxBlockTask, input: MoveTaskInput): Promise<Task> => {
+      ++refreshGeneration.current;
+      ++focusedGeneration.current;
+      beginPendingPatch(item.id);
       const optimisticStatus: TaskStatus =
         input.targetStatus === 'done'
           ? approvalEnabled && !isApprover
@@ -1447,9 +1486,11 @@ export function AssignedToMeBlock({
       } catch (e) {
         dropPatch(item.id);
         throw e;
+      } finally {
+        endPendingPatch(item.id);
       }
     },
-    [approvalEnabled, isApprover, taskRepository, dropPatch],
+    [approvalEnabled, isApprover, taskRepository, dropPatch, beginPendingPatch, endPendingPatch],
   );
 
   // «Готово» броском на нижнюю полосу. Там, где работу принимает руководитель, сервер
@@ -1458,6 +1499,9 @@ export function AssignedToMeBlock({
   const completeTask = useCallback(
     async (item: InboxBlockTask): Promise<void> => {
       if (!item.canModify || item.status === 'done') return;
+      ++refreshGeneration.current;
+      ++focusedGeneration.current;
+      beginPendingPatch(item.id);
       const shownStatus: TaskStatus = approvalEnabled && !isApprover ? 'pending_approval' : 'done';
       setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: shownStatus }));
       try {
@@ -1503,9 +1547,11 @@ export function AssignedToMeBlock({
       } catch (e) {
         dropPatch(item.id);
         toast.error(`Не удалось: ${(e as Error).message}`);
+      } finally {
+        endPendingPatch(item.id);
       }
     },
-    [approvalEnabled, isApprover, taskRepository, celebrate, forget, dropPatch, refresh, onChanged, withdrawApproval],
+    [approvalEnabled, isApprover, taskRepository, celebrate, forget, dropPatch, refresh, onChanged, withdrawApproval, beginPendingPatch, endPendingPatch],
   );
 
   // Перенос задачи в другой проект — бросок карточки на колонку проекта. Права проверяет
@@ -1538,6 +1584,9 @@ export function AssignedToMeBlock({
   const setWorkStatus = useCallback(
     async (item: InboxBlockTask, next: 'manual' | 'backlog' | 'todo', runMode?: RunMode): Promise<void> => {
       if (item.status === next) return;
+      ++refreshGeneration.current;
+      ++focusedGeneration.current;
+      beginPendingPatch(item.id);
       // Карточка переезжает на полку сразу, ещё до ответа сервера — иначе после дропа она
       // секунду висит на старом месте и жест читается как неудавшийся.
       setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: next }));
@@ -1566,9 +1615,11 @@ export function AssignedToMeBlock({
       } catch (e) {
         dropPatch(item.id);
         toast.error(`Не удалось: ${(e as Error).message}`);
+      } finally {
+        endPendingPatch(item.id);
       }
     },
-    [taskRepository, refresh, onChanged, dropPatch, restoreStatus],
+    [taskRepository, refresh, onChanged, dropPatch, restoreStatus, beginPendingPatch, endPendingPatch],
   );
 
   // Отправить свою задачу на приёмку жестом. Явный 'pending_approval' сервер пропускает
@@ -1576,6 +1627,9 @@ export function AssignedToMeBlock({
   // сам MoveTask — отдельного вызова не нужно.
   const sendToApproval = useCallback(
     async (item: InboxBlockTask): Promise<void> => {
+      ++refreshGeneration.current;
+      ++focusedGeneration.current;
+      beginPendingPatch(item.id);
       // Как и на остальных полках: карточка на месте назначения сразу, сеть — фоном.
       setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: 'pending_approval' }));
       // Сдать работу жестом — то же закрытие, что и кнопкой «готово»: обе ведут в
@@ -1602,9 +1656,11 @@ export function AssignedToMeBlock({
         forget(item.id);
         dropPatch(item.id);
         toast.error(`Не удалось отправить на утверждение: ${(e as Error).message}`);
+      } finally {
+        endPendingPatch(item.id);
       }
     },
-    [taskRepository, refresh, onChanged, dropPatch, celebrate, forget, withdrawApproval],
+    [taskRepository, refresh, onChanged, dropPatch, celebrate, forget, withdrawApproval, beginPendingPatch, endPendingPatch],
   );
 
   // Приёмка: принять работу (→ done) или вернуть исполнителю (→ in_progress). Сервер
@@ -1622,6 +1678,9 @@ export function AssignedToMeBlock({
   // здесь — фоновая сверка снимка, её не ждём.
   const acceptApproval = useCallback(
     async (item: InboxBlockTask): Promise<void> => {
+      ++refreshGeneration.current;
+      ++focusedGeneration.current;
+      beginPendingPatch(item.id);
       setPatches((prev) => withPatch(prev, item.id, { kind: 'status', status: 'done' }));
       try {
         await taskRepository.move(item.projectId, item.id, {
@@ -1635,9 +1694,11 @@ export function AssignedToMeBlock({
       } catch (e) {
         dropPatch(item.id);
         throw e;
+      } finally {
+        endPendingPatch(item.id);
       }
     },
-    [taskRepository, dropPatch, refresh, onChanged],
+    [taskRepository, dropPatch, refresh, onChanged, beginPendingPatch, endPendingPatch],
   );
 
   // Без useCallback: колбэк закрывает диалог через сеттер, а мемоизировать его незачем —
@@ -1857,8 +1918,11 @@ export function AssignedToMeBlock({
     ghost: boolean,
     opts: { showCreatedAt?: boolean; hideProjectLabel?: boolean } = {},
   ): React.ReactNode => {
-    const swipe = ghost ? null : queueSwipe(item);
-    const snooze = ghost ? null : queueSnooze(item);
+    // Не размонтируем SwipeToAct при переходе ghost=true (useExitingListItems):
+    // смена дерева размонтировала бы уже схлопнутую через playTaskExit карточку и
+    // смонтировала бы новую на 300мс. Вместо этого просто выключаем свайп через disabled.
+    const swipe = queueSwipe(item);
+    const snooze = queueSnooze(item);
     const card = (
       <AcceptedCard
         item={item}
@@ -1891,7 +1955,7 @@ export function AssignedToMeBlock({
         ghost={ghost}
       >
         {swipe || snooze ? (
-          <SwipeToAct action={swipe} back={snooze} disabled={dragActive}>
+          <SwipeToAct action={swipe} back={snooze} disabled={dragActive || ghost}>
             {card}
           </SwipeToAct>
         ) : (
@@ -2841,8 +2905,9 @@ export function AssignedToMeBlock({
         // открывший чужую пару из «Другим», получает read-only вместо 403 на каждом save.
         canEdit={drawerTask?.canModify ?? true}
         onClose={() => {
+          const closedProjectId = drawerTask?.projectId;
           setDrawerTask(null);
-          if (drawerChanged.current) void refresh();
+          if (drawerChanged.current) handleToggled(closedProjectId);
           drawerChanged.current = false;
         }}
         onSubmit={(input) => {
@@ -2851,7 +2916,7 @@ export function AssignedToMeBlock({
         }}
         onCommitsChange={() => {
           drawerChanged.current = true;
-          void refresh();
+          handleToggled(drawerTask?.projectId);
         }}
         projectName={drawerTask && !drawerTask.isInbox ? drawerTask.projectName : undefined}
         isInbox={drawerTask?.isInbox ?? false}
@@ -3954,13 +4019,15 @@ function ApprovalItemCard({
     <div className="grid">
       <div className="min-h-0 min-w-0">
         <div className="rounded-lg">
-          {/* Свайп вправо на тач-экране — «Принять» (тот же путь, что у кнопки). */}
+          {/* Свайп вправо на тач-экране — «Принять» (тот же путь, что у кнопки).
+              Не убираем action при accepting=true, чтобы не размонтировать SwipeToAct во время playTaskExit. */}
           <SwipeWrap
             action={
-              isApprover && !selecting && !accepting
+              isApprover && !selecting
                 ? { label: 'Принять', tone: 'done', onCommit: () => void startAccept() }
                 : null
             }
+            disabled={accepting}
           >
             <AcceptedCard
               item={item}
@@ -4112,7 +4179,7 @@ function InProgressShelf({
                 ghost={exiting}
                 selecting={selecting}
               >
-                <SwipeWrap action={exiting || !swipe ? null : swipe(item)} disabled={swipeDisabled}>
+                <SwipeWrap action={swipe ? swipe(item) : null} disabled={swipeDisabled || exiting}>
                   <AcceptedCard
                     item={item}
                     open={!exiting && item.id === openTaskId}

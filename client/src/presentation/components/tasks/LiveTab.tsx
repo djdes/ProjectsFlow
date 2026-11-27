@@ -462,8 +462,9 @@ function TaskLiveChat({
               backlogTail={backlogTail}
               todoTail={todoTail}
               onCommentCreated={handleChatComment}
-            defaultTarget="worker"
-            onWorkerQueued={handleQueued}
+              onCommentUpdated={handleChatComment}
+              defaultTarget="worker"
+              onWorkerQueued={handleQueued}
               onTaskChanged={() => onTaskChanged?.()}
             />
           </>
@@ -473,9 +474,10 @@ function TaskLiveChat({
             backlogTail={backlogTail}
             todoTail={todoTail}
             onCommentCreated={handleChatComment}
+            onCommentUpdated={handleChatComment}
             onApprovalReturned={onApprovalReturned}
-              defaultTarget="worker"
-              onWorkerQueued={handleQueued}
+            defaultTarget="worker"
+            onWorkerQueued={handleQueued}
             onTaskChanged={() => onTaskChanged?.()}
           />
         )}

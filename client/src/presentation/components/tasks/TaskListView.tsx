@@ -57,7 +57,7 @@ type Props = {
 // quick-add (Enter сразу создаёт), ниже плоский список без секций. Done-задачи
 // перечёркиваются. Для аттачей/коммитов — клик по строке открывает диалог.
 export function TaskListView({ projectId, showCommits = true, hideDone = false }: Props): React.ReactElement {
-  const { tasks, loading, error, create, update, remove, refetch } = useTasks(projectId);
+  const { tasks, loading, error, create, update, move, remove, refetch } = useTasks(projectId);
   const { user } = useCurrentUser();
   // Открытое окно задачи переживает перезагрузку (sessionStorage пер-проект) — см. KanbanBoard.
   const drawerStoreKey = `pf-open-drawer:${projectId}`;
@@ -233,9 +233,11 @@ export function TaskListView({ projectId, showCommits = true, hideDone = false }
               index={i}
               task={t}
               showCheckbox
+              hideDone={hideDone}
               currentUserId={user?.id ?? null}
               lastDoneTaskId={lastDoneTaskId}
               lastTodoTaskId={lastTodoTaskId}
+              onMove={(input) => move(t.id, input)}
               onEdit={() => setDialog({ mode: 'edit', task: t })}
               onDelete={() => handleDelete(t)}
               onChanged={() => void refetch()}
@@ -337,8 +339,10 @@ function TaskListRow({
   task,
   index,
   showCheckbox,
+  hideDone = false,
   lastDoneTaskId,
   lastTodoTaskId,
+  onMove,
   onEdit,
   onDelete,
   onChanged,
@@ -346,9 +350,11 @@ function TaskListRow({
   task: Task;
   index: number;
   showCheckbox: boolean;
+  hideDone?: boolean;
   currentUserId: string | null;
   lastDoneTaskId: string | null;
   lastTodoTaskId: string | null;
+  onMove?: (input: import('@/application/task/TaskRepository').MoveTaskInput) => Promise<unknown>;
   onEdit: () => void;
   onDelete: () => void;
   onChanged: () => void;
@@ -366,6 +372,7 @@ function TaskListRow({
 
   return (
     <motion.li
+      data-pf-task-id={task.id}
       // Stagger-вплывание строк при появлении списка: лёгкий fade+lift, задержка
       // капается на 0.3с (длинные списки не «телепаются» секундами). Гейтится useMotion
       // (pf-no-motion / reduced-motion → мгновенно). Новые строки тоже мягко появляются.
@@ -397,7 +404,9 @@ function TaskListRow({
           task={task}
           lastDoneTaskId={lastDoneTaskId}
           lastTodoTaskId={lastTodoTaskId}
-          onChanged={onChanged}
+          move={onMove}
+          exit={hideDone ? 'leave' : 'pulse'}
+          onChanged={onMove && !task.recurrence ? undefined : onChanged}
         />
       )}
       <div className="min-w-0 flex-1">

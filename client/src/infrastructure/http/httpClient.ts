@@ -217,6 +217,9 @@ async function requestRaw(path: string, opts: Options = {}): Promise<Raw> {
 
 async function mutate<T>(path: string, opts: Options): Promise<T> {
   reads.invalidate();
+  // Drop and advance readSeq before the write is sent so any earlier in-flight GET that
+  // resolves while this mutation is still running cannot store stale pre-write state.
+  cache.afterWrite(path);
   try { return await request<T>(path, opts); }
   finally {
     reads.invalidate();
